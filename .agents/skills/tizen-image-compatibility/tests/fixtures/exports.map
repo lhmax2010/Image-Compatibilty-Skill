@@ -1,0 +1,1 @@
+TIZEN_SYNTH_1.0 { global: public_*; shared_counter; local: *; };

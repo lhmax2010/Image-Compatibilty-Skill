@@ -1,0 +1,5 @@
+comparison:
+  baseline_name: SYNTHETIC-baseline-NOT-TIZEN
+  candidate_name: SYNTHETIC-candidate-NOT-TIZEN
+  baseline_toolchain: host-compiler-synthetic-fixture
+  candidate_toolchain: host-compiler-synthetic-fixture

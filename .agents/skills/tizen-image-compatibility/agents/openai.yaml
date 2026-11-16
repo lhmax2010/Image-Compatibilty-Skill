@@ -1,0 +1,6 @@
+interface:
+  display_name: "Tizen Image Compatibility"
+  short_description: "Audit Tizen GCC/LLVM interfaces with offline evidence"
+  default_prompt: "Use $tizen-image-compatibility to compare my GCC and LLVM Tizen images and report compatibility risks with evidence."
+policy:
+  allow_implicit_invocation: true

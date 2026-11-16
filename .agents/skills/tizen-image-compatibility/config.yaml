@@ -1,0 +1,44 @@
+comparison:
+  baseline_name: tizen-gcc
+  candidate_name: tizen-llvm
+  # User-declared provenance, not inferred from compiler strings in binaries.
+  baseline_toolchain: gcc
+  candidate_toolchain: llvm
+analysis:
+  modes: [elf, abi, api, headers, linking, compiler_runtime, kernel, ipc, commands, filesystem, packages, services, security, runtime, hardware, network, performance]
+  ignore_build_ids: true
+  ignore_timestamps: true
+  normalize_build_paths: true
+  workers: 4
+  timeout_seconds: 60
+  max_text_bytes: 4194304
+  max_extract_bytes: 107374182400
+  max_extract_files: 2000000
+tools: {} # Example: {readelf: /opt/bin/aarch64-linux-gnu-readelf, abidiff: false}
+runtime:
+  enabled: false
+  authorized: false
+  timeout_seconds: 60
+  environments: {}
+  probes: []
+cross_compilation:
+  enabled: true
+  c_tests: true
+  cpp_tests: true
+  sysroots: {}
+  compilers: {}
+  include_dirs: [usr/include]
+  header_limit: 50
+  probes: []
+performance:
+  enabled: false
+  tolerance_percent: 10
+report:
+  html: true
+  json: true
+  markdown: true
+  csv: true
+ci:
+  fail_on: HIGH
+  strict: false
+severity_overrides: {} # Example: {performance: MEDIUM}

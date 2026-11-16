@@ -1,0 +1,2 @@
+# Optional: only needed when passing --config. Default CLI uses the standard library.
+PyYAML>=6.0,<7

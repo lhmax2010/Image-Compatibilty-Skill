@@ -1,0 +1,3 @@
+debugfs 1.47.0 (5-Feb-2023)
+/usr/sbin/debugfs: invalid option -- '-'
+/usr/sbin/debugfs: Usage: debugfs [-b blocksize] [-s superblock] [-f cmd_file] [-R request] [-d data_source_device] [-i] [-n] [-D] [-V] [[-w] [-z undo_file] [-c]] [device]
