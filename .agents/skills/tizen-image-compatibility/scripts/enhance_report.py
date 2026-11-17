@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+"""Offline report enhancement; never collects, analyzes or executes image contents."""
+import argparse
+from pathlib import Path
+from compat.report_enhance import build
+from compat.report_browser import serve
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest='command', required=True)
+    render = sub.add_parser('build', help='Project an existing schema-1.2 report into a NEW directory')
+    render.add_argument('--input', required=True, type=Path)
+    render.add_argument('--output', required=True, type=Path)
+    browse = sub.add_parser('serve', help='Read-only interactive browser; loopback only, no Internet')
+    browse.add_argument('--report', required=True, type=Path)
+    browse.add_argument('--port', type=int, default=8765)
+    args = parser.parse_args()
+    if args.command == 'build':
+        build(args.input, args.output)
+    else:
+        serve(args.report, args.port)
+
+
+if __name__ == '__main__':
+    main()

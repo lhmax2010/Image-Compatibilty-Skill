@@ -385,3 +385,27 @@ python3 "$SKILL/tests/review/benchmark_v12.py" \
 PR #1 最终审查修复及逐项证据见 [V1_2_FINAL_REVIEW.md](V1_2_FINAL_REVIEW.md)，静态产品测试准备结论见 [V1_2_RELEASE_READINESS.md](V1_2_RELEASE_READINESS.md)。拟用的 [真实 Tizen 静态验收输入记录](V1_2_STATIC_ACCEPTANCE_INPUT.json) 需由产品方填入镜像、来源、RPM 清单和覆盖要求；它不是 CLI 配置文件。
 
 此次 collector 标识为 `1.2.0-rc.1`，报告 schema 仍为 1.2；旧 ELF 缓存会重新采集。修复仅涉及 ARM ABI/ISA 区分、自定义探针调度、解析完整度、candidate 新增包状态及 HTML 缺失接口预览。产品静态测试准备就绪不等于 GCC/LLVM 镜像兼容已获证明。
+
+### v1.3 大型报告浏览（独立报告增强）
+
+使用已生成的 schema 1.2 报告，无需重新采集镜像。Cline 可以直接执行以下命令；Python 标准库即可，不需要安装服务或访问互联网：
+
+```bash
+SKILL=.agents/skills/tizen-image-compatibility
+python3 "$SKILL/scripts/enhance_report.py" build \
+  --input /path/to/existing/skill-report --output /path/to/new/enhanced-report
+python3 "$SKILL/scripts/enhance_report.py" serve --report /path/to/new/enhanced-report
+# 浏览器打开 http://127.0.0.1:8765/
+```
+
+输出目录必须全新且独立。输入包含 `results.json`、双侧 manifest、`findings.csv`、`packages.csv`。增强工具不调用检测器，不执行镜像内容，不改变原始兼容性结论。原始 schema/collector 版本保持不变。
+
+- 按 Image → Package → ELF → Symbol 浏览；Package 支持名称搜索、ABI/API/Linking 过滤及 FUNC、Missing、Finding、UNKNOWN 数量排序。
+- 区分 FUNC/IFUNC/OBJECT/TLS、Weak、Versioned exports；按记录的虚拟符号链接去重，保留共享所有权和缺失证据。`observed_*` 是已观察数量；完整计数不足时为 UNKNOWN。
+- 完整导出 `package-symbol-summary.csv`、`elf-symbol-summary.csv`、`symbol-differences.csv`、`linking-findings-groups.csv`、`linking-unknown-reasons.csv`。MATCHED 和属性变化是展示分类，不生成新的兼容性判断。
+- Linking 分组保留原始状态、原因、方向、需求和提供者；可分页追溯消费者、Root Consumer、全部原始 Finding ID 及证据。缺失原因显示 NOT_RECORDED。
+- 原始 Finding 的完整 JSON 载荷以无损压缩形式保存在 `report-index.sqlite`，另提供完整 ID/Group Member/Unassigned CSV。原始 JSON/CSV 字段、Package 状态、符号总量和源文件哈希会自动对账。
+
+直接打开 `index.html`（`file://`）仅支持静态概览和 CSV 链接，**完整交互浏览需要上述本机 HTTP 服务**。服务只绑定 `127.0.0.1`，仅提供只读分页查询。证据仍位于原始报告目录，移动增强报告时请保留或同步原始目录位置；不要删除原始报告。
+
+真实报告处理限制：进程树 RSS 3 GiB、新增报告 15 GiB、磁盘剩余至少 100 GiB；可用内存低于 3 GiB 持续 10 秒停止并写入失败证据。不会通过提高限制自动重试。统计采用动态导出表，不等同于 Public API；相同导出数量不证明 ABI 兼容。详见 [设计](V1_3_REPORT_DESIGN.md)、[验证](V1_3_REPORT_VALIDATION.md)、[性能](V1_3_PERFORMANCE.md)和[限制](V1_3_KNOWN_LIMITATIONS.md)。
