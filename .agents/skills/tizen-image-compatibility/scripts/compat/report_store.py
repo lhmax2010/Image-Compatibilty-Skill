@@ -8,7 +8,7 @@ import posixpath
 import sqlite3
 import zlib
 
-from .report_io import ReportStream, canonical, digest
+from .report_io import ReportStream, canonical, digest, evidence_path
 
 
 def pack(value):
@@ -98,8 +98,10 @@ class Store:
 
     def evidence_exists(self, ref):
         if ref not in self.evidence_cache:
-            path = (self.source / ref).resolve()
-            self.evidence_cache[ref] = bool(ref.startswith('evidence/') and path.is_relative_to(self.source.resolve()) and path.is_file())
+            try:
+                self.evidence_cache[ref] = evidence_path(self.source, ref).is_file()
+            except (ValueError, OSError, RuntimeError):
+                self.evidence_cache[ref] = False
         return self.evidence_cache[ref]
 
     def _progress(self):

@@ -6,6 +6,22 @@ from .report_io import canonical, digest
 from .report_store import COUNTS, source_status, symbol_name, unpack
 
 
+def size_difference(a, b):
+    """Classify observations only; status still comes from original findings."""
+    old, new = a.get('type'), b.get('type')
+    if old == new and old in ('FUNC', 'IFUNC'):
+        return 'CODE_SIZE_CHANGED'
+    if old == new and old in ('OBJECT', 'TLS'):
+        return 'DATA_SIZE_CHANGED'
+    return 'SIZE_CHANGED_UNKNOWN'
+
+
+def difference_counts():
+    return Counter(missing=0, added=0, changed=0, version_changes=0, unknown=0,
+                   matched=0, code_size_changes=0, data_size_changes=0,
+                   unknown_size_changes=0, potential_abi_attribute_changes=0)
+
+
 def owners(store, elf_id):
     return [dict(row) for row in store.db.execute(
         'SELECT side,package_id,min(complete) AS complete FROM ownership WHERE elf_id=? GROUP BY side,package_id',
@@ -79,7 +95,7 @@ def compare_symbols(store):
         all_owners = {side: owners(store, obj['id']) if obj else []
                       for side, obj in zip(('baseline', 'candidate'), objs)}
         evidence = sorted({e for meta in metas for e in meta.get('evidence', [])})
-        observed = Counter(missing=0, added=0, changed=0, version_changes=0, unknown=0, matched=0)
+        observed = difference_counts()
         left, right = sets
         work = []
         exact = set(left) & set(right)
@@ -125,10 +141,16 @@ def compare_symbols(store):
                 if old != new:
                     changes.append(('VERSION_CHANGED', [old, new, base + ':default lookup', old + ':default symbol version']))
                     observed['version_changes'] += 1
-                for attr, kind in (('type', 'TYPE_CHANGED'), ('size', 'SIZE_CHANGED'),
+                for attr, kind in (('type', 'TYPE_CHANGED'), ('size', size_difference(av, bv)),
                                    ('visibility', 'VISIBILITY_CHANGED'), ('binding', 'BINDING_CHANGED')):
                     if av.get(attr) != bv.get(attr):
                         changes.append((kind, [old + ':' + attr]))
+                kinds = {kind for kind, _ in changes}
+                for kind, count in (('CODE_SIZE_CHANGED', 'code_size_changes'),
+                                    ('DATA_SIZE_CHANGED', 'data_size_changes'),
+                                    ('SIZE_CHANGED_UNKNOWN', 'unknown_size_changes')):
+                    observed[count] += kind in kinds
+                observed['potential_abi_attribute_changes'] += bool(kinds - {'CODE_SIZE_CHANGED', 'SIZE_CHANGED_UNKNOWN'})
                 if changes:
                     observed['changed'] += 1
                 else:
@@ -146,6 +168,9 @@ def compare_symbols(store):
                        'gcc_symbol_attributes': (a[0] if len(a) == 1 else a) if a else None,
                        'llvm_symbol_attributes': (b[0] if len(b) == 1 else b) if b else None,
                        'difference_type': kind, 'compatibility_status': status,
+                       'size_interpretation': ('Machine code size observation only' if kind == 'CODE_SIZE_CHANGED'
+                           else 'Data interface size observation; compatibility from source only' if kind == 'DATA_SIZE_CHANGED'
+                           else 'Unknown or differing symbol types; size semantics unverified' if kind == 'SIZE_CHANGED_UNKNOWN' else None),
                        'source_compatibility_statuses': sorted({f['status'] for f in refs.values()}),
                        'finding_ids': sorted(refs),
                        'evidence': sorted(set(evidence) | {e for f in refs.values() for e in json.loads(f['evidence'])})}
@@ -214,7 +239,7 @@ def package_counts(store, package):
     headers = assessment.get('collected_headers', [])
     header_count = len(headers) if complete and headers and all(x.get('ownership', {}).get('status') == 'COMPLETE' for x in headers) else None
     pairs = {x['pair_id'] for x in objects}
-    differences = Counter(missing=0, added=0, changed=0, version_changes=0, unknown=0, matched=0)
+    differences = difference_counts()
     diff_complete = bool(package['peer']) and complete
     for pair in pairs:
         summary = json.loads(db.execute('SELECT summary FROM pairs WHERE id=?', (pair,)).fetchone()[0])

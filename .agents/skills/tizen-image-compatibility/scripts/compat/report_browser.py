@@ -8,6 +8,7 @@ import time
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from .report_store import unpack
+from .report_io import evidence_path
 
 
 class ReportBrowser:
@@ -145,8 +146,9 @@ class ReportBrowser:
                         return
                     if route == '/evidence':
                         ref = parse_qs(parsed.query).get('ref', [''])[0]
-                        path = (browser.source / ref).resolve()
-                        if not ref.startswith('evidence/') or not path.is_relative_to(browser.source) or not path.is_relative_to((browser.source / 'evidence').resolve()):
+                        try:
+                            path = evidence_path(browser.source, ref)
+                        except (ValueError, OSError, RuntimeError):
                             self.send_error(403)
                             return
                         content_type = 'text/plain; charset=utf-8'

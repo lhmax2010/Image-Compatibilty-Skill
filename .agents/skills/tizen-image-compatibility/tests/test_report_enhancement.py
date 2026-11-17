@@ -111,7 +111,7 @@ class EnhancementTests(unittest.TestCase):
 
     def test_all_difference_categories_and_original_status(self):
         kinds = {r[0] for r in self.db.execute('SELECT DISTINCT difference_type FROM differences')}
-        self.assertTrue({'MISSING', 'ADDED', 'TYPE_CHANGED', 'SIZE_CHANGED', 'VISIBILITY_CHANGED', 'BINDING_CHANGED', 'VERSION_CHANGED', 'MATCHED'} <= kinds)
+        self.assertTrue({'MISSING', 'ADDED', 'TYPE_CHANGED', 'CODE_SIZE_CHANGED', 'VISIBILITY_CHANGED', 'BINDING_CHANGED', 'VERSION_CHANGED', 'MATCHED'} <= kinds)
         rows = [json.loads(r[0]) for r in self.db.execute("SELECT row_json FROM differences WHERE difference_type='MATCHED'")]
         self.assertTrue(all(r['compatibility_status'] == 'UNKNOWN' for r in rows))
         missing = json.loads(self.db.execute("SELECT row_json FROM differences WHERE name='missing' AND difference_type='MISSING'").fetchone()[0])

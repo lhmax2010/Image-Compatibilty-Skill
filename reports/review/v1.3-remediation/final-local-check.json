@@ -1,0 +1,36 @@
+{
+  "status": "PASS",
+  "head_unchanged": true,
+  "main_unchanged": true,
+  "v12_branch_unchanged": true,
+  "staging_empty": true,
+  "code_hashes_match_tested_source": true,
+  "changed_files": [
+    ".agents/skills/tizen-image-compatibility/assets/enhanced-report.js",
+    ".agents/skills/tizen-image-compatibility/references/report_schema.md",
+    ".agents/skills/tizen-image-compatibility/scripts/compat/report_browser.py",
+    ".agents/skills/tizen-image-compatibility/scripts/compat/report_groups.py",
+    ".agents/skills/tizen-image-compatibility/scripts/compat/report_io.py",
+    ".agents/skills/tizen-image-compatibility/scripts/compat/report_store.py",
+    ".agents/skills/tizen-image-compatibility/scripts/compat/report_symbols.py",
+    ".agents/skills/tizen-image-compatibility/tests/test_report_enhancement.py",
+    ".agents/skills/tizen-image-compatibility/tests/test_report_review.py",
+    "V1_3_REVIEW_REGRESSION.md",
+    "V1_3_REVIEW_REMAINING_RISKS.md",
+    "V1_3_REVIEW_REMEDIATION.md",
+    "reports/review/v1.3-remediation/before-final-tests.log",
+    "reports/review/v1.3-remediation/final-tests.log",
+    "reports/review/v1.3-remediation/final-tests.time",
+    "reports/review/v1.3-remediation/real-integrity-audit.json",
+    "reports/review/v1.3-remediation/real-size-audit.json",
+    "reports/review/v1.3-remediation/scope-check.json"
+  ],
+  "test_results": {
+    "total": 158,
+    "pass": 153,
+    "skip": 5,
+    "fail": 0
+  },
+  "real_report_updated": false,
+  "commit_push_merge_performed": false
+}

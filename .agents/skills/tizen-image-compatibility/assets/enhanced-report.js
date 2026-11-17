@@ -110,7 +110,7 @@ async function render() {
       node('h2', 'All package inventories', app);
       await listing(app, 'packages', {}, [
         ['Package', (r, td) => { link(td, r.name, 'package/' + enc(r.side) + '/' + enc(r.package_id)); }], ['Image', r => r.side], ['Match', r => r.match_status],
-        ['Observed ELFs', r => r.observed_owned_elf_count], ['Observed FUNC', r => r.observed_counts.func], ['Complete FUNC', r => r.counts.func], ['Observed missing', r => r.observed_differences.missing], ['Complete missing', r => r.differences.missing], ['ABI', r => r.abi], ['API', r => r.api], ['Linking', r => r.linking], ['Findings', r => r.finding_count], ['UNKNOWN', r => r.unknown_count]
+        ['Observed ELFs', r => r.observed_owned_elf_count], ['Observed FUNC', r => r.observed_counts.func], ['Complete FUNC', r => r.counts.func], ['Observed code size changes', r => r.observed_differences.code_size_changes], ['Observed potential ABI attribute changes', r => r.observed_differences.potential_abi_attribute_changes], ['Observed missing', r => r.observed_differences.missing], ['Complete missing', r => r.differences.missing], ['ABI', r => r.abi], ['API', r => r.api], ['Linking', r => r.linking], ['Findings', r => r.finding_count], ['UNKNOWN', r => r.unknown_count]
       ], [['q', 'Package name'], ['side', 'Image', ['', 'baseline', 'candidate']], ['abi', 'ABI', statuses], ['api', 'API', statuses], ['linking', 'Linking', statuses], ['sort', 'Sort (FUNC / missing use observed counts)', ['name', 'func', 'missing', 'findings', 'unknown']]]);
     } else if (route === 'package') {
       const data = await api('package', {side: id, id: detail}); if (token !== generation) return;
@@ -125,12 +125,12 @@ async function render() {
       pretty(app, data, 'ELF counts, aliases, owners, SONAME, DT_NEEDED and recorded ABI'); evidence(app, data.evidence);
       node('h2', 'Dynamic exports and difference observations', app);
       await listing(app, 'symbols', {pair: id}, [['Symbol', r => r.symbol_name], ['Version', r => r.symbol_version], ['Type', r => r.symbol_type], ['Difference', r => r.difference_type], ['Original compatibility', r => r.compatibility_status], ['GCC attributes', r => r.gcc_symbol_attributes], ['LLVM attributes', r => r.llvm_symbol_attributes], ['Findings / evidence', (r, td) => { for (const fid of r.finding_ids) { link(td, fid, 'finding/' + enc(fid)); node('br', undefined, td); } evidence(td, r.evidence); }]],
-        [['q', 'Symbol name'], ['type', 'Difference type', ['', 'MISSING', 'ADDED', 'TYPE_CHANGED', 'SIZE_CHANGED', 'VISIBILITY_CHANGED', 'BINDING_CHANGED', 'VERSION_CHANGED', 'MATCHED', 'UNKNOWN']]]);
+        [['q', 'Symbol name'], ['type', 'Difference type', ['', 'MISSING', 'ADDED', 'TYPE_CHANGED', 'CODE_SIZE_CHANGED', 'DATA_SIZE_CHANGED', 'SIZE_CHANGED_UNKNOWN', 'VISIBILITY_CHANGED', 'BINDING_CHANGED', 'VERSION_CHANGED', 'MATCHED', 'UNKNOWN']]]);
       if (token !== generation) return;
       node('h2', 'Original ELF findings', app); await findings(app, {elf: id});
     } else if (route === 'groups') {
       node('h2', 'Linking navigation groups', app);
-      await listing(app, 'groups', {reason: id || ''}, [['Group', (r, td) => { link(td, r.group_id, 'group/' + enc(r.group_id)); }], ['Reason', r => r.reason_category], ['Status', r => r.status], ['Interface / dependency', r => r.interface_or_dependency], ['Raw findings', r => r.raw_finding_count], ['Packages', r => r.affected_package_count], ['Direct ELFs', r => r.affected_elf_count], ['Root consumers', r => r.affected_root_consumer_count]], [['q', 'Interface contains'], ['reason', 'Recorded resolution'], ['status', 'Status', statuses]]);
+      await listing(app, 'groups', {reason: id || ''}, [['Group', (r, td) => { link(td, r.group_id, 'group/' + enc(r.group_id)); }], ['Reason', r => r.reason_category], ['Status', r => r.status], ['Interface / dependency', r => r.interface_or_dependency], ['Raw findings', r => r.raw_finding_count], ['Associated packages (union)', r => r.associated_package_count], ['Consumer packages', r => r.affected_consumer_package_count], ['Root packages', r => r.affected_root_package_count], ['Provider packages', r => r.provider_package_count], ['Direct ELFs', r => r.affected_elf_count], ['Root consumers', r => r.affected_root_consumer_count]], [['q', 'Interface contains'], ['reason', 'Recorded resolution'], ['status', 'Status', statuses]]);
     } else if (route === 'group') {
       const data = await api('group', {id}); if (token !== generation) return;
       node('h2', data.reason_category + ' · ' + data.interface_or_dependency, app);

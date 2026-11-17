@@ -1,0 +1,19 @@
+{
+  "mode": "READ_ONLY_CLASSIFICATION_AUDIT_NO_REPORT_UPDATE",
+  "old_size_changed": 133702,
+  "new_categories": {
+    "CODE_SIZE_CHANGED": 133638,
+    "DATA_SIZE_CHANGED": 64
+  },
+  "type_pairs": {
+    "('FUNC', 'FUNC')": 133638,
+    "('OBJECT', 'OBJECT')": 64
+  },
+  "preserved_status_counts": {
+    "UNKNOWN": 133638,
+    "INCOMPATIBLE": 64
+  },
+  "rows_deleted": 0,
+  "original_index_written": false,
+  "wall_seconds": 12.935267813969404
+}

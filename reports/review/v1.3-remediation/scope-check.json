@@ -1,0 +1,30 @@
+{
+  "existing_tracked_changes": [
+    ".agents/skills/tizen-image-compatibility/assets/enhanced-report.js",
+    ".agents/skills/tizen-image-compatibility/references/report_schema.md",
+    ".agents/skills/tizen-image-compatibility/scripts/compat/report_browser.py",
+    ".agents/skills/tizen-image-compatibility/scripts/compat/report_groups.py",
+    ".agents/skills/tizen-image-compatibility/scripts/compat/report_io.py",
+    ".agents/skills/tizen-image-compatibility/scripts/compat/report_store.py",
+    ".agents/skills/tizen-image-compatibility/scripts/compat/report_symbols.py",
+    ".agents/skills/tizen-image-compatibility/tests/test_report_enhancement.py"
+  ],
+  "refs": {
+    "main": "386a284c37b0fdf105948bef35d1bacdc7a9c389",
+    "review/tizen-compatibility-correctness-1.2": "2d5bacaef2af1a9bd4b793123de02684e5f38128",
+    "HEAD": "0f2698eb5c8b5604e1730811b16127133339d20d"
+  },
+  "detector_files_changed": false,
+  "index_updates": false,
+  "staged_files": [],
+  "test_and_source_sha256": {
+    ".agents/skills/tizen-image-compatibility/assets/enhanced-report.js": "d13b321b431853624877b30fba49600312ff2be661343c11714a5abd98294156",
+    ".agents/skills/tizen-image-compatibility/scripts/compat/report_browser.py": "9fc3ebef62d8beccacf0829b68a83577c5fd812605ae79f44c00564f6fda7bae",
+    ".agents/skills/tizen-image-compatibility/scripts/compat/report_groups.py": "906c702074bbdf20638a6134900b03843b0d365da56774558730c9aa901c2945",
+    ".agents/skills/tizen-image-compatibility/scripts/compat/report_io.py": "7348f49f2ba3817d789145bad8d2456b45caaafab669f4dc5583fdfcd2fc584d",
+    ".agents/skills/tizen-image-compatibility/scripts/compat/report_store.py": "384c9704ea7765a4ffc8fc88d8c584fa91f896c7b34778a47d2a4eee82fcd08a",
+    ".agents/skills/tizen-image-compatibility/scripts/compat/report_symbols.py": "ee830c92604697e3990993312c120830aa69abfda6bc79546ecb689c0196af48",
+    ".agents/skills/tizen-image-compatibility/tests/test_report_enhancement.py": "14d1cbdae4ff9f25cc1bc79282778e9052a293ed03b9466293b30cf7c8c04017",
+    ".agents/skills/tizen-image-compatibility/tests/test_report_review.py": "fa7dcbb6e694c9c0266f53d8c5c917a961ba56e818485e8744d84501d7bc4075"
+  }
+}

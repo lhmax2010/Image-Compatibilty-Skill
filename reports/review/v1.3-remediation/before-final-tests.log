@@ -1,0 +1,129 @@
+test_evidence_collector_and_server_agree_on_symlink_boundary (test_report_review.ReviewTests.test_evidence_collector_and_server_agree_on_symlink_boundary) ... FAIL
+test_invalid_consumer_paths_remain_unknown (test_report_review.ReviewTests.test_invalid_consumer_paths_remain_unknown) ...
+  test_invalid_consumer_paths_remain_unknown (test_report_review.ReviewTests.test_invalid_consumer_paths_remain_unknown) (path=None) ... FAIL
+  test_invalid_consumer_paths_remain_unknown (test_report_review.ReviewTests.test_invalid_consumer_paths_remain_unknown) (path='') ... FAIL
+  test_invalid_consumer_paths_remain_unknown (test_report_review.ReviewTests.test_invalid_consumer_paths_remain_unknown) (path='relative') ... FAIL
+  test_invalid_consumer_paths_remain_unknown (test_report_review.ReviewTests.test_invalid_consumer_paths_remain_unknown) (path='/') ... FAIL
+  test_invalid_consumer_paths_remain_unknown (test_report_review.ReviewTests.test_invalid_consumer_paths_remain_unknown) (path='//bin/app') ... FAIL
+  test_invalid_consumer_paths_remain_unknown (test_report_review.ReviewTests.test_invalid_consumer_paths_remain_unknown) (path='/bin/../app') ... FAIL
+  test_invalid_consumer_paths_remain_unknown (test_report_review.ReviewTests.test_invalid_consumer_paths_remain_unknown) (path='/bin/app\x00x') ... FAIL
+test_package_roles_are_image_qualified_and_non_additive (test_report_review.ReviewTests.test_package_roles_are_image_qualified_and_non_additive) ... ERROR
+test_size_type_uncertainty_and_type_changes_are_observations (test_report_review.ReviewTests.test_size_type_uncertainty_and_type_changes_are_observations) ... ERROR
+test_symbol_sizes_preserve_source_and_separate_code (test_report_review.ReviewTests.test_symbol_sizes_preserve_source_and_separate_code) ... baseline manifest
+candidate manifest
+original findings and assessments
+canonical ELF matching
+symbol observations
+linking navigation groups
+package statistics
+CSV exports
+independent reconciliation
+FAIL
+test_unknown_ownership_retains_observed_roles_without_credit (test_report_review.ReviewTests.test_unknown_ownership_retains_observed_roles_without_credit) ... ERROR
+
+======================================================================
+ERROR: test_package_roles_are_image_qualified_and_non_additive (test_report_review.ReviewTests.test_package_roles_are_image_qualified_and_non_additive)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<ACCEPTANCE_ROOT>/work/pr2-remediation/reviewed-tree/.agents/skills/tizen-image-compatibility/tests/test_report_review.py", line 111, in test_package_roles_are_image_qualified_and_non_additive
+    self.assertEqual(row['associated_package_count'], 2)
+                     ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'associated_package_count'
+
+======================================================================
+ERROR: test_size_type_uncertainty_and_type_changes_are_observations (test_report_review.ReviewTests.test_size_type_uncertainty_and_type_changes_are_observations)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<ACCEPTANCE_ROOT>/work/pr2-remediation/reviewed-tree/.agents/skills/tizen-image-compatibility/tests/test_report_review.py", line 19, in test_size_type_uncertainty_and_type_changes_are_observations
+    from compat.report_symbols import size_difference
+ImportError: cannot import name 'size_difference' from 'compat.report_symbols' (<ACCEPTANCE_ROOT>/work/pr2-remediation/reviewed-tree/.agents/skills/tizen-image-compatibility/scripts/compat/report_symbols.py)
+
+======================================================================
+ERROR: test_unknown_ownership_retains_observed_roles_without_credit (test_report_review.ReviewTests.test_unknown_ownership_retains_observed_roles_without_credit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<ACCEPTANCE_ROOT>/work/pr2-remediation/reviewed-tree/.agents/skills/tizen-image-compatibility/tests/test_report_review.py", line 131, in test_unknown_ownership_retains_observed_roles_without_credit
+    self.assertIsNone(row['associated_package_count'])
+                      ~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'associated_package_count'
+
+======================================================================
+FAIL: test_evidence_collector_and_server_agree_on_symlink_boundary (test_report_review.ReviewTests.test_evidence_collector_and_server_agree_on_symlink_boundary)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<ACCEPTANCE_ROOT>/work/pr2-remediation/reviewed-tree/.agents/skills/tizen-image-compatibility/tests/test_report_review.py", line 158, in test_evidence_collector_and_server_agree_on_symlink_boundary
+    self.assertFalse(store.evidence_exists(ref), ref)
+AssertionError: True is not false : evidence/../outside.txt
+
+======================================================================
+FAIL: test_invalid_consumer_paths_remain_unknown (test_report_review.ReviewTests.test_invalid_consumer_paths_remain_unknown) (path=None)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<ACCEPTANCE_ROOT>/work/pr2-remediation/reviewed-tree/.agents/skills/tizen-image-compatibility/tests/test_report_review.py", line 142, in test_invalid_consumer_paths_remain_unknown
+    self.assertIsNone(row['affected_elf_count'])
+AssertionError: 1 is not None
+
+======================================================================
+FAIL: test_invalid_consumer_paths_remain_unknown (test_report_review.ReviewTests.test_invalid_consumer_paths_remain_unknown) (path='')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<ACCEPTANCE_ROOT>/work/pr2-remediation/reviewed-tree/.agents/skills/tizen-image-compatibility/tests/test_report_review.py", line 143, in test_invalid_consumer_paths_remain_unknown
+    self.assertEqual(row['observed_direct_consumer_count'], 1)
+AssertionError: 2 != 1
+
+======================================================================
+FAIL: test_invalid_consumer_paths_remain_unknown (test_report_review.ReviewTests.test_invalid_consumer_paths_remain_unknown) (path='relative')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<ACCEPTANCE_ROOT>/work/pr2-remediation/reviewed-tree/.agents/skills/tizen-image-compatibility/tests/test_report_review.py", line 143, in test_invalid_consumer_paths_remain_unknown
+    self.assertEqual(row['observed_direct_consumer_count'], 1)
+AssertionError: 2 != 1
+
+======================================================================
+FAIL: test_invalid_consumer_paths_remain_unknown (test_report_review.ReviewTests.test_invalid_consumer_paths_remain_unknown) (path='/')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<ACCEPTANCE_ROOT>/work/pr2-remediation/reviewed-tree/.agents/skills/tizen-image-compatibility/tests/test_report_review.py", line 142, in test_invalid_consumer_paths_remain_unknown
+    self.assertIsNone(row['affected_elf_count'])
+AssertionError: 2 is not None
+
+======================================================================
+FAIL: test_invalid_consumer_paths_remain_unknown (test_report_review.ReviewTests.test_invalid_consumer_paths_remain_unknown) (path='//bin/app')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<ACCEPTANCE_ROOT>/work/pr2-remediation/reviewed-tree/.agents/skills/tizen-image-compatibility/tests/test_report_review.py", line 142, in test_invalid_consumer_paths_remain_unknown
+    self.assertIsNone(row['affected_elf_count'])
+AssertionError: 2 is not None
+
+======================================================================
+FAIL: test_invalid_consumer_paths_remain_unknown (test_report_review.ReviewTests.test_invalid_consumer_paths_remain_unknown) (path='/bin/../app')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<ACCEPTANCE_ROOT>/work/pr2-remediation/reviewed-tree/.agents/skills/tizen-image-compatibility/tests/test_report_review.py", line 142, in test_invalid_consumer_paths_remain_unknown
+    self.assertIsNone(row['affected_elf_count'])
+AssertionError: 2 is not None
+
+======================================================================
+FAIL: test_invalid_consumer_paths_remain_unknown (test_report_review.ReviewTests.test_invalid_consumer_paths_remain_unknown) (path='/bin/app\x00x')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<ACCEPTANCE_ROOT>/work/pr2-remediation/reviewed-tree/.agents/skills/tizen-image-compatibility/tests/test_report_review.py", line 142, in test_invalid_consumer_paths_remain_unknown
+    self.assertIsNone(row['affected_elf_count'])
+AssertionError: 2 is not None
+
+======================================================================
+FAIL: test_symbol_sizes_preserve_source_and_separate_code (test_report_review.ReviewTests.test_symbol_sizes_preserve_source_and_separate_code)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<ACCEPTANCE_ROOT>/work/pr2-remediation/reviewed-tree/.agents/skills/tizen-image-compatibility/tests/test_report_review.py", line 60, in test_symbol_sizes_preserve_source_and_separate_code
+    self.assertEqual(row['difference_type'], kind)
+AssertionError: 'SIZE_CHANGED' != 'CODE_SIZE_CHANGED'
+- SIZE_CHANGED
++ CODE_SIZE_CHANGED
+? +++++
+
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.363s
+
+FAILED (failures=9, errors=3)

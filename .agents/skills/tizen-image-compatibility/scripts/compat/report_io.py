@@ -11,6 +11,17 @@ import resource
 import time
 
 
+def evidence_path(source, ref):
+    """One boundary for indexed evidence presence and HTTP evidence reads."""
+    source = Path(source).resolve()
+    if not isinstance(ref, str) or not ref.startswith('evidence/'):
+        raise ValueError('Evidence reference must start with evidence/')
+    path = (source / ref).resolve()
+    if not path.is_relative_to(source) or not path.is_relative_to((source / 'evidence').resolve()):
+        raise ValueError('Evidence reference escapes evidence subtree')
+    return path
+
+
 def canonical(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
 
