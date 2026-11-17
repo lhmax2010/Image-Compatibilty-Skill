@@ -1,0 +1,24 @@
+{
+  "reason": "Original global status key is status, not overall; independently reproduced and regression-tested",
+  "old_value": null,
+  "new_value": "INCOMPATIBLE",
+  "original_verification": "PARTIAL",
+  "source_json_scalar_extraction": "Unique indent=2 root scalar in final 1 MiB, JSONDecoder parsed; status independently agrees with original Markdown",
+  "files_before": {
+    "overview.json": "f206be69390e1a89e70b54c0634ab3e4aaad115626e023353a6a40105e46b126",
+    "index.html": "29505799f6417031fd737e4e3f018e67da6c05ec980c75d397ca5fb1ccaf2975",
+    "enhanced-report.js": "70e46c13080a6e4ed75d0ad08b8df9dbf0f9184e8a1c8e0a50c01d1a81c1c03e",
+    "enhanced-report.css": "7d7c9ff4406c93727c53e512a1d62cf340b429c84f10600174a8fb0f77e1f9c9",
+    "README.md": "1ee6cd07018280af6500f49c0189a0c1a0a297553e83304c4af49548b92a7177"
+  },
+  "files_after": {
+    "overview.json": "7eada0e23a88d049310d4f81044a5b5008f94ba8dac5322d72a08b6fac703d4d",
+    "index.html": "1e326c0ea782dd3e29faf5d56ff2071bf38ab9f0585a5333ef98d56b967e4d8b",
+    "enhanced-report.js": "70e46c13080a6e4ed75d0ad08b8df9dbf0f9184e8a1c8e0a50c01d1a81c1c03e",
+    "enhanced-report.css": "7d7c9ff4406c93727c53e512a1d62cf340b429c84f10600174a8fb0f77e1f9c9",
+    "README.md": "1ee6cd07018280af6500f49c0189a0c1a0a297553e83304c4af49548b92a7177"
+  },
+  "finding_database_size_and_mtime_unchanged": true,
+  "csv_files_written": false,
+  "wall_seconds": 0.06076251500053331
+}

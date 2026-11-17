@@ -1,0 +1,251 @@
+{
+  "created_utc": "2026-11-17T14:57:18.972616+00:00",
+  "copies": [
+    {
+      "file": "validation.json",
+      "purpose": "Build reconciliation: 23 checks, status histogram and full CSV counts",
+      "source": "<ACCEPTANCE_ROOT>/reports/phase5-report-enhancement/validation.json",
+      "source_bytes": 1522,
+      "source_sha256": "3be233869fbc4fddded74daafbc5e5bfb3db28934421e7b5cb51d213e17fb64d",
+      "published_bytes": 1522,
+      "published_sha256": "3be233869fbc4fddded74daafbc5e5bfb3db28934421e7b5cb51d213e17fb64d",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "independent-validation.json",
+      "purpose": "Independent readback: 12 checks, exact IDs/member fields and fixed real counts",
+      "source": "<ACCEPTANCE_ROOT>/reports/phase5-report-enhancement/independent-validation.json",
+      "source_bytes": 2498,
+      "source_sha256": "01a67c415abfeb9087afa2617896d4a8558f039d70edbf94043cce70a1ec7e9c",
+      "published_bytes": 2498,
+      "published_sha256": "01a67c415abfeb9087afa2617896d4a8558f039d70edbf94043cce70a1ec7e9c",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "overview.json",
+      "purpose": "Image/package/ELF/symbol/linking summary and preserved outcome",
+      "source": "<ACCEPTANCE_ROOT>/reports/phase5-report-enhancement/overview.json",
+      "source_bytes": 18024,
+      "source_sha256": "7eada0e23a88d049310d4f81044a5b5008f94ba8dac5322d72a08b6fac703d4d",
+      "published_bytes": 17901,
+      "published_sha256": "649e872f3cd3d0ebe6bcdb2e6e01628849179e50dec8dbd0688179e6b13464b2",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "run.json",
+      "purpose": "Completed build wall time, RSS and output sizes before navigation repair",
+      "source": "<ACCEPTANCE_ROOT>/reports/phase5-report-enhancement/run.json",
+      "source_bytes": 1586,
+      "source_sha256": "eeaf44b7258b4d0918d52803644664aa36b9cc2d8f1ceed36fee52655be57124",
+      "published_bytes": 1586,
+      "published_sha256": "eeaf44b7258b4d0918d52803644664aa36b9cc2d8f1ceed36fee52655be57124",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "stages.json",
+      "purpose": "Measured build stage durations",
+      "source": "<ACCEPTANCE_ROOT>/reports/phase5-report-enhancement/stages.json",
+      "source_bytes": 724,
+      "source_sha256": "4ba55b856030adced470d3e97c5baf1c2efce1a7782bfdf1d9f593c2b1a190f8",
+      "published_bytes": 724,
+      "published_sha256": "4ba55b856030adced470d3e97c5baf1c2efce1a7782bfdf1d9f593c2b1a190f8",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "source-before.json",
+      "purpose": "Original report top-level file size/SHA256 before enhancement",
+      "source": "<ACCEPTANCE_ROOT>/reports/phase5-report-enhancement/source-before.json",
+      "source_bytes": 1055,
+      "source_sha256": "c38fb4937039b7496156522aa82cb444d66a001319fdc5fd8c7c7ee6142e8016",
+      "published_bytes": 1055,
+      "published_sha256": "c38fb4937039b7496156522aa82cb444d66a001319fdc5fd8c7c7ee6142e8016",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "source-after.json",
+      "purpose": "Original report top-level file size/SHA256 after enhancement",
+      "source": "<ACCEPTANCE_ROOT>/reports/phase5-report-enhancement/source-after.json",
+      "source_bytes": 1055,
+      "source_sha256": "c38fb4937039b7496156522aa82cb444d66a001319fdc5fd8c7c7ee6142e8016",
+      "published_bytes": 1055,
+      "published_sha256": "c38fb4937039b7496156522aa82cb444d66a001319fdc5fd8c7c7ee6142e8016",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "navigation-index-evidence.json",
+      "purpose": "Index-only repair and query plan, group count unchanged",
+      "source": "<ACCEPTANCE_ROOT>/reports/phase5-report-enhancement/navigation-index-evidence.json",
+      "source_bytes": 943,
+      "source_sha256": "cfa3e022f9c64df237675525ff9a510fb55cc2fda47167aeca87e169881a6f26",
+      "published_bytes": 943,
+      "published_sha256": "cfa3e022f9c64df237675525ff9a510fb55cc2fda47167aeca87e169881a6f26",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "overview-refresh-evidence.json",
+      "purpose": "Display-only original-status repair, DB/CSV unchanged",
+      "source": "<ACCEPTANCE_ROOT>/reports/phase5-report-enhancement/overview-refresh-evidence.json",
+      "source_bytes": 1426,
+      "source_sha256": "e4146ed55f26425412a9da5dc638221a3396dc1a0fa8268bbe69a75342582a70",
+      "published_bytes": 1426,
+      "published_sha256": "e4146ed55f26425412a9da5dc638221a3396dc1a0fa8268bbe69a75342582a70",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "resource-samples.jsonl",
+      "purpose": "Recorded build resource samples and peak/limit measurements",
+      "source": "<ACCEPTANCE_ROOT>/reports/phase5-report-enhancement/resource-samples.jsonl",
+      "source_bytes": 75192,
+      "source_sha256": "5fee6faba5b8d2e839180e8582416e103500303c152099a95f91c507c9a8ca14",
+      "published_bytes": 75192,
+      "published_sha256": "5fee6faba5b8d2e839180e8582416e103500303c152099a95f91c507c9a8ca14",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "INPUT_IMMUTABILITY_AFTER.json",
+      "purpose": "Full input hash and rootfs metadata audit result",
+      "source": "<ACCEPTANCE_ROOT>/work/phase5/INPUT_IMMUTABILITY_AFTER.json",
+      "source_bytes": 1946,
+      "source_sha256": "c4cb3bc992238f3085eb09e8da33ce04b5c5159a6c714148aa037597dd3f2051",
+      "published_bytes": 1536,
+      "published_sha256": "67ffd9e6c3a37897a475ed5b70de9f7623a0a7e394e01cd21070620374e3484b",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "browser-real.json",
+      "purpose": "Final actual Chromium routes, timings and JS errors",
+      "source": "<ACCEPTANCE_ROOT>/work/phase5/browser-real.json",
+      "source_bytes": 3880,
+      "source_sha256": "ef48867b896299bf67ef667c43554f0b9cb144e4823a80dfa0b78d17b0603021",
+      "published_bytes": 3880,
+      "published_sha256": "ef48867b896299bf67ef667c43554f0b9cb144e4823a80dfa0b78d17b0603021",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "INDEX_PREREAD.json",
+      "purpose": "Disclosed sequential read within build wall interval",
+      "source": "<ACCEPTANCE_ROOT>/work/phase5/INDEX_PREREAD.json",
+      "source_bytes": 276,
+      "source_sha256": "3a6afc2067ad83b219393100d3b4f73ed466e77351c20f740e9a877218eff9aa",
+      "published_bytes": 276,
+      "published_sha256": "3a6afc2067ad83b219393100d3b4f73ed466e77351c20f740e9a877218eff9aa",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "FINAL_ARTIFACTS.json",
+      "purpose": "Final logical/allocated report sizes",
+      "source": "<ACCEPTANCE_ROOT>/work/phase5/FINAL_ARTIFACTS.json",
+      "source_bytes": 2406,
+      "source_sha256": "bb31b0636469688f9a50cd0082a2d5488f06beeed4989030248f6e43e7c8738f",
+      "published_bytes": 2406,
+      "published_sha256": "bb31b0636469688f9a50cd0082a2d5488f06beeed4989030248f6e43e7c8738f",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "input-audit-pause.json",
+      "purpose": "Controlled pause included in immutability audit elapsed time",
+      "source": "<ACCEPTANCE_ROOT>/work/phase5/input-audit-pause.json",
+      "source_bytes": 293,
+      "source_sha256": "b8f971c6d280990f8d5aa45ac6adafea23f6582e4db45cf90d5fbd349885b230",
+      "published_bytes": 293,
+      "published_sha256": "b8f971c6d280990f8d5aa45ac6adafea23f6582e4db45cf90d5fbd349885b230",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "navigation-index-count-interruption.json",
+      "purpose": "Retained failed pre-count during navigation index repair",
+      "source": "<ACCEPTANCE_ROOT>/work/phase5/navigation-index-count-interruption.json",
+      "source_bytes": 244,
+      "source_sha256": "6d420b9db2e9d0d0d014fcd19682c530fb601d5c94a5411e8f6799ecb1afa6a1",
+      "published_bytes": 244,
+      "published_sha256": "6d420b9db2e9d0d0d014fcd19682c530fb601d5c94a5411e8f6799ecb1afa6a1",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "browser-real-before-group-index.json",
+      "purpose": "Actual browser timeout before navigation index repair",
+      "source": "<ACCEPTANCE_ROOT>/work/phase5/browser-real-before-group-index.json",
+      "source_bytes": 921,
+      "source_sha256": "19a5395ab98393fc0e0c290f3bf6a7cfca11ebe4ad9f2af4ec76aae841e06722",
+      "published_bytes": 921,
+      "published_sha256": "19a5395ab98393fc0e0c290f3bf6a7cfca11ebe4ad9f2af4ec76aae841e06722",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "browser-real-first-selection.json",
+      "purpose": "Retained earlier browser harness selection error",
+      "source": "<ACCEPTANCE_ROOT>/work/phase5/browser-real-first-selection.json",
+      "source_bytes": 675,
+      "source_sha256": "8ca1ad229a42003fade5ab354bf4b17a1cce337fc01aa3554e39c4a6815620de",
+      "published_bytes": 675,
+      "published_sha256": "8ca1ad229a42003fade5ab354bf4b17a1cce337fc01aa3554e39c4a6815620de",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "full-tests.log",
+      "purpose": "Current full suite: exact test names and skip reasons",
+      "source": "<ACCEPTANCE_ROOT>/work/phase5/publication/full-tests.log",
+      "source_bytes": 24539,
+      "source_sha256": "5f8b77bff9cd7ae19da90696aeadfb2ff1d6ef6a092a4852eaa5a61395397108",
+      "published_bytes": 24006,
+      "published_sha256": "5aab91fbb23aedd49dab2ccdc9ae880cded30747330ec6f1072f55a76d52369a",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "full-tests.time",
+      "purpose": "Current full-suite command exit code, wall time and RSS",
+      "source": "<ACCEPTANCE_ROOT>/work/phase5/publication/full-tests.time",
+      "source_bytes": 811,
+      "source_sha256": "f35df3964058f9327427537be96bb035f8b74ea8436f1ed30076520b1b7d2105",
+      "published_bytes": 811,
+      "published_sha256": "f35df3964058f9327427537be96bb035f8b74ea8436f1ed30076520b1b7d2105",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "rc-tree-tests.log",
+      "purpose": "Isolated staged RC tree complete suite",
+      "source": "<ACCEPTANCE_ROOT>/work/phase5/publication/rc-tree-tests.log",
+      "source_bytes": 20349,
+      "source_sha256": "729acb649d5c7be96589fb2377abf555b89dc87997801bd69c5b111b0ecf4d33",
+      "published_bytes": 19816,
+      "published_sha256": "ba90e56af0cf8695a073b713cf600045fd2829dba935b432ebe144a8c546bd90",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "rc-tree-tests.time",
+      "purpose": "Isolated RC tree command exit code and resource metrics",
+      "source": "<ACCEPTANCE_ROOT>/work/phase5/publication/rc-tree-tests.time",
+      "source_bytes": 899,
+      "source_sha256": "5fd70afe214c0676c5056f0faf51f3f2295ec71d0b7d13ef8acb8c498716ca77",
+      "published_bytes": 858,
+      "published_sha256": "49056a03f74b186f47554f5ab07ade8f56d20c613b36f71a0531eec537c2bebe",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "independent_reconcile.py.txt",
+      "purpose": "Actual independent reconciliation script (path-normalized text evidence, not an executable tool)",
+      "source": "<ACCEPTANCE_ROOT>/work/phase5/independent_reconcile.py",
+      "source_bytes": 4017,
+      "source_sha256": "bef8ee2a003c972b60ebb4929cfd5dab3ab71664c45a4860c38caf38771570f0",
+      "published_bytes": 3976,
+      "published_sha256": "006ed876d2fe6f05057fd9251902178fce0aedaf6e8e62e53bfec0d6bcd5c8a2",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    },
+    {
+      "file": "audit_immutable.py.txt",
+      "purpose": "Actual input immutability audit script (path-normalized text evidence)",
+      "source": "<ACCEPTANCE_ROOT>/work/phase5/audit_immutable.py",
+      "source_bytes": 3046,
+      "source_sha256": "cec9eae021392c75951d8bcf9d9ad9ca42a50ff11cfa7eb4223dcf79273d9064",
+      "published_bytes": 3005,
+      "published_sha256": "21b8987960b8a10b55753e8e7c19ccdbc10707beb51b444036ba7e8204790d91",
+      "normalization": "Only acceptance/repository absolute path prefixes replaced; all measurements and hashes preserved."
+    }
+  ],
+  "derived_documents": [
+    "INPUT_PROVENANCE.json",
+    "CODE_PROVENANCE.json",
+    "PREPUBLICATION_CLASSIFICATION.json"
+  ],
+  "exclusions": "No archives, partition/rootfs/RPM/SDK data, SQLite, full report JSON/CSV, caches, browser profiles, credentials or raw environment dumps."
+}

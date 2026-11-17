@@ -1,0 +1,105 @@
+{
+  "report_files": {
+    "README.md": {
+      "bytes": 1870,
+      "allocated_bytes": 4096
+    },
+    "elf-symbol-summary.csv": {
+      "bytes": 2659496,
+      "allocated_bytes": 2662400
+    },
+    "enhanced-report.css": {
+      "bytes": 1484,
+      "allocated_bytes": 4096
+    },
+    "enhanced-report.js": {
+      "bytes": 12274,
+      "allocated_bytes": 12288
+    },
+    "finding-index.csv": {
+      "bytes": 128921608,
+      "allocated_bytes": 128929792
+    },
+    "independent-validation.json": {
+      "bytes": 2498,
+      "allocated_bytes": 4096
+    },
+    "index.html": {
+      "bytes": 11334,
+      "allocated_bytes": 12288
+    },
+    "linking-findings-groups.csv": {
+      "bytes": 223005931,
+      "allocated_bytes": 223010816
+    },
+    "linking-group-members.csv": {
+      "bytes": 136738171,
+      "allocated_bytes": 136740864
+    },
+    "linking-unknown-reasons.csv": {
+      "bytes": 685,
+      "allocated_bytes": 4096
+    },
+    "navigation-index-evidence.json": {
+      "bytes": 943,
+      "allocated_bytes": 4096
+    },
+    "overview-refresh-evidence.json": {
+      "bytes": 1426,
+      "allocated_bytes": 4096
+    },
+    "overview.json": {
+      "bytes": 18024,
+      "allocated_bytes": 20480
+    },
+    "package-symbol-summary.csv": {
+      "bytes": 85262265,
+      "allocated_bytes": 85262336
+    },
+    "report-index.sqlite": {
+      "bytes": 6024732672,
+      "allocated_bytes": 6025867264
+    },
+    "resource-samples.jsonl": {
+      "bytes": 75192,
+      "allocated_bytes": 81920
+    },
+    "run.json": {
+      "bytes": 1586,
+      "allocated_bytes": 4096
+    },
+    "source-after.json": {
+      "bytes": 1055,
+      "allocated_bytes": 4096
+    },
+    "source-before.json": {
+      "bytes": 1055,
+      "allocated_bytes": 4096
+    },
+    "stages.json": {
+      "bytes": 724,
+      "allocated_bytes": 4096
+    },
+    "symbol-differences.csv": {
+      "bytes": 459781250,
+      "allocated_bytes": 459788288
+    },
+    "unassigned-findings.csv": {
+      "bytes": 233335,
+      "allocated_bytes": 233472
+    },
+    "validation.json": {
+      "bytes": 1522,
+      "allocated_bytes": 4096
+    }
+  },
+  "report_logical_bytes": 7061466400,
+  "report_allocated_bytes": 7062667264,
+  "work_allocated_bytes": 713879552,
+  "resources": {
+    "mem_available_bytes": 18768203776,
+    "swap_free_bytes": 625459200,
+    "disk_available_bytes": 209123684352,
+    "inodes_available": 96308505
+  }
+}

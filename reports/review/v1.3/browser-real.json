@@ -1,0 +1,198 @@
+{
+  "base": "http://127.0.0.1:8767/",
+  "checks": [
+    {
+      "name": "initial overview rendered",
+      "ms": 529.892952,
+      "body_bytes": 21639
+    },
+    {
+      "name": "#/packages",
+      "ms": 220.54699600000004
+    },
+    {
+      "name": "package name search rendered",
+      "ms": 162.38912800000003,
+      "first_row": "building-blocks-sub2-domain_API-Base-Glibc\tcandidate\tmatched\t0\t0\tUNKNOWN\t0\tUNKNOWN\tUNKNOWN\tUNKNOWN\tUNKNOWN\t0\t0"
+    },
+    {
+      "name": "#/package/candidate/runtime%3A6f0cd9c9be8780155708ac5b",
+      "ms": 4975.64054
+    },
+    {
+      "name": "#/elf/PAIR-6eb53e4fcc5cd5ddf12e3a61",
+      "ms": 223.4564959999998
+    },
+    {
+      "name": "ELF symbol first page",
+      "rows": 50
+    },
+    {
+      "name": "#/groups",
+      "ms": 2407.6172739999993
+    },
+    {
+      "name": "#/group/LG-5ea915db741321a8601cb860d6c429c8",
+      "ms": 162.5299930000001
+    },
+    {
+      "name": "#/finding/TC-00043fd7acc521be",
+      "ms": 58.750661999998556
+    },
+    {
+      "name": "original finding payload visible",
+      "characters": 2420
+    }
+  ],
+  "errors": [],
+  "browser_stderr": "",
+  "performance": {
+    "metrics": [
+      {
+        "name": "Timestamp",
+        "value": 294695.220073
+      },
+      {
+        "name": "AudioHandlers",
+        "value": 0
+      },
+      {
+        "name": "AudioWorkletProcessors",
+        "value": 0
+      },
+      {
+        "name": "Documents",
+        "value": 4
+      },
+      {
+        "name": "Frames",
+        "value": 4
+      },
+      {
+        "name": "JSEventListeners",
+        "value": 20
+      },
+      {
+        "name": "LayoutObjects",
+        "value": 5666
+      },
+      {
+        "name": "MediaKeySessions",
+        "value": 0
+      },
+      {
+        "name": "MediaKeys",
+        "value": 0
+      },
+      {
+        "name": "Nodes",
+        "value": 13070
+      },
+      {
+        "name": "Resources",
+        "value": 17
+      },
+      {
+        "name": "ContextLifecycleStateObservers",
+        "value": 130
+      },
+      {
+        "name": "V8PerContextDatas",
+        "value": 2
+      },
+      {
+        "name": "WorkerGlobalScopes",
+        "value": 0
+      },
+      {
+        "name": "UACSSResources",
+        "value": 0
+      },
+      {
+        "name": "RTCPeerConnections",
+        "value": 0
+      },
+      {
+        "name": "ResourceFetchers",
+        "value": 4
+      },
+      {
+        "name": "AdSubframes",
+        "value": 0
+      },
+      {
+        "name": "DetachedScriptStates",
+        "value": 1
+      },
+      {
+        "name": "ArrayBufferContents",
+        "value": 0
+      },
+      {
+        "name": "LayoutCount",
+        "value": 21
+      },
+      {
+        "name": "RecalcStyleCount",
+        "value": 21
+      },
+      {
+        "name": "LayoutDuration",
+        "value": 0.063441
+      },
+      {
+        "name": "RecalcStyleDuration",
+        "value": 0.016158
+      },
+      {
+        "name": "DevToolsCommandDuration",
+        "value": 0.034209
+      },
+      {
+        "name": "ScriptDuration",
+        "value": 0.00855
+      },
+      {
+        "name": "V8CompileDuration",
+        "value": 0.000033
+      },
+      {
+        "name": "TaskDuration",
+        "value": 0.22895
+      },
+      {
+        "name": "TaskOtherDuration",
+        "value": 0.106559
+      },
+      {
+        "name": "ThreadTime",
+        "value": 0.204874
+      },
+      {
+        "name": "ProcessTime",
+        "value": 0.35
+      },
+      {
+        "name": "JSHeapUsedSize",
+        "value": 1701724
+      },
+      {
+        "name": "JSHeapTotalSize",
+        "value": 3932160
+      },
+      {
+        "name": "FirstMeaningfulPaint",
+        "value": 294687.22207
+      },
+      {
+        "name": "DomContentLoaded",
+        "value": 294686.974665
+      },
+      {
+        "name": "NavigationStart",
+        "value": 294686.469611
+      }
+    ]
+  },
+  "status": "PASS"
+}

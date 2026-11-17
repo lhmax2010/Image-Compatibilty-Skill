@@ -1,0 +1,36 @@
+{
+  "base": "http://127.0.0.1:8767/",
+  "checks": [
+    {
+      "name": "initial overview rendered",
+      "ms": 69.14196099999998,
+      "body_bytes": 21639
+    },
+    {
+      "name": "#/packages",
+      "ms": 109.287803
+    },
+    {
+      "name": "package name search rendered",
+      "ms": 110.93928600000004,
+      "first_row": "building-blocks-sub2-domain_API-Base-Glibc\tcandidate\tmatched\t0\t0\tUNKNOWN\t0\tUNKNOWN\tUNKNOWN\tUNKNOWN\tUNKNOWN\t0\t0"
+    },
+    {
+      "name": "#/package/candidate/runtime%3A6f0cd9c9be8780155708ac5b",
+      "ms": 168.54270600000007
+    },
+    {
+      "name": "#/elf/PAIR-0b01954a5ac0ccccbea5a91f",
+      "ms": 102.68404699999996
+    },
+    {
+      "name": "ELF symbol first page",
+      "rows": 1
+    }
+  ],
+  "errors": [
+    "Error: Timeout: document.querySelector('input[name=reason]') && document.querySelector('#app tbody a')"
+  ],
+  "browser_stderr": "",
+  "status": "FAIL"
+}

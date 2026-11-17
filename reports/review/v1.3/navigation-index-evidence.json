@@ -1,0 +1,27 @@
+{
+  "reason": "Actual browser default group query exceeded deadline without covering navigation index",
+  "index_sql": "CREATE INDEX group_navigation ON groups(raw_count DESC,id,reason,status,interface)",
+  "group_rows_before_reconciled_overview": 134402,
+  "group_rows_after_covering_index": 134402,
+  "plan": [
+    [
+      4,
+      0,
+      0,
+      "SCAN groups USING COVERING INDEX group_navigation"
+    ]
+  ],
+  "data_rows_modified": false,
+  "wall_seconds": 27.75778615003219,
+  "resources": {
+    "elapsed_seconds": 27.76068808097625,
+    "mem_available_bytes": 18173202432,
+    "swap_free_bytes": 621969408,
+    "tree_rss_bytes": 156123136,
+    "process_peak_rss_bytes": 176635904,
+    "cpu_seconds": 1.3092389999999998,
+    "allocated_bytes": 7062659072,
+    "disk_free_bytes": 209322573824,
+    "memory_pressure": "some avg10=0.00 avg60=0.00 avg300=0.00 total=61138602\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=59773403\n"
+  }
+}

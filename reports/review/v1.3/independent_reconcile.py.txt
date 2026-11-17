@@ -1,0 +1,50 @@
+"""Read back actual v1.3 artifacts, independently of the build entry point."""
+import collections,csv,json,pathlib,sqlite3,time
+B=pathlib.Path('<ACCEPTANCE_ROOT>');R=B/'reports/phase5-report-enhancement';W=B/'work/phase5'
+start=time.monotonic();db=sqlite3.connect((R/'report-index.sqlite').as_uri()+'?mode=ro',uri=True);db.row_factory=sqlite3.Row
+csv.field_size_limit(64*1024*1024)
+def scalar(sql):return db.execute(sql).fetchone()[0]
+expected={'UNKNOWN':860110,'INCOMPATIBLE':12195,'COMPATIBLE':25726,'IDENTICAL':311}
+out={'checks':{}};checks=out['checks']
+checks['phase4_exact_status_counts']=dict(db.execute('select status,count(*) from findings group by status'))==expected
+checks['phase4_exact_findings']=scalar('select count(*) from findings')==898342
+checks['phase4_exact_unassigned']=scalar('select count(*) from unassigned')==11111
+checks['phase4_exact_packages']=dict(db.execute('select side,count(*) from packages group by side'))=={'baseline':722,'candidate':736}
+checks['phase4_exact_elf_rows']=dict(db.execute('select side,count(*) from raw_elf group by side'))=={'baseline':2007,'candidate':2116}
+checks['aliases_deduplicated']=dict(db.execute('select side,count(*) from elf group by side'))=={'baseline':1968,'candidate':2077}
+for filename,query in {
+ 'finding-index.csv':'select id,status,dimension,n,payload_hash,group_id from findings order by n',
+ 'unassigned-findings.csv':'select id from unassigned order by id',
+ 'linking-group-members.csv':'select group_id,id,consumer_image,consumer_path,root_image,root_path,provider_path from findings where group_id is not null order by group_id,id'
+}.items():
+ count=0;expected_rows=iter(db.execute(query));equal=True
+ with (R/filename).open(newline='') as stream:
+  for row in csv.DictReader(stream):
+   original=next(expected_rows,None)
+   if original is None:equal=False;break
+   for k,v in dict(original).items():
+    value='UNKNOWN' if v is None else str(v)
+    if value.startswith(('=','+','-','@','\t','\r')):value="'"+value
+    if row[k]!=value:equal=False;break
+   count+=1
+ checks[filename+'_exact_fields']=equal and next(expected_rows,None) is None
+ out[filename+'_rows']=count
+ print('verified',filename,count,flush=True)
+checks['groups_cover_all_linking']=scalar('select sum(raw_count) from groups')==855522==out['linking-group-members.csv_rows']
+checks['each_linking_member_has_existing_group']=scalar('select count(*) from findings f left join groups g on f.group_id=g.id where f.group_id is not null and g.id is null')==0
+checks['no_package_complete_counts_from_partial_manifests']=True
+no_elf=collections.Counter()
+for p in db.execute('select side,summary from packages'):
+ s=json.loads(p['summary'])
+ if any(v is not None for v in s['counts'].values()) or s['owned_elf_count'] is not None:checks['no_package_complete_counts_from_partial_manifests']=False
+ if s['observed_owned_elf_count']==0:no_elf[p['side']]+=1
+out['packages_with_no_observed_elf']=dict(no_elf)
+out['group_count']=scalar('select count(id) from groups');out['distinct_recorded_interfaces']=scalar('select count(distinct interface) from groups')
+out['multiple_observation_groups']=scalar('select count(*) from groups where raw_count>1')
+out['observations_in_multiple_groups']=scalar('select sum(raw_count) from groups where raw_count>1')
+out['resolution_distribution']=[dict(r) for r in db.execute('select resolution,status,count(*) count from findings where dimension="linking" group by resolution,status')]
+out['symbol_rows_by_category']=dict(db.execute('select difference_type,count(*) from differences group by difference_type'))
+out['package_match_status']=[dict(r) for r in db.execute('select side,match_status,count(*) count from packages group by side,match_status')]
+out['status']='PASS' if all(checks.values()) else 'FAIL';out['wall_seconds']=time.monotonic()-start
+(R/'independent-validation.json').write_text(json.dumps(out,indent=2));print(json.dumps(out,indent=2));db.close()
+raise SystemExit(out['status']!='PASS')

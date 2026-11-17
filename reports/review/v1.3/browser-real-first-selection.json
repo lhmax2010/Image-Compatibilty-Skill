@@ -1,0 +1,24 @@
+{
+  "base": "http://127.0.0.1:8767/",
+  "checks": [
+    {
+      "name": "initial overview rendered",
+      "ms": 2604.596511,
+      "body_bytes": 21639
+    },
+    {
+      "name": "#/packages",
+      "ms": 355.42552199999955
+    },
+    {
+      "name": "package name search rendered",
+      "ms": 110.3441929999999,
+      "first_row": "building-blocks-sub2-domain_API-Base-Glibc\tcandidate\tmatched\t0\t0\tUNKNOWN\t0\tUNKNOWN\tUNKNOWN\tUNKNOWN\tUNKNOWN\t0\t0"
+    }
+  ],
+  "errors": [
+    "Error: Timeout: document.querySelector('#app').innerText.includes('Owned canonical ELF pairs') && document.querySelector('#app tbody a')"
+  ],
+  "browser_stderr": "",
+  "status": "FAIL"
+}

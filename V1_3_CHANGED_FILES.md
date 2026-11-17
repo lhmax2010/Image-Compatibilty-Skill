@@ -37,3 +37,13 @@ No existing production Python module is modified by v1.3. In particular `core.py
 - Phase3/4 reports, evidence, original rootfs, archives and partitions are inputs and remain unchanged. Exact after-checks and artifact sizes are recorded in the validation/performance documents and machine audit files.
 
 No commit, push, branch switch, reset, stash or merge is performed. Final branch/HEAD/main verification and SHA256 changes are saved in `work/phase5/FINAL_WORKSPACE.json` at handoff.
+
+## GitHub review publication supplement
+
+The sections above describe the completed development task before publication. The subsequent user-authorized handoff publishes a new Draft review branch, based on `2d5bacaef2af1a9bd4b793123de02684e5f38128`, without changing main or the existing review branch.
+
+- RC commit `67d039c4ecc9a169fe9da0530d3bda6b5df01b62`: 27 files, precisely recovered from the saved pre-v1.3 snapshot.
+- v1.3 code commit `15c9b6340268983dc51ad308319dafe68f39a6a0`: the 20 development files listed above, with production code/tests unchanged during publication. Three documentation paths overlap with RC: 44 distinct original changed files.
+- A separate documentation/evidence receipt adds `V1_3_REVIEW_HANDOFF.md` and 28 small UTF-8 evidence files under `reports/review/v1.3/`, and appends this publication note: **73 distinct changed files against the PR base**.
+
+The complete per-file classification, purpose, exact test commands/skips and code-to-evidence mapping are in [V1_3_REVIEW_HANDOFF.md](V1_3_REVIEW_HANDOFF.md). Only `design.md` and `require.md` remain untracked in the repository. No raw large report, image, rootfs, database, SDK, cache or credential is published.

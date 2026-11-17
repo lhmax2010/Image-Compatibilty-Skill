@@ -1,0 +1,38 @@
+[
+  {
+    "stage": "baseline manifest",
+    "seconds": 7.477947910956573
+  },
+  {
+    "stage": "candidate manifest",
+    "seconds": 8.080115857010242
+  },
+  {
+    "stage": "original findings and assessments",
+    "seconds": 1942.4157502070302
+  },
+  {
+    "stage": "canonical ELF matching",
+    "seconds": 1.284401967015583
+  },
+  {
+    "stage": "symbol observations",
+    "seconds": 45.33732130803401
+  },
+  {
+    "stage": "linking navigation groups",
+    "seconds": 60.89400154701434
+  },
+  {
+    "stage": "package statistics",
+    "seconds": 38.53909002500586
+  },
+  {
+    "stage": "CSV exports",
+    "seconds": 48.16501298599178
+  },
+  {
+    "stage": "independent reconciliation",
+    "seconds": 87.60789769695839
+  }
+]
