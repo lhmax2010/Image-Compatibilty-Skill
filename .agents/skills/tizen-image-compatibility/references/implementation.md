@@ -1,4 +1,4 @@
-> Historical 1.0 delivery record. For current 1.1 behavior, see [correctness.md](correctness.md), [report_schema.md](report_schema.md), and repository-root VALIDATION_RESULTS.md. Counts and missing-tool statements below describe the original delivery, not the current remediation.
+> Historical 1.0 delivery record. For current 1.2 behavior, see [correctness.md](correctness.md), [report_schema.md](report_schema.md), and repository-root V1_2_VALIDATION.md. Counts and missing-tool statements below describe the original delivery, not the current remediation.
 
 # Implementation delivery record
 

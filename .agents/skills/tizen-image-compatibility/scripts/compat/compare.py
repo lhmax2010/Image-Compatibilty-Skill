@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from collections import defaultdict
 from typing import Any
 from .core import DIMENSIONS, SEVERITIES, Tools, canonical, finding
 from .elf import symbol_identity, target_abi_matches, arm_abi
@@ -150,17 +151,23 @@ def compare_api(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def compare_packages(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
-    old = {(x['name'], x['arch']): x for x in a['packages']}
-    new = {(x['name'], x['arch']): x for x in b['packages']}
+    old = defaultdict(list); new = defaultdict(list)
+    for record in a['packages']: old[(record['name'], record['arch'])].append(record)
+    for record in b['packages']: new[(record['name'], record['arch'])].append(record)
     findings = []
-    for key, package in old.items():
-        other = new.get(key)
+    for key, packages in old.items():
+        candidates = new.get(key, [])
+        if len(packages) != 1 or len(candidates) > 1:
+            findings.append(finding('packages', ':'.join(key), 'package identity', packages, candidates, 'UNKNOWN', 'HIGH', impact='Multiple installed NEVRAs require explicit identity resolution; none were overwritten.'))
+            continue
+        package = packages[0]
+        other = candidates[0] if candidates else None
         if not other:
             findings.append(finding('packages', ':'.join(key), 'package availability', package['name'], None, 'UNKNOWN', 'HIGH',
                 impact='Package may be renamed, split or replaced; check its provided interfaces and file consumers.'))
             continue
         ev = evidence(package, other)
-        for field in ('version', 'release', 'provides', 'requires', 'conflicts', 'obsoletes', 'files'):
+        for field in ('epoch', 'version', 'release', 'provides', 'requires', 'conflicts', 'obsoletes', 'files'):
             if package.get(field) != other.get(field):
                 release = field == 'release'
                 findings.append(finding('packages', ':'.join(key), field, package.get(field), other.get(field),
@@ -233,8 +240,17 @@ def compare_static(a: dict[str, Any], b: dict[str, Any], config: dict[str, Any])
 def finalize(findings: list[dict[str, Any]], config: dict[str, Any]) -> list[dict[str, Any]]:
     active = set(config['analysis']['modes'])
     unique = {}
+    payloads = {}
     for item in findings:
         if item['dimension'] in active:
-            item['severity'] = config['severity_overrides'].get(item['dimension'], item['severity'])
-            unique[item['id']] = item
+            item = dict(item, severity=config['severity_overrides'].get(item['dimension'], item['severity']))
+            ident = item['id']
+            payload = canonical({k: v for k, v in item.items() if k != 'occurrences'})
+            if ident in unique:
+                if payloads[ident] != payload:
+                    raise ValueError('Conflicting finding ID: ' + ident)
+                unique[ident]['occurrences'] = unique[ident].get('occurrences', 1) + item.get('occurrences', 1)
+            else:
+                unique[ident] = item
+                payloads[ident] = payload
     return sorted(unique.values(), key=lambda x: (SEVERITIES.index(x['severity']), x['dimension'], x['component'], x['id']))

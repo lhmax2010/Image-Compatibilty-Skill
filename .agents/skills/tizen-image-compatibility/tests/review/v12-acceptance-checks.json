@@ -1,0 +1,64 @@
+[
+  {
+    "argv": [
+      "python3",
+      "-m",
+      "compileall",
+      "-q",
+      ".agents/skills/tizen-image-compatibility/scripts",
+      ".agents/skills/tizen-image-compatibility/tests"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "python3",
+      "/opt/nvme-home/linhao/.codex/skills/.system/skill-creator/scripts/quick_validate.py",
+      ".agents/skills/tizen-image-compatibility"
+    ],
+    "exit_code": 0,
+    "stdout": "Skill is valid!\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "git",
+      "diff",
+      "--check"
+    ],
+    "exit_code": 0,
+    "stdout": "",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "git",
+      "branch",
+      "--show-current"
+    ],
+    "exit_code": 0,
+    "stdout": "review/tizen-compatibility-correctness-1.1\n",
+    "stderr": ""
+  },
+  {
+    "argv": [
+      "git",
+      "rev-parse",
+      "HEAD"
+    ],
+    "exit_code": 0,
+    "stdout": "b5fe963efe4243e969638846fd5523e685dc3928\n",
+    "stderr": ""
+  },
+  {
+    "check": "sample configuration and generated package manifests readable",
+    "result": "PASS"
+  },
+  {
+    "check": "local Markdown links",
+    "files_checked": 18,
+    "result": "PASS"
+  }
+]

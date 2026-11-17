@@ -60,10 +60,24 @@ The last command deliberately returns **1** because the fixture removes a versio
 
 For supported tools/dependencies read [tool_requirements.md](references/tool_requirements.md). For implementation, raw evidence, caching and normalization read [detection_methods.md](references/detection_methods.md). For consumers of JSON/CSV read [report_schema.md](references/report_schema.md). The detailed delivery/validation record is [implementation.md](references/implementation.md).
 
-## Correctness and migration gates (1.1)
+## Correctness and migration gates (1.2)
 
 Before claiming GCC-to-LLVM migration compatibility, read [correctness.md](references/correctness.md). Preserve exact versions (`@` / `@@`), actual provider paths and baseline-consumer direction. Do not dismiss C++/ASAN/generated-symbol removals from export counts or naming alone. Same-build-type comparisons reduce confounding but do not establish compatibility themselves.
 
 Require explicit compiler → SDK/native-reference/build-provenance mappings for the four-way matrix. SDK headers and runtime-image headers are separate evidence. Own-reference failure or missing deployment/execution receipts means UNKNOWN. Never execute target artifacts directly on the host.
 
-Report each dimension's applicable/verified/compatible/incompatible/unknown contracts and both percentage denominators. Missing tools/DWARF/SDK/devices must remain visible. Configure `ci.minimum_coverage` for actual quality gates; an exit 0 with no coverage threshold is not a full pass. Loader verification is conditional on a complete declared target search environment; unknown caches/namespace behavior must not be guessed. Schema 1.0 successful observations require revalidation under 1.1.
+Report compatibility outcome and verification completeness independently. A confirmed break with missing checks is **INCOMPATIBLE + PARTIAL**, not fully verified. Count only COMPLETE mandatory obligations in coverage; show partial/unexecuted obligations, confirmed failures, and both denominators. Missing tools/DWARF/SDK/devices stay visible. `ci.minimum_coverage` and compatibility failures have separate gate reasons; exit 0 without coverage thresholds is not a full pass.
+
+Inspect `expected-tests.json` (written before execution) and `expected-tests-results.json`. Matrix acceptance requires exact expected IDs, all mandatory stages, matching artifact hashes and a valid native reference. Header limits and unavailable prerequisites leave expected tests incomplete. Loader verification requires a declared complete startup scope/search environment; multiple providers, weak/IFUNC/GNU UNIQUE/protected semantics, namespaces and legacy interposition stay UNKNOWN when unsupported. Never promote first-match lookup evidence to runtime proof.
+
+Use configured SDK ABI and selected runtime objects for ARMv7 probes; unrelated missing attributes do not veto the primary ABI. Report mixed objects separately. Base PCS (`float: soft`) includes softfp code generation; it is distinct from VFP PCS (`float: hard`).
+
+Read [packages.md](references/packages.md) before interpreting package results. Installed RPM database records and available RPM archives are separate. Unreadable/missing databases mean unknown counts, not zero. Ownership uses RPM file lists, retaining multiple owners and usrmerge aliases; consumer, provider and root consumer are separate roles. SDK header findings need an explicitly associated SDK inventory. Runtime-only packages do not establish API compatibility. Review `package_results`, `packages.csv` and unassigned interfaces alongside global findings.
+
+Schema 1.0/1.1 successful observations require 1.2 revalidation. Preserve failures and original evidence; never infer new execution from manifest reuse.
+
+## Acceptance accounting
+
+Check `count_reconciliation`, candidate assessments and unverified package records before reporting package totals. Review `provider_consumers`, `interface_findings`, and global unassigned finding IDs. Shared-file rename/split hints are UNKNOWN, not proof of lineage. Complete data-only applicability yields NOT_APPLICABLE, not an automatic compatibility pass. `finding_integrity` makes exact duplicate occurrences visible; distinct root-consumer failures must remain distinct. A recorded failure without complete test metadata stays incompatible and partial.
+
+For a small reproducible package report see [examples/package-report](examples/package-report/README.md). The stress tool in `tests/review/benchmark_v12.py` validates serialized IDs/relationships and enforces time/memory budgets; do not describe a successful process exit without those checks as scale validation. Before product acceptance, require actual RPM inventories, matching SDK/debuginfo/ABI evidence, declared loader context, a complete expected probe list, and an authorized isolated adapter. Full prerequisites and capability categories are in the repository's `V1_2_CORRECTNESS_REMEDIATION.md`.

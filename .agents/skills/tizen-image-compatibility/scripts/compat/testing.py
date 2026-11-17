@@ -5,10 +5,11 @@ from pathlib import Path
 import re
 import json
 from typing import Any
-from .core import Tools, finding, hash_file, InputError
+from .core import Tools, finding, hash_file, InputError, write_json, digest, canonical
 from .images import Image
-from .elf import collect_elf, target_abi_matches
+from .elf import collect_elf, target_abi_matches, verify_compile_target
 from .semantic import semantic_probe, compare_semantics
+from .matrix_manifest import prepare_sdks, plan_expected, reconcile
 
 ASSETS = Path(__file__).resolve().parents[2] / 'assets' / 'probes'
 
@@ -25,7 +26,20 @@ def run_matrix(manifests: tuple[dict[str, Any], dict[str, Any]], roots: tuple[An
     build_dir = tools.output / 'build'
     build_dir.mkdir(exist_ok=True)
     tools.aliases[str(build_dir)] = '<build>'
+    sdks = prepare_sdks(manifests, tools)
+    expected = plan_expected(manifests, tools, ASSETS)
+    write_json(tools.output / 'expected-tests.json', expected)
+    planned = {(e['legacy_id'], e['image'], 'runtime' if e['kind'] == 'runtime' else 'compile'): e for e in expected}
     def record(test: dict[str, Any]) -> None:
+        test['logical_id'] = test['id']
+        plan = planned.get((test['id'], test['image'], test['kind']))
+        if plan:
+            test['id'] = plan['id']
+        elif test.get('name') is None:
+            test['kind'] = 'diagnostic'
+            test['id'] = 'DIAG-' + digest(canonical([test['id'], test['image']]).encode())[:24]
+        else:
+            test['id'] = 'UNEXPECTED-' + digest(canonical([test['id'], test['image']]).encode())[:24]
         tests.append(test)
         image_index = 0 if test['image'] == 'baseline' else 1
         manifests[image_index]['test_results'].append(test)
@@ -48,21 +62,8 @@ def run_matrix(manifests: tuple[dict[str, Any], dict[str, Any]], roots: tuple[An
                 cell['reason'] = 'Configured sysroot does not exist.'
                 continue
             tools.aliases[str(sysroot_path)] = f'<{label}-sysroot>'
-            sdk = Image(sysroot_path, build_dir, tools, label + '-sdk')
-            sdk_headers = []
-            for directory in cc['include_dirs']:
-                resolved = sdk.resolve('/' + directory)
-                if resolved and resolved.is_dir():
-                    for path in sorted(resolved.rglob('*')):
-                        if path.suffix in ('.h', '.hpp', '.hh', '.hxx'):
-                            virtual = '/' + directory.strip('/') + '/' + path.relative_to(resolved).as_posix()
-                            hp = sdk.resolve(virtual)
-                            if hp and hp.is_file():
-                                sdk_headers.append({'path': virtual, 'origin': 'sdk', 'sdk': str(sysroot_path)})
-            # Retain availability obligations for baseline image headers absent from the SDK.
-            sdk_paths = {h['path'] for h in sdk_headers}
-            sdk_headers += [dict(h, origin='sdk_missing') for h in manifest['public_headers'] if h['path'] not in sdk_paths]
-            manifest['sdk_headers'] = sdk_headers
+            sdk = sdks[label]
+            sdk_headers = manifest['sdk_headers']
             headers = sdk_headers[:int(cc['header_limit'])] if 'headers' in config['analysis']['modes'] else []
             if len(headers) < len(sdk_headers):
                 findings.append(finding('headers', label, compiler + ':header coverage', len(sdk_headers), len(headers),
@@ -92,6 +93,7 @@ def run_matrix(manifests: tuple[dict[str, Any], dict[str, Any]], roots: tuple[An
                 target_object = target_source.with_suffix('.o')
                 target = tools.run([*base, '-c', str(target_source), '-o', str(target_object)])
                 target_ok = False
+                target_verification = {'status': 'UNKNOWN', 'reason': 'Target compilation unavailable'}
                 if target['returncode'] == 0 and target_object.exists():
                     elf = collect_elf(target_object, target_object.name, tools, 'quick')
                     macro_result = tools.run([*base, '-dM', '-E', str(target_source)])
@@ -101,11 +103,17 @@ def run_matrix(manifests: tuple[dict[str, Any], dict[str, Any]], roots: tuple[An
                             elf['arm_abi']['float'] = 'hard'
                         elif '#define __ARM_PCS ' in compiler_macros:
                             elf['arm_abi']['float'] = 'soft'
-                    image_abis = [obj for obj in manifest['elf_objects'] if obj.get('complete') and not obj.get('type', '').startswith('REL')]
-                    target_ok = bool(image_abis) and all(target_abi_matches(elf, obj) for obj in image_abis)
+                    if elf.get('machine') == 'ARM':
+                        elf['arm_abi']['pcs'] = 'vfp' if elf['arm_abi'].get('float') == 'hard' else 'base' if elf['arm_abi'].get('float') == 'soft' else None
+                        elf['arm_abi']['float_codegen'] = 'hard' if '#define __ARM_PCS_VFP ' in compiler_macros else 'soft' if '#define __SOFTFP__ ' in compiler_macros else 'softfp' if '#define __ARM_FP ' in compiler_macros else 'unknown'
+                    target_verification = verify_compile_target(elf, manifest, config, label)
+                    target_ok = target_verification['status'] == 'COMPATIBLE'
+                    for mixed in target_verification['other_objects']:
+                        findings.append(finding('elf', mixed['path'], 'mixed/missing target ABI', target_verification['source'], mixed,
+                            mixed['status'], 'HIGH' if mixed['status'] == 'INCOMPATIBLE' else 'INFO', 'selected target ABI comparison'))
                 if not target_ok:
                     record({'id': compiler + ':' + language + ':target', 'image': label, 'compiler': compiler,
-                        'kind': 'compile', 'status': 'UNKNOWN', 'reason': 'Compiler target ABI could not be matched to image ELF metadata.',
+                        'kind': 'compile', 'status': 'UNKNOWN', 'reason': 'Compiler target ABI could not be matched to authoritative evidence.', 'target_abi_verification': target_verification,
                         'evidence': [target['stdout_evidence'], target['stderr_evidence']]})
                     continue
                 probes: list[tuple[str, Path, list[str], bool]] = []
@@ -129,7 +137,8 @@ def run_matrix(manifests: tuple[dict[str, Any], dict[str, Any]], roots: tuple[An
                         if probe['language'] == language:
                             probes.append((probe['name'], Path(probe['source']).resolve(), probe.get('flags', []), True))
                 for number, (name, source, extra, link) in enumerate(probes):
-                    artifact = build_dir / f'{compiler}-{label}-{language}-{number}.bin'
+                    planned_test = planned.get((compiler + ':' + language + ':' + name, label, 'compile'))
+                    artifact = tools.output / planned_test['expected_artifact'] if link and planned_test else build_dir / f'{compiler}-{label}-{language}-{number}.bin'
                     argv = [*base, *include_flags, '-UNDEBUG', '-std=c11' if language == 'c' else '-std=c++17',
                             str(source), *extra, '-o', str(artifact)] if link else [*base, *include_flags, '-fsyntax-only', str(source)]
                     result = tools.run(argv)
@@ -139,6 +148,9 @@ def run_matrix(manifests: tuple[dict[str, Any], dict[str, Any]], roots: tuple[An
                         'compiler': compiler, 'kind': 'compile', 'status': status, 'success': success,
                         'compiler_version': version['stdout'].splitlines()[:1], 'argv': result['argv'],
                         'sdk': str(sysroot_path), 'header_origin': 'sdk', 'target_abi': elf,
+                        'target_abi_verification': target_verification,
+                        'artifact_path': str(artifact.relative_to(tools.output)) if link else None,
+                        'artifact_sha256': hash_file(artifact) if success and link else None,
                         'compiler_macros_evidence': macro_result['stdout_evidence'],
                         'build_provenance': build.get('provenance'), 'reference_image': build.get('reference_image'),
                         'compile_status': 'SUCCESS' if success else 'FAILED',
@@ -156,9 +168,11 @@ def run_matrix(manifests: tuple[dict[str, Any], dict[str, Any]], roots: tuple[An
                 cell['header_status'] = 'COMPATIBLE'
             cell['reason'] = 'Header compilation is separate from binary execution.'
     # Only conclude regression when the exact compiler/probe succeeds on baseline headers.
-    old = {t['id']: t for t in tests if t['image'] == 'baseline'}
+    old = {t['logical_id']: t for t in tests if t['image'] == 'baseline'}
     for test in list(tests):
-        baseline = old.get(test['id'])
+        baseline = old.get(test['logical_id'])
+        if test.get('name', '').startswith('header:'):
+            test['native_reference_valid'] = bool(baseline and baseline.get('success'))
         if test['image'] == 'candidate' and test.get('name', '').startswith('header:'):
             if not baseline or not baseline.get('success'):
                 test['status'] = 'UNKNOWN'
@@ -189,7 +203,7 @@ def run_matrix(manifests: tuple[dict[str, Any], dict[str, Any]], roots: tuple[An
             record({'id': compiler + ':' + name + ':execution', 'name': name, 'image': label, 'compiler': compiler,
                 'kind': 'runtime', 'status': 'UNKNOWN', 'returncode': result['returncode'],
                 'reference_image': artifact['reference_image'], 'build_sdk': artifact['sdk'], 'build_provenance': artifact['provenance'],
-                'artifact_sha256': artifact['sha256'], 'compile_status': 'SUCCESS', **result['stages'], 'stdout': result['stdout'],
+                'artifact_sha256': artifact['sha256'], 'receipt_sha256': result.get('receipt_sha256'), 'compile_status': 'SUCCESS', **result['stages'], 'stdout': result['stdout'],
                 'stderr': result['stderr'], 'environment_id': environment['id'],
                 'evidence': [result['stdout_evidence'], result['stderr_evidence']]})
     if execution and roots:
@@ -199,21 +213,22 @@ def run_matrix(manifests: tuple[dict[str, Any], dict[str, Any]], roots: tuple[An
                 for probe in rt['probes']:
                     result = run_target(env, Path(probe['argv'][0]), probe['argv'][1:], label, image, tools)
                     record({'id': 'custom:' + probe['name'], 'name': probe['name'], 'image': label, 'compiler': 'custom',
-                        'kind': 'runtime', 'dimension': probe['dimension'], 'status': 'UNKNOWN', 'reference_image': 'baseline', **result['stages'],
+                        'kind': 'runtime', 'dimension': probe['dimension'], 'receipt_sha256': result.get('receipt_sha256'), 'expected_artifact_sha256': result.get('expected_artifact_sha256'), 'status': 'UNKNOWN', 'reference_image': 'baseline', **result['stages'],
                         'returncode': result['returncode'], 'stdout': result['stdout'], 'stderr': result['stderr'],
                         'expected_exit': probe.get('expected_exit', 0), 'expected_stdout': probe.get('expected_stdout'),
                         'evidence': [result['stdout_evidence'], result['stderr_evidence']]})
-    reference_tests = {(t['id'], t['image']): t for t in tests if t['kind'] == 'runtime'}
+    reference_tests = {(t['logical_id'], t['image']): t for t in tests if t['kind'] == 'runtime'}
     for test in tests:
         if test['kind'] != 'runtime':
             continue
-        reference = reference_tests.get((test['id'], test.get('reference_image', 'baseline')))
+        reference = reference_tests.get((test['logical_id'], test.get('reference_image', 'baseline')))
         if not reference or any(t.get(k) != 'SUCCESS' for t in (reference, test) for k in ('deployment_status', 'execution_status')):
             continue
         if not reference or reference['returncode'] != reference.get('expected_exit', 0):
             continue
         if reference.get('expected_stdout') is not None and reference['stdout'] != reference['expected_stdout']:
             continue
+        test['native_reference_valid'] = True
         if test['returncode'] < 0 or test['returncode'] in (124, 125, 126, 127):
             test['status'] = 'UNKNOWN'
         else:
@@ -222,18 +237,11 @@ def run_matrix(manifests: tuple[dict[str, Any], dict[str, Any]], roots: tuple[An
         findings.append(finding(test.get('dimension', 'runtime'), test['name'], test['compiler'] + ':' + test['image'],
             {k: reference[k] for k in ('returncode', 'stdout', 'stderr')}, {k: test[k] for k in ('returncode', 'stdout', 'stderr')},
             test['status'], 'HIGH' if test['status'] == 'INCOMPATIBLE' else 'INFO', 'authorized target adapter', test['evidence']))
-    for cell in matrix:
-        matched = [t for t in tests if t['kind'] == 'runtime' and t['image'] == cell['image'] and t['compiler'] == cell['compiler']]
-        expected = sum(bool(cc[k + '_tests']) for k in ('c', 'cpp')) + len(cc['probes'])
-        cell['compile_status'] = 'SUCCESS' if expected and sum(k[0] == cell['compiler'] for k in built) >= expected else 'UNKNOWN'
-        if matched:
-            for stage in ('deployment_status', 'execution_status'):
-                cell[stage] = 'SUCCESS' if len(matched) >= expected and all(t.get(stage) == 'SUCCESS' for t in matched) else 'UNKNOWN'
-            statuses = {t['status'] for t in matched}
-            cell['runtime_status'] = 'INCOMPATIBLE' if 'INCOMPATIBLE' in statuses else 'COMPATIBLE' if statuses == {'COMPATIBLE'} and len(matched) >= expected else 'UNKNOWN'
-        cell['behavior_status'] = cell['runtime_status']
-        statuses = {cell['header_status'], cell['runtime_status']}
-        cell['status'] = 'INCOMPATIBLE' if 'INCOMPATIBLE' in statuses else 'COMPATIBLE' if statuses == {'COMPATIBLE'} else 'UNKNOWN'
+    audit = reconcile(expected, tests, matrix)
+    for label, manifest in zip(('baseline', 'candidate'), manifests):
+        manifest['expected_tests'] = [e for e in expected if e['image'] == label or (e['image'] is None and label == 'baseline')]
+        manifest['test_manifest_audit'] = audit
+    write_json(tools.output / 'expected-tests-results.json', expected)
     return tests, matrix, findings
 
 
@@ -250,6 +258,8 @@ def run_target(environment: dict[str, Any], binary: Path, args: list[str], label
     try:
         receipt = json.loads(result['stdout'])
         source = binary if binary.is_file() and binary.is_relative_to(tools.output) else image.resolve(str(binary))
+        result['expected_artifact_sha256'] = hash_file(source) if source and source.is_file() else None
+        result['receipt_sha256'] = receipt.get('binary_sha256') if isinstance(receipt, dict) else None
         valid = (result['returncode'] == 0 and not result['stdout_truncated'] and isinstance(receipt, dict)
                  and receipt.get('schema') == 'tizen-compat-runner/v1' and receipt.get('environment_id') == environment['id']
                  and source and source.is_file() and receipt.get('binary_sha256') == hash_file(source))

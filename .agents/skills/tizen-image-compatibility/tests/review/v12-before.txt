@@ -1,0 +1,3 @@
+M1 two eligible providers: [('baseline consumers on candidate:import:f', 'COMPATIBLE')]
+M2 failure plus unknown: {'applicable': 1, 'verified': 1, 'incompatible': 1, 'coverage_percent': 100.0}
+M4 all-rootfs ABI prerequisite: False

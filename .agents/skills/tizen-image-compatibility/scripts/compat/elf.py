@@ -51,10 +51,10 @@ def parse_readelf(text: str) -> dict[str, Any]:
         if "Symbol table '" in line:
             in_dynamic = "'.dynsym'" in line
         if in_dynamic:
-            match = re.match(r'\s*\d+:\s+[0-9a-fA-F]+\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
+            match = re.match(r'\s*\d+:\s+([0-9a-fA-F]+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
             if match:
-                size, kind, binding, visibility, section, name = match.groups()
-                symbol = dict(name=name, size=int(size), type=kind, binding=binding, visibility=visibility,
+                value, size, kind, binding, visibility, section, name = match.groups()
+                symbol = dict(name=name, value=int(value, 16), size=int(size), type=kind, binding=binding, visibility=visibility,
                               section=section, **symbol_identity(name))
                 version_index = re.search(r'\((\d+)\)\s*$', line)
                 symbol['version_index'] = int(version_index[1]) if version_index else None
@@ -148,7 +148,8 @@ def arm_abi(obj: dict[str, Any]) -> dict[str, Any]:
     attr_float = 'hard' if vfp == 'VFP registers' else 'soft' if vfp == 'Base AAPCS' else None
     conflict = bool(float_abi and attr_float and float_abi != attr_float)
     return {'eabi': (bits >> 24) or None, 'float': float_abi or attr_float,
-            'vfp_args': vfp, 'cpu_arch': attrs.get('Tag_CPU_arch'), 'conflict': conflict}
+            'vfp_args': vfp, 'cpu_arch': attrs.get('Tag_CPU_arch'), 'conflict': conflict, 'pcs': 'vfp' if (float_abi or attr_float) == 'hard' else 'base' if (float_abi or attr_float) == 'soft' else None,
+            'fp_arch': attrs.get('Tag_FP_arch')}
 
 
 def target_abi_matches(left: dict[str, Any], right: dict[str, Any]) -> bool:
@@ -160,3 +161,61 @@ def target_abi_matches(left: dict[str, Any], right: dict[str, Any]) -> bool:
             return False
         return all(a.get(k) is not None and a.get(k) == b.get(k) for k in ('eabi', 'float'))
     return True
+
+
+def abi_relation(left, right):
+    """Tri-state metadata comparison; missing fields never imply agreement."""
+    missing = []; conflicts = []
+    for key in ('class', 'endianness', 'machine'):
+        if not left.get(key) or not right.get(key): missing.append(key)
+        elif left[key] != right[key]: conflicts.append(key)
+    if left.get('machine') == right.get('machine') == 'ARM':
+        a, b = left.get('arm_abi') or arm_abi(left), right.get('arm_abi') or arm_abi(right)
+        if a.get('conflict') or b.get('conflict'): conflicts.append('conflicting ARM attributes')
+        for key in ('eabi', 'float'):
+            if not a.get(key) or not b.get(key): missing.append(key)
+            elif a[key] != b[key]: conflicts.append(key)
+    return {'status': 'INCOMPATIBLE' if conflicts else 'UNKNOWN' if missing else 'COMPATIBLE',
+            'missing': missing, 'conflicts': conflicts}
+
+
+def verify_compile_target(elf, manifest, config, label):
+    """Configured SDK ABI is primary; selected loader/libc objects support it.
+    Other rootfs objects are diagnosed independently, never universal prerequisites.
+    """
+    configured = config['cross_compilation']['target_abis'].get(label)
+    objects = manifest.get('elf_objects', [])
+    selected_paths = config['cross_compilation']['runtime_objects'].get(label)
+    if selected_paths is None:
+        selected_paths = sorted({o['interpreter'] for o in objects if o.get('interpreter')} |
+                                {o['path'] for o in objects if o.get('soname') in ('libc.so.6', 'libc.so')})
+    selected = [o for o in objects if o['path'] in selected_paths and o.get('complete') and o.get('type', '').startswith(('DYN', 'EXEC'))]
+    if configured:
+        primary = {k: configured[k] for k in ('machine', 'class', 'endianness')}
+        primary['arm_abi'] = {k: configured.get(k) for k in ('eabi', 'float', 'cpu_arch')}
+        source = 'configured SDK ABI: ' + configured['provenance']
+    elif selected:
+        primary = selected[0]; source = 'selected target runtime'
+    else:
+        # Non-ARM synthetic/native images have no optional PCS metadata requirement.
+        native = [o for o in objects if o.get('complete') and o.get('machine') != 'ARM' and o.get('type', '').startswith(('DYN', 'EXEC'))]
+        primary = native[0] if native else {}; source = 'native image metadata' if native else 'no authoritative target evidence'
+    result = abi_relation(elf, primary)
+    if not elf.get('type', '').startswith('REL'):
+        result['conflicts'].append('compile target must be ET_REL'); result['status'] = 'INCOMPATIBLE'
+    if elf.get('machine') == 'ARM':
+        want = (primary.get('arm_abi') or arm_abi(primary)).get('cpu_arch')
+        got = (elf.get('arm_abi') or arm_abi(elf)).get('cpu_arch')
+        if not want or not got:
+            result['missing'].append('cpu_arch')
+            if result['status'] != 'INCOMPATIBLE': result['status'] = 'UNKNOWN'
+        elif want != got:
+            result['conflicts'].append('cpu_arch'); result['status'] = 'INCOMPATIBLE'
+    supporting = [{'path': p, 'status': 'UNKNOWN', 'missing': ['authoritative runtime object unavailable'], 'conflicts': []} for p in selected_paths if p not in {o['path'] for o in selected}]
+    for o in selected:
+        r = abi_relation(elf, o); supporting.append({'path': o['path'], **r})
+        if r['status'] == 'INCOMPATIBLE':
+            result['status'] = 'INCOMPATIBLE'; result['conflicts'].append(o['path'])
+    mixed = [{'path': o['path'], **abi_relation(primary, o)} for o in objects if o.get('complete') and not o.get('type', '').startswith('REL')]
+    return {**result, 'source': source, 'selected_objects': supporting,
+            'other_objects': [r for r in mixed if r['status'] != 'COMPATIBLE']}

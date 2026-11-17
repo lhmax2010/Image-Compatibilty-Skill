@@ -89,3 +89,43 @@ The trusted operator adapter emits one JSON object (outer process exit 0):
 Reports separately expose `compile_status`, `deployment_status`, `execution_status`, `behavior_status`, `build_sdk`, `build_provenance`, and `reference_image`. Runtime behavior is COMPATIBLE only after a valid own-reference run and matching output/exit status. Missing compiler, incomplete target ABI, failed native probe, invalid receipt, unsupported environment or absent deployment evidence stays UNKNOWN. Direct runner invocation of a target artifact/image path is rejected. Operator adapters remain trusted and must never execute the target on the host.
 
 ARM example triples/float flags must match your product's SDK; do not assume all Tizen ARMv7 builds use the same PCS. Read [correctness.md](correctness.md) for exact analysis boundaries.
+
+## Expected tests and complete verification (1.2)
+
+The harness inventories SDK headers and writes `expected-tests.json` before invoking compilers or adapters. Stable IDs bind compiler family/binary hash/configuration, source path/hash, SDK label/path, build provenance, configured target ABI, native reference and destination. Missing prerequisites remain planned. `header_limit` controls execution only; it does not remove mandatory expected headers. A baseline SDK header absent from the candidate is still planned for both. Missing header inventories create an unknown discovery test.
+
+Build tests require target ABI, compilation and linking. Header tests require target ABI, compilation and the same compiler's baseline reference. Runtime tests require successful compilation/linking, the frozen artifact hash, valid deployment/execution receipts, a valid native reference and behavior comparison. Custom command probes require artifact/deployment/execution/reference/behavior stages. Unconfigured identities are explicit null/unknown fields, not invented provenance. Observed target ABI and artifact hash are attached to reconciled results.
+
+`expected-tests-results.json`, image manifests and `results.json.expected_tests` retain each planned ID, required checks, stage results, completeness and diagnostic reasons. Exact reconciliation lists missing, duplicate and unexpected IDs. Duplicates cannot satisfy missing tests; unexpected positive records are downgraded. No compiler/image cell is COMPATIBLE while a required ID/stage is unknown. Confirmed failures survive incomplete stages. A static run normally leaves matrix obligations NOT_EXECUTED; this is expected and visible.
+
+## ARMv7 primary ABI and supporting runtime objects
+
+Configure the actual SDK ABI with provenance. The following values are examples, **not defaults for all Tizen products**:
+
+```yaml
+cross_compilation:
+  target_abis:
+    baseline:
+      machine: ARM
+      class: ELF32
+      endianness: "2's complement, little endian"
+      eabi: 5
+      float: soft
+      cpu_arch: v7
+      provenance: product-SDK-toolchain-manifest-id
+    candidate:
+      machine: ARM
+      class: ELF32
+      endianness: "2's complement, little endian"
+      eabi: 5
+      float: soft
+      cpu_arch: v7
+      provenance: candidate-SDK-toolchain-manifest-id
+  runtime_objects:
+    baseline: [/lib/ld-linux.so.3, /lib/libc.so.6]
+    candidate: [/lib/ld-linux.so.3, /lib/libc.so.6]
+```
+
+`float: hard` means VFP calling convention; `float: soft` means base PCS, which includes softfp code generation. Recorded `float_codegen` and ARM macros distinguish softfp from software-only arithmetic without conflating them with calling convention. Object metadata uses readelf field spelling. Compiler probes must be ET_REL; selected runtime objects must be complete DYN/EXEC records. Configured target ABI is primary. Without it the verifier tries selected loader/libc evidence; incomplete ARM evidence yields UNKNOWN. Unrelated ELF attributes no longer veto every compiler probe. Explicit conflicts with authoritative objects prevent acceptance; mixed/missing other objects receive separate findings. CPU attribute equality is conservative, not full ISA feature compatibility proof. AArch64 retains machine/class/endian checks.
+
+SDK package attribution can additionally use `sdk_package_manifests`; see [packages.md](packages.md). Compilation success does not imply whole-package API semantic compatibility.

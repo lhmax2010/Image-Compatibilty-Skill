@@ -6,7 +6,7 @@
 
 > 当前版本提供可运行的离线分析、SDK 编译探针和可配置的目标运行适配器。无法完成或证据不足的检查标为 `UNKNOWN`。仓库中的示例全部为合成数据，不代表任何真实 Tizen 版本的兼容性结论。
 
-**正确性整改（1.1）**：已补充受加载路径约束的依赖/导入符号检查、完整版本关系、显式 SDK/构建来源矩阵、ARM EABI/浮点调用约定校验、Build-ID 拆分 DWARF 和逐维度覆盖率门禁。词法相同、库名存在、适配器退出 0 都不能单独作为兼容结论。详见 [问题复现](REVIEW_FINDINGS.md)、[整改说明](CORRECTNESS_REMEDIATION.md) 和 [验证记录](VALIDATION_RESULTS.md)。目前没有真实 Tizen TV 镜像、SDK、设备的端到端验收结果。
+**当前本地版本 1.2**：修正多提供者符号解析边界，把兼容结论与验证完整度分开；四向矩阵采用执行前生成的预期测试清单；ARMv7 优先验证配置的 SDK ABI 与选定运行库；新增按已安装 RPM 归属的包级 ABI/API/链接报告。详见 [1.2 实现与验证记录](V1_2_VALIDATION.md)。[1.1 问题复现](REVIEW_FINDINGS.md)、[1.1 整改说明](CORRECTNESS_REMEDIATION.md) 和 [1.1 验证记录](VALIDATION_RESULTS.md) 保留为历史记录。尚无真实 Tizen TV 镜像、SDK、设备的端到端验收结果。
 
 
 ## 快速开始
@@ -127,7 +127,7 @@ Cline 应使用**实际加载的 `SKILL.md` 所在目录**定位脚本，不应�
 | ELF / ABI | ELF 架构和类型、导入/导出符号、符号版本、数据/TLS 符号大小、C++ RTTI/vtable 符号；可选 libabigail | 完整类型布局需要可用调试信息；相同符号不等于完整 ABI 相同 |
 | 公共 API / 头文件 | 安装路径、声明、宏、包含依赖、条件编译信息、注释/空白归一化 | 保守词法分析，不是完整 C/C++ AST 或类型解析器 |
 | 动态链接 | SONAME、DT_NEEDED、加载器、RPATH/RUNPATH、库提供者、依赖环 | 不完整模拟实际加载器的搜索顺序、命名空间和符号解析 |
-| RPM / SDK | 名称、版本、架构、Provides/Requires/Conflicts/Obsoletes、文件列表、pkg-config/CMake 配置 | 不安装 RPM，不执行脚本，不实现包依赖求解器 |
+| RPM / SDK | 已安装数据库与可用 RPM 档案分开；完整 NEVRA、文件归属；逐包 ABI/API/链接状态及覆盖率 | 缺少数据库时包数为未知；SDK 需明确关联；不实现包依赖求解器 |
 | 系统接口 | 文件类型、链接、权限、UID/GID、配置、命令可用性、systemd 单元、D-Bus XML | 静态存在性不证明运行行为 |
 | 安全 / 内核 / 网络 / 多媒体 | 策略和可读取扩展属性、UAPI/内核配置、相关库与配置清单 | 有效权限、内核行为、网络协议和硬件能力需要目标测试 |
 | 编译与运行 | 四向头文件编译、C/C++ 探针、相同程序跨镜像执行与输出比较 | 需要显式 SDK/编译器，以及获得授权的隔离目标环境 |
@@ -308,7 +308,7 @@ python3 -m unittest discover -s "$SKILL/tests" -v
 python3 -m compileall -q "$SKILL/scripts" "$SKILL/tests"
 ```
 
-原有 36 项测试保留，并补充了正确性回归和可选真实 Clang/libabigail 工具测试。最新数量、完整命令、工具来源和结果见 [VALIDATION_RESULTS.md](VALIDATION_RESULTS.md)。测试使用真实构造的 ELF/RPM 和模拟适配器；已验证 Clang AST/ARM 对象及 libabigail 嵌入/拆分 DWARF，尚未完成真实 Tizen SDK、设备/QEMU 集成验收。依赖工具的测试在工具缺失时明确跳过。
+原有 36 项测试保留，并补充了正确性回归和可选真实 Clang/libabigail 工具测试。1.1 基线 69 项测试全部通过后开始本次修改；1.2 的新增用例、完整命令、工具来源和结果见 [V1_2_VALIDATION.md](V1_2_VALIDATION.md)。测试使用真实构造的 ELF/RPM 和模拟适配器；已验证 Clang AST/ARM 对象及 libabigail 嵌入/拆分 DWARF，尚未完成真实 Tizen SDK、设备/QEMU 集成验收。依赖工具的测试在工具缺失时明确跳过。
 
 ## 目录与进一步阅读
 
@@ -341,8 +341,40 @@ ci:
   minimum_coverage: {abi: 90, linking: 95, runtime: 100}
 ```
 
-`results.json.coverage` 每个维度提供 applicable、verified、compatible、incompatible、unknown、coverage_percent 和 compatibility_percent。统计单位是 baseline 组件接口契约，ABI 区分导出表与类型布局；不是 finding 条数，也不是所有第三方 API 的穷举。覆盖率 = verified / applicable；兼容率 = compatible / applicable，UNKNOWN 留在分母。缺失工具/环境不会算作兼容，低于门槛返回 1。没有配置门槛时，退出 0 仍不代表全量通过。
+`results.json.coverage` 每个维度列出 applicable、completely_verified、partially_verified、unexecuted，以及 confirmed_compatible、confirmed_incompatible、unknown。兼容结论和验证完整度独立：一个确认破坏但仍缺 DWARF 的组件可以是 **INCOMPATIBLE + PARTIAL**，不会算作完整验证。`verified` 兼容字段现在只等于 completely_verified，不能再理解为 compatible + incompatible。
+
+覆盖率 = COMPLETE / applicable；兼容率 = confirmed_compatible / applicable。NOT_APPLICABLE 排除在分母外；缺失清单产生 UNKNOWN 义务，不能变成 100%。全部 N/A 或排除的维度百分比为 null。统计单位是组件契约及明确的必需检查，ABI 区分导出表与类型布局；增加 finding 不会提高覆盖率。`quality_gate` 分开报告 compatibility_status、coverage_status 和 strict_status；覆盖率低于门槛返回 1。退出 0 只说明配置的门禁未触发。
 
 加载器环境默认未知，不能仅凭 rootfs 内存在 SONAME 判定可加载。声明完整 loader environment 前，必须核实目标搜索路径及有效缓存；配置样例、尚不支持的 glibc 行为、拆分 debuginfo 输入和 AST 限制见 [正确性边界](.agents/skills/tizen-image-compatibility/references/correctness.md)。
 
-HTML 只展开前 1000 条 finding，Markdown 列出前 200 条不兼容详情；完整数据保存在 JSON/CSV。Schema 1.0 manifest 可读取，但旧成功测试/矩阵结论需重新验证，不能直接作为 1.1 门禁通过证据。
+HTML 展示前 1000 条 finding 和前 1000 个包，Markdown 展示前 200 条不兼容详情和前 200 个包；完整数据保存在 JSON/CSV。Schema 1.0/1.1 manifest 可读取，保留已确认失败，但旧成功测试/矩阵结论降为 UNKNOWN，不能作为 1.2 完整覆盖证据。升级会使旧 ELF 缓存失效。
+
+### 逐包 ABI/API 报告
+
+查看 `results.json.package_inventory`、`package_results` 和 `packages.csv`。包级表包括 baseline/candidate 版本、ABI、API、链接、完整覆盖率与总体状态；可展开 ELF/符号/头文件、相关 finding、缺失接口、证据及未验证项。已安装 RPM 与目录里可下载/可安装的 RPM 文件分别统计。数据库不存在或查询失败时 installed_count 为 null，不是 0。
+
+文件归属来自 RPM 文件清单，保留多所有者、usrmerge 别名以及消费者/提供者角色。多版本不被覆盖，改名/拆包不凭名称缺失就判不兼容。只拿到 runtime rootfs 不能宣布某个包 API 兼容；SDK 头文件必须通过 `cross_compilation.sdk_package_manifests` 明确关联到 SDK 的已安装包清单，否则列为未归属。配置与解释见 [包级分析](.agents/skills/tizen-image-compatibility/references/packages.md)。
+
+### 预期测试清单与 ARMv7
+
+`expected-tests.json` 在执行前生成，`expected-tests-results.json` 记录逐阶段结果。稳定 ID 包含编译器、源文件、SDK、构建来源和目标角色。缺失、重复、意外 ID、产物哈希不符、无效回执或原生参考失败都会阻止矩阵通过；`header_limit` 之外的头文件仍是未完成项。静态模式下矩阵保持未执行是正常结果。
+
+ARMv7 可配置 `cross_compilation.target_abis` 和 `runtime_objects`，用真实 SDK ABI 与选定 loader/libc 校验编译器探针；其他 ELF 缺少可选属性不再阻塞全部探针。hard 对应 VFP PCS，soft 对应 base PCS（包含 softfp 代码生成）。明确 ABI 冲突与信息不足分别记录，不能把两者当成成功。示例见 [编译与运行配置](.agents/skills/tizen-image-compatibility/references/execution.md)。
+
+### v1.2 补充验收
+
+新增 [审查发现](V1_2_REVIEW_FINDINGS.md)、[实现范围、能力分类与生产验收前提](V1_2_CORRECTNESS_REMEDIATION.md)，实际命令与结果统一记录在 [V1_2_VALIDATION.md](V1_2_VALIDATION.md)。可直接查看 [小型包级 HTML 示例](.agents/skills/tizen-image-compatibility/examples/package-report/index.html) 与 [示例说明/JSON/CSV](.agents/skills/tizen-image-compatibility/examples/package-report/README.md)；这些都是合成数据，不是 Tizen 产品结果。
+
+包清单现在显式提供数量对账、每个 candidate 包的 assessment、提供者包到消费者包的索引以及未验证来源的包记录。改名/拆包只报告有共享文件证据的候选线索，状态仍为 UNKNOWN。无公开接口且清单完整的包为 NOT_APPLICABLE，不凭元数据相等宣布兼容。`finding_integrity` 记录重复观察次数；不同入口程序的传递失败使用不同 ID。缺少预期测试元数据时不沿用旧矩阵成功，已有失败继续保留。
+
+压力测试会重新读取 JSON/CSV 并核对精确 finding ID、归属、状态、HTML/Markdown 展示及完整记录数，并执行时间/内存预算：
+
+```bash
+python3 "$SKILL/tests/review/benchmark_v12.py" \
+  --packages 2000 --symbols 10 --max-seconds 30 --max-rss-mib 768 \
+  --output /tmp/package-stress-new
+# 同一夹具版本、同规模的后续运行可增加：
+# --reference /tmp/package-stress-new/benchmark.json --max-regression-factor 2
+```
+
+默认预算是合成测试的回归警戒值，不是实际 Tizen 镜像的性能承诺。正式验收仍需匹配的产品 rootfs、RPM 数据库、SDK、debuginfo 和授权隔离运行环境。

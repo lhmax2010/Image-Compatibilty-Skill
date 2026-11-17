@@ -36,6 +36,9 @@ cross_compilation:
   probes: []
   builds: {} # Explicit compiler -> {sdk, reference_image, provenance}; no implicit GCC/Clang mapping.
   semantic_headers: false # Optional configured Clang AST evidence, not whole-API proof.
+  target_abis: {} # Primary SDK ABI with provenance; see references/execution.md for ARM PCS fields.
+  runtime_objects: {} # Selected authoritative target loader/libc virtual paths per image.
+  sdk_package_manifests: {} # Installed SDK RPM manifests, image.source must match sysroots.<label>.
 performance:
   enabled: false
   tolerance_percent: 10

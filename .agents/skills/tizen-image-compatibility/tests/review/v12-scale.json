@@ -1,0 +1,22 @@
+{
+  "fixture": "SYNTHETIC metadata only; no target execution",
+  "packages_per_image": 2000,
+  "exports_per_package": 10,
+  "findings": 20000,
+  "package_csv_rows": 2000,
+  "build_seconds": 0.522,
+  "render_seconds": 1.617,
+  "peak_rss_mib": 121.2,
+  "bytes": {
+    "findings.csv": 7329042,
+    "summary.md": 55662,
+    "packages.csv": 1001023,
+    "baseline-manifest.json": 4700171,
+    "index.html": 5365864,
+    "candidate-manifest.json": 1428172,
+    "results.json": 94342980
+  },
+  "html_has_package_filter": true,
+  "abi_complete_coverage_percent": 50.0,
+  "quality_gate": "FAIL"
+}

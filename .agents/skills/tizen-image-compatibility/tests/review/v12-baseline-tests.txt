@@ -1,0 +1,87 @@
+test_abidiff_exit_bits_with_mock_not_target_results (test_correctness.AbiAndGateTests.test_abidiff_exit_bits_with_mock_not_target_results) ... ok
+test_arm_eabi_and_float_abi (test_correctness.AbiAndGateTests.test_arm_eabi_and_float_abi) ... ok
+test_cli_coverage_gate_exit_and_immutability (test_correctness.AbiAndGateTests.test_cli_coverage_gate_exit_and_immutability) ... ok
+test_config_new_fields_reject_malformed (test_correctness.AbiAndGateTests.test_config_new_fields_reject_malformed) ... ok
+test_coverage_not_finding_count_and_missing_tool_not_pass (test_correctness.AbiAndGateTests.test_coverage_not_finding_count_and_missing_tool_not_pass) ... ok
+test_no_debug_each_library_counted (test_correctness.AbiAndGateTests.test_no_debug_each_library_counted) ... ok
+test_old_manifest_cannot_reuse_legacy_pass (test_correctness.AbiAndGateTests.test_old_manifest_cannot_reuse_legacy_pass) ... ok
+test_real_abidiff_embedded_and_split_layout_break (test_correctness.ExplicitToolIntegrationTests.test_real_abidiff_embedded_and_split_layout_break) ... ok
+test_real_clang_ast_and_arm (test_correctness.ExplicitToolIntegrationTests.test_real_clang_ast_and_arm) ... ok
+test_cache_order_and_symlink_alias (test_correctness.LoaderTests.test_cache_order_and_symlink_alias) ... ok
+test_dependency_cycle_terminates (test_correctness.LoaderTests.test_dependency_cycle_terminates) ... ok
+test_missing_and_unknown_environment (test_correctness.LoaderTests.test_missing_and_unknown_environment) ... ok
+test_missing_loader_and_candidate_own_vs_baseline_imports (test_correctness.LoaderTests.test_missing_loader_and_candidate_own_vs_baseline_imports) ... ok
+test_provider_outside_search_path_is_unresolvable (test_correctness.LoaderTests.test_provider_outside_search_path_is_unresolvable) ... ok
+test_relative_paths_and_unknown_tokens_never_verified (test_correctness.LoaderTests.test_relative_paths_and_unknown_tokens_never_verified) ... ok
+test_requirements_bound_to_provider_not_any_library (test_correctness.LoaderTests.test_requirements_bound_to_provider_not_any_library) ... ok
+test_runpath_not_inherited_rpath_is (test_correctness.LoaderTests.test_runpath_not_inherited_rpath_is) ... ok
+test_runpath_suppresses_ancestor_rpath_and_preload_is_unknown (test_correctness.LoaderTests.test_runpath_suppresses_ancestor_rpath_and_preload_is_unknown) ... ok
+test_tls_type_and_ifunc (test_correctness.LoaderTests.test_tls_type_and_ifunc) ... ok
+test_versioned_import_not_satisfied_by_bare_name (test_correctness.LoaderTests.test_versioned_import_not_satisfied_by_bare_name) ... ok
+test_weak_and_dso_unresolved_scope_unknown (test_correctness.LoaderTests.test_weak_and_dso_unresolved_scope_unknown) ... ok
+test_adapter_zero_exit_without_receipt_unknown (test_correctness.MatrixAndSemanticTests.test_adapter_zero_exit_without_receipt_unknown) ... ok
+test_candidate_build_uses_its_own_reference (test_correctness.MatrixAndSemanticTests.test_candidate_build_uses_its_own_reference) ... ok
+test_direct_target_runner_forbidden (test_correctness.MatrixAndSemanticTests.test_direct_target_runner_forbidden) ... ok
+test_explicit_swapped_compiler_provenance (test_correctness.MatrixAndSemanticTests.test_explicit_swapped_compiler_provenance) ... ok
+test_optional_semantic_evidence_not_whole_api_pass (test_correctness.MatrixAndSemanticTests.test_optional_semantic_evidence_not_whole_api_pass) ... ok
+test_own_reference_failure_cannot_pass_elsewhere (test_correctness.MatrixAndSemanticTests.test_own_reference_failure_cannot_pass_elsewhere) ... ok
+test_receipt_hash_and_deployment_validation (test_correctness.MatrixAndSemanticTests.test_receipt_hash_and_deployment_validation) ... ok
+test_actual_version_definitions_and_requirements (test_correctness.RealELFTests.test_actual_version_definitions_and_requirements) ... ok
+test_default_version_removal_preserves_explicit_import (test_correctness.RealELFTests.test_default_version_removal_preserves_explicit_import) ... ok
+test_real_elf_hidden_provider_and_import_failure (test_correctness.RealELFTests.test_real_elf_hidden_provider_and_import_failure) ... ok
+test_split_debug_build_id_matching_and_mismatch (test_correctness.RealELFTests.test_split_debug_build_id_matching_and_mismatch) ... ok
+test_unversioned_export_can_gain_default_version (test_correctness.RealELFTests.test_unversioned_export_can_gain_default_version) ... ok
+test_actual_rpm_archive_query (test_execution.ExecutionTests.test_actual_rpm_archive_query) ... ok
+test_authorized_adapter_detects_behavior_difference (test_execution.ExecutionTests.test_authorized_adapter_detects_behavior_difference) ... ok
+test_real_header_compile_matrix (test_execution.ExecutionTests.test_real_header_compile_matrix) ... ok
+test_runtime_exclusion_prevents_execution (test_execution.ExecutionTests.test_runtime_exclusion_prevents_execution) ... ok
+test_trusted_probe_sources_on_host (test_execution.ExecutionTests.test_trusted_probe_sources_on_host) ... ok
+test_unauthorized_adapter_is_never_run (test_execution.ExecutionTests.test_unauthorized_adapter_is_never_run) ... ok
+test_function_size_not_abi_failure (test_framework.ComparisonTests.test_function_size_not_abi_failure) ... ok
+test_missing_tool_no_false_removals (test_framework.ComparisonTests.test_missing_tool_no_false_removals) ... ok
+test_missing_versioned_symbol (test_framework.ComparisonTests.test_missing_versioned_symbol) ... ok
+test_rpm_release_is_compatible (test_framework.ComparisonTests.test_rpm_release_is_compatible) ... ok
+test_rpm_xml (test_framework.ComparisonTests.test_rpm_xml) ... ok
+test_severity_override_and_exclude (test_framework.ComparisonTests.test_severity_override_and_exclude) ... ok
+test_soname_difference_and_needed (test_framework.ComparisonTests.test_soname_difference_and_needed) ... ok
+test_weak_import_is_not_missing_export (test_framework.ComparisonTests.test_weak_import_is_not_missing_export) ... ok
+test_elf_collection_and_cache (test_framework.EndToEndTests.test_elf_collection_and_cache) ... ok
+test_full_offline_cli_and_reuse (test_framework.EndToEndTests.test_full_offline_cli_and_reuse) ... ok
+test_identical_strict_and_threshold (test_framework.EndToEndTests.test_identical_strict_and_threshold) ... ok
+test_oci_layer_layout_rejected (test_framework.ImageTests.test_oci_layer_layout_rejected) ... ok
+test_reject_tar_escape (test_framework.ImageTests.test_reject_tar_escape) ... ok
+test_reject_tar_symlink_write (test_framework.ImageTests.test_reject_tar_symlink_write) ... ok
+test_safe_tar_preserves_metadata (test_framework.ImageTests.test_safe_tar_preserves_metadata) ... ok
+test_symlink_stays_inside_image (test_framework.ImageTests.test_symlink_stays_inside_image) ... ok
+test_unsupported_image (test_framework.ImageTests.test_unsupported_image) ... ok
+test_config_rejects_types_and_unknown_keys (test_framework.InfrastructureTests.test_config_rejects_types_and_unknown_keys) ... ok
+test_missing_tool (test_framework.InfrastructureTests.test_missing_tool) ... ok
+test_no_runtime_means_unknown (test_framework.InfrastructureTests.test_no_runtime_means_unknown) ... ok
+test_report_escaping_and_manifest (test_framework.InfrastructureTests.test_report_escaping_and_manifest) ... ok
+test_source_output_guard (test_framework.InfrastructureTests.test_source_output_guard) ... Input error: Output/cache must be outside all source images and SDK sysroots
+ok
+test_timeout_records_evidence (test_framework.InfrastructureTests.test_timeout_records_evidence) ... ok
+test_comment_only_header_is_lexically_equal_but_semantics_unknown (test_framework.SourceTests.test_comment_only_header_is_lexically_equal_but_semantics_unknown) ... ok
+test_comments_preserve_strings_and_tokens (test_framework.SourceTests.test_comments_preserve_strings_and_tokens) ... ok
+test_dbus_argument_names_are_not_wire_contract (test_framework.SourceTests.test_dbus_argument_names_are_not_wire_contract) ... ok
+test_dbus_nested_paths (test_framework.SourceTests.test_dbus_nested_paths) ... ok
+test_function_macro_spacing_matters (test_framework.SourceTests.test_function_macro_spacing_matters) ... ok
+test_header_comparison (test_framework.SourceTests.test_header_comparison) ... ok
+test_normalization (test_framework.SourceTests.test_normalization) ... ok
+
+----------------------------------------------------------------------
+Ran 69 tests in 2.399s
+
+OK
+Synthetic fixture written to /tmp/tmp7d_d5ysl/images; NOT a real Tizen compatibility result.
+UNKNOWN: 40 findings; coverage gate FAIL; report /tmp/tmp7d_d5ysl/gate-fail/index.html
+UNKNOWN: 40 findings; coverage gate PASS; report /tmp/tmp7d_d5ysl/gate-pass/index.html
+Synthetic fixture written to /tmp/tmprqsgde3h/images; NOT a real Tizen compatibility result.
+Synthetic fixture written to /tmp/tmplln84e6j/images; NOT a real Tizen compatibility result.
+Synthetic fixture written to /tmp/tmp1p2hpavz/images; NOT a real Tizen compatibility result.
+INCOMPATIBLE: 52 findings; coverage gate PASS; report /tmp/tmp1p2hpavz/cli-report/index.html
+INCOMPATIBLE: 52 findings; coverage gate PASS; report /tmp/tmp1p2hpavz/reuse/index.html
+Synthetic fixture written to /tmp/tmpua5b6c7a/images; NOT a real Tizen compatibility result.
+UNKNOWN: 40 findings; coverage gate PASS; report /tmp/tmpua5b6c7a/same/index.html
+UNKNOWN: 40 findings; coverage gate PASS; report /tmp/tmpua5b6c7a/strict/index.html
+INCOMPATIBLE: 52 findings; coverage gate PASS; report /tmp/tmpua5b6c7a/critical/index.html

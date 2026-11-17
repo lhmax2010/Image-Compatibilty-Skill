@@ -1,0 +1,257 @@
+{
+  "collection_complete": true,
+  "elf_objects": [
+    {
+      "complete": true,
+      "exports": [
+        {
+          "binding": "GLOBAL",
+          "name": "public_0",
+          "size": 0,
+          "type": "FUNC",
+          "visibility": "DEFAULT"
+        },
+        {
+          "binding": "GLOBAL",
+          "name": "public_1",
+          "size": 0,
+          "type": "FUNC",
+          "visibility": "DEFAULT"
+        }
+      ],
+      "imports": [],
+      "needed": [],
+      "path": "/usr/lib/libsynthetic0.so",
+      "type": "DYN"
+    },
+    {
+      "complete": true,
+      "exports": [
+        {
+          "binding": "GLOBAL",
+          "name": "public_0",
+          "size": 0,
+          "type": "FUNC",
+          "visibility": "DEFAULT"
+        },
+        {
+          "binding": "GLOBAL",
+          "name": "public_1",
+          "size": 0,
+          "type": "FUNC",
+          "visibility": "DEFAULT"
+        }
+      ],
+      "imports": [],
+      "needed": [],
+      "path": "/usr/lib/libsynthetic1.so",
+      "type": "DYN"
+    },
+    {
+      "complete": true,
+      "exports": [
+        {
+          "binding": "GLOBAL",
+          "name": "public_0",
+          "size": 0,
+          "type": "FUNC",
+          "visibility": "DEFAULT"
+        },
+        {
+          "binding": "GLOBAL",
+          "name": "public_1",
+          "size": 0,
+          "type": "FUNC",
+          "visibility": "DEFAULT"
+        }
+      ],
+      "imports": [],
+      "needed": [],
+      "path": "/usr/lib/libsynthetic2.so",
+      "type": "DYN"
+    },
+    {
+      "complete": true,
+      "exports": [
+        {
+          "binding": "GLOBAL",
+          "name": "public_0",
+          "size": 0,
+          "type": "FUNC",
+          "visibility": "DEFAULT"
+        },
+        {
+          "binding": "GLOBAL",
+          "name": "public_1",
+          "size": 0,
+          "type": "FUNC",
+          "visibility": "DEFAULT"
+        }
+      ],
+      "imports": [],
+      "needed": [],
+      "path": "/usr/lib/libsynthetic3.so",
+      "type": "DYN"
+    }
+  ],
+  "filesystem": [
+    {
+      "path": "/usr/lib/libsynthetic0.so",
+      "type": "file"
+    },
+    {
+      "path": "/usr/include/synthetic0.h",
+      "type": "file"
+    },
+    {
+      "path": "/usr/lib/libsynthetic1.so",
+      "type": "file"
+    },
+    {
+      "path": "/usr/lib/libsynthetic2.so",
+      "type": "file"
+    },
+    {
+      "path": "/usr/lib/libsynthetic3.so",
+      "type": "file"
+    }
+  ],
+  "image": {
+    "name": "SYNTHETIC metadata baseline"
+  },
+  "limitations": [
+    {
+      "component": "fixture",
+      "dimension": "packages",
+      "reason": "Generated metadata; not queried from RPM or a real Tizen image"
+    }
+  ],
+  "package_inventory": {
+    "installed_count": 4,
+    "reason": "SIMULATED ownership",
+    "source_kind": "installed_rpmdb",
+    "status": "COMPLETE"
+  },
+  "packages": [
+    {
+      "arch": "x86_64",
+      "collection_status": "COMPLETE",
+      "conflicts": [],
+      "epoch": "0",
+      "evidence": [],
+      "files": [
+        "/usr/lib/libsynthetic0.so",
+        "/usr/include/synthetic0.h"
+      ],
+      "name": "synthetic-0",
+      "obsoletes": [],
+      "provenance": {
+        "kind": "installed_rpmdb",
+        "source": "SIMULATED metadata, not a queried DB"
+      },
+      "provides": [],
+      "release": "1",
+      "requires": [],
+      "version": "1"
+    },
+    {
+      "arch": "x86_64",
+      "collection_status": "COMPLETE",
+      "conflicts": [],
+      "epoch": "0",
+      "evidence": [],
+      "files": [
+        "/usr/lib/libsynthetic1.so"
+      ],
+      "name": "synthetic-1",
+      "obsoletes": [],
+      "provenance": {
+        "kind": "installed_rpmdb",
+        "source": "SIMULATED metadata, not a queried DB"
+      },
+      "provides": [],
+      "release": "1",
+      "requires": [],
+      "version": "1"
+    },
+    {
+      "arch": "x86_64",
+      "collection_status": "COMPLETE",
+      "conflicts": [],
+      "epoch": "0",
+      "evidence": [],
+      "files": [
+        "/usr/lib/libsynthetic2.so"
+      ],
+      "name": "synthetic-2",
+      "obsoletes": [],
+      "provenance": {
+        "kind": "installed_rpmdb",
+        "source": "SIMULATED metadata, not a queried DB"
+      },
+      "provides": [],
+      "release": "1",
+      "requires": [],
+      "version": "1"
+    },
+    {
+      "arch": "x86_64",
+      "collection_status": "COMPLETE",
+      "conflicts": [],
+      "epoch": "0",
+      "evidence": [],
+      "files": [
+        "/usr/lib/libsynthetic3.so"
+      ],
+      "name": "synthetic-3",
+      "obsoletes": [],
+      "provenance": {
+        "kind": "installed_rpmdb",
+        "source": "SIMULATED metadata, not a queried DB"
+      },
+      "provides": [],
+      "release": "1",
+      "requires": [],
+      "version": "1"
+    }
+  ],
+  "public_headers": [
+    {
+      "body_tokens": [
+        "int",
+        "api",
+        "(",
+        "void",
+        ")",
+        ";"
+      ],
+      "conditions": [],
+      "context_hints": [],
+      "declarations": {
+        "api": [
+          "int",
+          "api",
+          "(",
+          "void",
+          ")"
+        ]
+      },
+      "includes": [],
+      "macros": {},
+      "origin": "runtime_image",
+      "parser": "conservative C/C++ lexical declarations; no preprocessing/type resolution",
+      "path": "/usr/include/synthetic0.h",
+      "sha256": "81b1602446ed07fd6ac514dbdf43d586ff98550be1bb42a0eef2097202508319",
+      "tokens": [
+        "int",
+        "api",
+        "(",
+        "void",
+        ")",
+        ";"
+      ]
+    }
+  ],
+  "schema_version": "1.2",
+  "test_results": []
+}

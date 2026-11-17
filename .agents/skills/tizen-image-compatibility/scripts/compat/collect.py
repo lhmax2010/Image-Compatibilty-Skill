@@ -12,7 +12,7 @@ from typing import Any
 from .core import VERSION, SCHEMA, Tools, canonical, digest, hash_file, limitation, write_json
 from .elf import collect_elf
 from .images import Image
-from .packages import collect_packages
+from .packages import collect_package_inventory
 from .source import normalize_text, parse_header
 
 RUNTIMES = re.compile(r'lib(c\+\+|stdc\+\+|gcc|clang_rt|unwind|omp|gomp|atomic|asan|tsan|ubsan|c\.|m\.|pthread|dl\.)')
@@ -204,7 +204,7 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
         m['image']['os_version'] = parse_keys(release.read_text(errors='replace'))
     m['image']['kernel_version'] = sorted({Path(x['path']).name.removeprefix('config-') for x in m['kernel'] if x['path'].startswith('/boot/config-')})
     if 'packages' in active:
-        m['packages'], limits = collect_packages(image, tools, workspace)
+        m['packages'], m['available_packages'], m['package_inventory'], limits = collect_package_inventory(image, tools, workspace)
         m['limitations'] += limits
     if not m['hardware']:
         m['capabilities'].append({'dimension': 'hardware', 'status': 'NOT_APPLICABLE', 'reason': 'No multimedia userspace interface detected; physical hardware presence is unknown.'})

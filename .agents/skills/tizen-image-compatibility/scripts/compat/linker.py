@@ -4,7 +4,7 @@ Unknown environment/cache, unsupported tokens and shared-library caller scopes s
 """
 from collections import deque
 import posixpath
-from .core import finding
+from .core import finding, canonical, digest
 from .elf import symbol_identity, target_abi_matches
 
 
@@ -46,6 +46,14 @@ def dependency_checks(manifest, label, consumers=None):
                        'INFO' if status == 'COMPATIBLE' else severity, 'offline glibc dependency closure',
                        obj.get('evidence'), impact='Resolution state: ' + state + '. Conditional on recorded loader environment; runtime interposition/dlopen/IFUNC behavior is separate.')
         item['resolution'] = state
+        item['check_id'] = interface
+        item['consumer_path'] = obj['path']
+        item['consumer_image'] = 'baseline' if consumers is not None and obj is root else 'candidate'
+        item['root_consumer'] = root['path']
+        item['root_consumer_image'] = 'baseline' if consumers is not None else 'candidate'
+        item['provider_path'] = after.get('provider') if isinstance(after, dict) else after if isinstance(after, str) and after.startswith('/') else None
+        # A transitive failure reached from different entry points is distinct evidence.
+        item['id'] = 'TC-' + digest(canonical({k: v for k, v in item.items() if k != 'id'}).encode())[:16]
         out.append(item)
     for root in consumers if consumers is not None else objects.values():
         if not root.get('complete'):
@@ -54,13 +62,14 @@ def dependency_checks(manifest, label, consumers=None):
         root_scope = bool(root.get('interpreter')) or root.get('type', '').startswith('EXEC')
         loader = root.get('interpreter')
         loader_obj = objects.get(alias(loader, files)) if loader else None
-        local_known = known
+        local_known = known and env.get('namespace', 'base') == 'base'
         preload = next((x.get('normalized', '') for x in manifest.get('configurations', []) if x['path'] == '/etc/ld.so.preload'), '')
         mode = int(files.get(root['path'], {}).get('mode', '0'), 8)
         if any(line.split('#')[0].strip() for line in preload.splitlines()) or mode & 0o6000:
             local_known = False
             emit(root, 'loader context', None, 'preload or secure-execution semantics not modeled', 'unknown_search_environment')
         scope_known = local_known and inventory
+        symbol_scope_known = root.get('resolution_metadata_complete', True) and root_scope and env.get('symbol_scope') == 'startup' and env.get('namespace', 'base') == 'base'
         if loader:
             valid = bool(loader_obj and loader_obj.get('complete') and target_abi_matches(root, loader_obj))
             emit(root, 'dynamic loader', loader, loader_obj.get('path') if loader_obj else None,
@@ -81,7 +90,7 @@ def dependency_checks(manifest, label, consumers=None):
             rpaths = [expand(v, origin) for v in obj.get('rpath', [])] if not obj.get('runpath') else []
             runpaths = [expand(v, origin) for v in obj.get('runpath', [])]
             inherited_next = rpaths + inherited
-            unsupported = any(any(k in f for k in ('FILTER', 'AUXILIARY', 'AUDIT', 'SYMBOLIC')) for f in obj.get('dynamic_flags', []))
+            unsupported = any(f.split(':', 1)[0] not in ('FLAGS', 'FLAGS_1') or any(word not in {'Flags:', 'NOW', 'BIND_NOW', 'PIE', 'NODEFLIB', 'STATIC_TLS'} for word in f.split(':', 1)[-1].split()) for f in obj.get('dynamic_flags', []))
             nodeflib = any('NODEFLIB' in f for f in obj.get('dynamic_flags', []))
             if unsupported:
                 scope_known = False
@@ -107,7 +116,7 @@ def dependency_checks(manifest, label, consumers=None):
                     actual = alias(path, files)
                     hit = objects.get(actual)
                     if hit:
-                        if not hit.get('complete') or not target_abi_matches(obj, hit):
+                        if not hit.get('complete') or (hit.get('type') and not hit['type'].startswith('DYN')) or not target_abi_matches(obj, hit):
                             ambiguous = True
                             continue
                         provider = hit
@@ -131,14 +140,17 @@ def dependency_checks(manifest, label, consumers=None):
         for provider in closure:
             for exported in provider.get('exports', []):
                 exp = symbol_identity(exported['name'])
-                if exported.get('binding') in ('GLOBAL', 'WEAK', 'UNIQUE') and exported.get('visibility') in ('DEFAULT', 'PROTECTED'):
+                if not (exported.get('value') == 0 and exported.get('section') != 'ABS' and exported.get('type') != 'TLS') and exported.get('binding') in ('GLOBAL', 'WEAK', 'UNIQUE', 'GNU_UNIQUE') and exported.get('visibility') in ('DEFAULT', 'PROTECTED') and exported.get('section') != 'UND' and exported.get('type') in ('NOTYPE', 'OBJECT', 'FUNC', 'COMMON', 'TLS', 'IFUNC', 'GNU_IFUNC'):
                     export_scope.setdefault(exp['base_name'], []).append((provider, exported, exp))
         # Requirements refer to a particular dependency, in addition to symbol lookup scope.
         for obj in closure:
+            failed_requirements = set()
             for req in obj.get('version_requirements', []):
                 provider = edges.get((obj['path'], req['file'])) or loaded.get(req['file'])
                 names = {v['name'] for v in (provider or {}).get('version_definitions', [])}
                 present = req['name'] in names
+                if not present:
+                    failed_requirements.add((req['file'], req['name']))
                 weak = 'WEAK' in req.get('flags', '').upper()
                 state = 'verified' if present and scope_known else 'missing_version' if scope_known and provider and not weak else 'unknown_version_requirement'
                 emit(obj, 'version:' + str(req['file']) + ':' + req['name'], req, provider['path'] if provider else None, state,
@@ -150,18 +162,24 @@ def dependency_checks(manifest, label, consumers=None):
                     version_ok = (identity['version'] == exp['version'] if identity['version'] else (exp['version'] is None or exp['default_version']))
                     if version_ok:
                         matches.append((provider, exported))
+                required_file = symbol.get('version_file')
+                constraint_failed = (required_file, identity['version']) in failed_requirements
+                constraint_unknown = bool(required_file and not (edges.get((obj['path'], required_file)) or loaded.get(required_file)))
+                # Unversioned interposition and legacy non-default fallback are not modeled.
+                fallback = any((identity['version'] and exp['version'] is None) or (identity['version'] is None and exp['version'] and not exp['default_version']) for _, _, exp in export_scope.get(identity['base_name'], []))
                 if matches:
                     provider, exported = matches[0]
                     types_ok = symbol.get('type') in ('NOTYPE', exported.get('type'))
-                    special = exported.get('type') in ('IFUNC', 'GNU_IFUNC') or exported.get('binding') == 'UNIQUE'
-                    state = 'verified' if scope_known and types_ok and not special else 'unknown_symbol_semantics'
-                    if scope_known and not types_ok and not special:
+                    special = (any(x.get('type') in ('IFUNC', 'GNU_IFUNC') or x.get('binding') in ('UNIQUE', 'GNU_UNIQUE') or x.get('visibility') == 'PROTECTED' for _, x in matches)
+                               or symbol.get('binding') == 'WEAK' or len(matches) > 1 or fallback or constraint_failed or constraint_unknown)
+                    state = 'verified' if scope_known and symbol_scope_known and types_ok and not special else 'unknown_symbol_semantics'
+                    if scope_known and symbol_scope_known and not types_ok and not special:
                         state = 'symbol_type_mismatch'
-                    emit(obj, 'import:' + symbol['name'], symbol, {'provider': provider['path'], 'export': exported}, state,
+                    emit(obj, 'import:' + symbol['name'], symbol, {'provider': provider['path'], 'export': exported, 'lookup_candidates': [{'provider': p['path'], 'export': x} for p, x in matches], 'scope_proven': bool(symbol_scope_known and scope_known), 'required_provider': required_file}, state,
                          'INCOMPATIBLE' if state == 'symbol_type_mismatch' else None)
                 else:
                     # A DSO can import from its executable/global namespace; weak absence is legal but behavior is unknown.
-                    broken = scope_known and root_scope and symbol.get('binding') != 'WEAK'
+                    broken = scope_known and symbol_scope_known and not fallback and not constraint_unknown and symbol.get('binding') != 'WEAK'
                     emit(obj, 'import:' + symbol['name'], symbol, None, 'missing_symbol' if broken else 'unknown_symbol_scope',
                          'INCOMPATIBLE' if broken else None)
     return out

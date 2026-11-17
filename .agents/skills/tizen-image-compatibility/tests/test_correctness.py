@@ -34,7 +34,7 @@ class LoaderTests(Environment):
     def manifest(self, *objects):
         m = self.blank()
         m.update(elf_objects=list(objects), collection_complete=True,
-                 loader_environment=dict(model='glibc', cache_complete=True, environment_complete=True,
+                 loader_environment=dict(model='glibc', cache_complete=True, environment_complete=True, symbol_scope='startup', namespace='base',
                                          default_dirs=['/lib', '/usr/lib'], library_path=[], cache={}))
         return m
 
@@ -86,7 +86,7 @@ class LoaderTests(Environment):
         c = obj('/bin/app', needed=['libx.so'], imports=[symbol('foo@V1')], type='EXEC')
         lib = obj('/lib/libx.so', exports=[symbol('foo')])
         m = self.manifest(lib)
-        self.assertEqual(self.results(m, c)[-1]['status'], 'INCOMPATIBLE')
+        self.assertEqual(self.results(m, c)[-1]['status'], 'UNKNOWN')  # glibc unversioned interposition requires more context
         lib['exports'] = [symbol('foo@V1')]
         self.assertEqual(self.results(m, c)[-1]['resolution'], 'verified')
         lib['exports'] = [symbol('foo@@V2')]
@@ -196,7 +196,7 @@ class RealELFTests(Environment):
         lib['path'] = '/opt/hidden/x.so'
         client.update(path='/bin/client', type='EXEC')
         m = self.blank(); m.update(elf_objects=[lib], collection_complete=True,
-                                  loader_environment=dict(model='glibc', cache_complete=True, environment_complete=True, default_dirs=['/lib']))
+                                  loader_environment=dict(model='glibc', cache_complete=True, environment_complete=True, symbol_scope='startup', namespace='base', default_dirs=['/lib']))
         self.assertTrue(any(f['resolution'] == 'unresolvable_provider' for f in dependency_checks(m, 'test', [client])))
         client['runpath'] = ['/opt/hidden']
         self.assertTrue(all(f['status'] == 'COMPATIBLE' for f in dependency_checks(m, 'test', [client])))
@@ -244,7 +244,8 @@ class AbiAndGateTests(Environment):
         self.assertTrue(all(f['status'] == 'UNKNOWN' for f in result))
         cov, _ = coverage_report(a, b, result, [], [], self.config)
         self.assertEqual(cov['abi']['applicable'], 4)
-        self.assertEqual(cov['abi']['verified'], 0)
+        self.assertEqual(cov['abi']['verified'], 2)  # empty collected export surfaces; both layout obligations remain unexecuted
+        self.assertTrue(all(u['status'] == 'UNKNOWN' for u in cov['abi']['units'] if u['interface'].endswith(':type-layout')))
 
     def test_abidiff_exit_bits_with_mock_not_target_results(self):
         a, b = self.blank(), self.blank()
@@ -258,14 +259,15 @@ class AbiAndGateTests(Environment):
 
     def test_coverage_not_finding_count_and_missing_tool_not_pass(self):
         from compat.core import finding
-        a, b = self.blank(), self.blank(); a['elf_objects'] = [obj('/lib/a.so')]
+        a, b = self.blank(), self.blank(); a['elf_objects'] = [obj('/lib/a.so')]; b['elf_objects'] = copy.deepcopy(a['elf_objects'])
         good = finding('abi', '/lib/a.so', 'dynamic interface surface', 'x', 'x', 'IDENTICAL')
         cov, _ = coverage_report(a, b, [good] * 100, [], [], self.config)
         self.assertEqual(cov['abi']['applicable'], 2)
         self.assertEqual(cov['abi']['coverage_percent'], 50)
         self.assertEqual(cov['abi']['compatibility_percent'], 50)
         self.config['ci']['minimum_coverage'] = {'abi': 75}
-        missing, gate = coverage_report(a, b, [], [], [], self.config)
+        incomplete = copy.deepcopy(b); incomplete['elf_objects'][0]['complete'] = False
+        missing, gate = coverage_report(a, incomplete, [], [], [], self.config)
         self.assertEqual(missing['abi']['compatibility_percent'], 0)
         self.assertEqual(gate['status'], 'FAIL')
         layout = finding('abi', '/lib/a.so', 'DWARF type/layout ABI', 1, 1, 'COMPATIBLE')
@@ -379,7 +381,7 @@ class MatrixAndSemanticTests(Environment):
             manifests = (self.blank(), self.blank())
             for m in manifests: m['elf_objects'] = [metadata]
             def fake(env, binary, args, label, image, tools):
-                return dict(returncode=own_code if label == 'candidate' else 0, stdout='same', stderr='', stdout_evidence='a', stderr_evidence='b',
+                return dict(receipt_sha256=hash_file(binary), returncode=own_code if label == 'candidate' else 0, stdout='same', stderr='', stdout_evidence='a', stderr_evidence='b',
                             stages=dict(deployment_status='SUCCESS', execution_status='SUCCESS', behavior_status='UNKNOWN'))
             with patch('compat.testing.run_target', side_effect=fake):
                 tests, matrix, _ = run_matrix(manifests, roots, self.tools, 'full')

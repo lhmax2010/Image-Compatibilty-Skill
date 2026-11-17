@@ -13,8 +13,8 @@ import tempfile
 import threading
 from typing import Any
 
-VERSION = '1.1.0'
-SCHEMA = '1.1'
+VERSION = '1.2.0'
+SCHEMA = '1.2'
 DIMENSIONS = ('elf', 'abi', 'api', 'headers', 'linking', 'compiler_runtime', 'kernel',
               'ipc', 'commands', 'filesystem', 'packages', 'services', 'security',
               'runtime', 'hardware', 'network', 'performance')
@@ -34,7 +34,7 @@ DEFAULTS: dict[str, Any] = {
                 'environments': {}, 'probes': []},
     'cross_compilation': {'enabled': True, 'c_tests': True, 'cpp_tests': True,
                           'sysroots': {}, 'compilers': {}, 'header_limit': 50,
-                          'include_dirs': ['usr/include'], 'probes': [], 'builds': {}, 'semantic_headers': False},
+                          'include_dirs': ['usr/include'], 'probes': [], 'builds': {}, 'semantic_headers': False, 'target_abis': {}, 'runtime_objects': {}, 'sdk_package_manifests': {}},
     'performance': {'enabled': False, 'tolerance_percent': 10},
     'report': {'html': True, 'json': True, 'markdown': True, 'csv': True},
     'ci': {'fail_on': 'HIGH', 'strict': False, 'minimum_coverage': {}},
@@ -60,7 +60,10 @@ def canonical(obj: Any) -> str:
 
 def write_json(path: Path, obj: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(obj, ensure_ascii=False, sort_keys=True, indent=2) + '\n')
+    # Stream large inventories rather than retaining a second full JSON copy.
+    with path.open('w', encoding='utf-8') as stream:
+        json.dump(obj, stream, ensure_ascii=False, sort_keys=True, indent=2)
+        stream.write('\n')
 
 
 def hash_file(path: Path) -> str:
@@ -137,13 +140,25 @@ def validate_config(c: dict[str, Any]) -> None:
         require(set(build) <= {'sdk', 'reference_image', 'provenance'}, 'Unknown build provenance key')
         require(build.get('sdk') in ('baseline', 'candidate') and build.get('reference_image') in ('baseline', 'candidate'), 'Build needs sdk and reference_image')
         require(isinstance(build.get('provenance'), str) and bool(build['provenance']), 'Build needs provenance identifier')
+    for label, abi in cc['target_abis'].items():
+        require(label in ('baseline', 'candidate') and isinstance(abi, dict), 'Invalid target ABI')
+        require(set(abi) <= {'machine', 'class', 'endianness', 'eabi', 'float', 'cpu_arch', 'provenance'}, 'Unknown target ABI field')
+        require(all(isinstance(abi.get(k), str) and abi[k] for k in ('machine', 'class', 'endianness', 'provenance')), 'Target ABI needs machine/class/endianness/provenance')
+        require(abi['class'] in ('ELF32', 'ELF64'), 'Invalid ELF class')
+        if abi['machine'] == 'ARM':
+            require(type(abi.get('eabi')) is int and abi['eabi'] > 0 and abi.get('float') in ('hard', 'soft') and isinstance(abi.get('cpu_arch'), str), 'ARM target needs EABI, PCS (hard/soft) and cpu_arch')
+    for label, paths in cc['runtime_objects'].items():
+        require(label in ('baseline', 'candidate') and isinstance(paths, list) and all(isinstance(p, str) and p.startswith('/') and '..' not in Path(p).parts for p in paths), 'runtime_objects must be virtual absolute paths')
+    require(set(cc['sdk_package_manifests']) <= {'baseline', 'candidate'} and all(isinstance(p, str) for p in cc['sdk_package_manifests'].values()), 'SDK package manifests must map image to manifest file')
     for label, paths in c['debuginfo']['roots'].items():
         require(label in ('baseline', 'candidate') and isinstance(paths, list) and all(isinstance(p, str) for p in paths), 'Debuginfo roots must map image to directory array')
     for dim, threshold in c['ci']['minimum_coverage'].items():
         require(dim in DIMENSIONS and type(threshold) in (int, float) and 0 <= threshold <= 100, 'Coverage threshold must be dimension: percentage (0..100)')
     for label, env in c['loader']['environments'].items():
         require(label in ('baseline', 'candidate') and isinstance(env, dict), 'Invalid loader environment')
-        require(set(env) <= {'model', 'default_dirs', 'library_path', 'cache', 'cache_complete', 'environment_complete'}, 'Unknown loader environment key')
+        require(set(env) <= {'model', 'default_dirs', 'library_path', 'cache', 'cache_complete', 'environment_complete', 'symbol_scope', 'namespace'}, 'Unknown loader environment key')
+        require(env.get('symbol_scope', 'unknown') in ('unknown', 'startup'), 'Invalid symbol_scope')
+        require(isinstance(env.get('namespace', 'base'), str), 'Invalid loader namespace')
         require(env.get('model', 'unknown') in ('unknown', 'glibc'), 'Unsupported loader model')
         require(all(type(env.get(k, False)) is bool for k in ('cache_complete', 'environment_complete')), 'Loader completeness must be boolean')
         for key in ('default_dirs', 'library_path'):
@@ -157,6 +172,8 @@ def validate_config(c: dict[str, Any]) -> None:
         require(isinstance(probe, dict) and set(probe) <= {'name', 'source', 'language', 'flags'}, 'Invalid compile probe')
         require(all(isinstance(probe.get(k), str) for k in ('name', 'source', 'language')) and probe['language'] in ('c', 'cpp'), 'Probe needs name, source and language')
         require(isinstance(probe.get('flags', []), list) and all(isinstance(x, str) for x in probe.get('flags', [])), 'Probe flags must be array')
+    runtime_names = [p['name'] for p in c['runtime']['probes'] if isinstance(p, dict) and isinstance(p.get('name'), str)]
+    require(len(set(runtime_names)) == len(runtime_names), 'Runtime probe names must be unique')
     for probe in c['runtime']['probes']:
         require(isinstance(probe, dict) and set(probe) <= {'name', 'dimension', 'argv', 'expected_stdout', 'expected_exit'}, 'Invalid runtime probe')
         require(isinstance(probe.get('name'), str) and probe.get('dimension') in DIMENSIONS, 'Runtime probe needs name/dimension')
@@ -263,7 +280,7 @@ def limitation(dimension: str, reason: str, component: str = '*') -> dict[str, s
 def read_manifest(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text())
-        if data['schema_version'] not in ('1.0', SCHEMA) or not isinstance(data['image'], dict):
+        if data['schema_version'] not in ('1.0', '1.1', SCHEMA) or not isinstance(data['image'], dict):
             raise ValueError('unsupported schema')
         if not isinstance(data['image'].get('name'), str):
             raise ValueError('image.name must be a string')
@@ -333,12 +350,24 @@ def read_manifest(path: Path) -> dict[str, Any]:
                     raise ValueError('invalid ELF versions')
             if any(not isinstance(v.get('file'), str) for v in obj.get('version_requirements', [])):
                 raise ValueError('invalid version requirement file')
-        if data['schema_version'] == '1.0':
+        validate_package_context(data)
+        if not isinstance(data.get('expected_tests', []), list):
+            raise ValueError('Invalid expected test manifest')
+        for expected in data.get('expected_tests', []):
+            if not isinstance(expected, dict) or not all(isinstance(expected.get(k), str) for k in ('id', 'compiler', 'name', 'kind')) or expected['kind'] not in ('header', 'build', 'runtime'):
+                raise ValueError('Invalid expected test identity')
+            if expected.get('image') not in ('baseline', 'candidate', None) or not isinstance(expected.get('required_stages'), list) or any(not isinstance(k, str) for k in expected['required_stages']):
+                raise ValueError('Invalid expected test stages/destination')
+            if not isinstance(expected.get('checks', []), list):
+                raise ValueError('Invalid expected test checks')
+        if data['schema_version'] in ('1.0', '1.1'):
+            data['migration_notes'] = ['Coverage and expected-test semantics changed in 1.2; no old completeness credit is reused.']
+            for obj in data['elf_objects']: obj['resolution_metadata_complete'] = False
             for test in data['test_results']:
                 if test['status'] in ('COMPATIBLE', 'IDENTICAL'):
                     test['recorded_status'] = test['status']
                     test['status'] = 'UNKNOWN'
-                    test['reason'] = 'Legacy 1.0 provenance/receipt semantics require revalidation'
+                    test['reason'] = 'Legacy expected-test/completeness semantics require 1.2 revalidation'
             for cell in data.get('cross_matrix', []):
                 for key in ('status', 'runtime_status', 'header_status'):
                     if cell[key] in ('COMPATIBLE', 'IDENTICAL'):
@@ -346,3 +375,30 @@ def read_manifest(path: Path) -> dict[str, Any]:
         return data
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise InputError(f'Invalid manifest {path}: {exc}') from exc
+
+
+def validate_package_context(data, nested=False):
+    for section in ('packages', 'available_packages'):
+        records = data.get(section, [])
+        if not isinstance(records, list): raise ValueError('Invalid package records')
+        for p in records:
+            if not isinstance(p, dict) or not all(isinstance(p.get(k), str) for k in ('name', 'arch')):
+                raise ValueError('Invalid package identity')
+            if not isinstance(p.get('files', []), list) or any(not isinstance(f, str) or not f.startswith('/') or '..' in Path(f).parts for f in p.get('files', [])):
+                raise ValueError('Invalid RPM owned file paths')
+            if 'provenance' in p and (not isinstance(p['provenance'], dict) or p['provenance'].get('kind') not in ('installed_rpmdb', 'rpm_archive')):
+                raise ValueError('Invalid RPM provenance')
+    info = data.get('package_inventory')
+    if info is not None:
+        if not isinstance(info, dict) or info.get('status') not in ('COMPLETE', 'PARTIAL', 'UNKNOWN', 'NOT_EXECUTED'):
+            raise ValueError('Invalid package inventory status')
+        count = info.get('installed_count')
+        if count is not None and (type(count) is not int or count < 0): raise ValueError('Invalid installed package count')
+        if info['status'] == 'COMPLETE' and count != len(data.get('packages', [])):
+            raise ValueError('Installed package count differs from inventory records')
+        if info['status'] == 'COMPLETE' and any(p.get('provenance', {}).get('kind') != 'installed_rpmdb' for p in data.get('packages', [])):
+            raise ValueError('Complete installed inventory requires installed RPM database provenance')
+    sdk = data.get('sdk_package_manifest')
+    if sdk is not None:
+        if nested or not isinstance(sdk, dict): raise ValueError('Invalid/nested SDK package manifest')
+        validate_package_context(sdk, True)

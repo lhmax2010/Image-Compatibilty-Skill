@@ -16,6 +16,7 @@ from compat.core import (DIMENSIONS, SEVERITIES, InfrastructureError, InputError
 from compat.images import Image
 from compat.report import build_results, generate
 from compat.testing import run_matrix
+from compat.matrix_manifest import reconcile
 
 
 def parser() -> argparse.ArgumentParser:
@@ -110,6 +111,12 @@ def main(argv: list[str] | None = None) -> int:
                 matrix = a.get('cross_matrix') or [{'compiler': compiler, 'image': image, 'header_status': 'UNKNOWN', 'runtime_status': 'UNKNOWN',
                            'status': 'UNKNOWN', 'reason': 'Manifest-only comparison; no new executions.'}
                           for compiler in ('gcc', 'clang') for image in ('baseline', 'candidate')]
+                expected = a.get('expected_tests', []) + b.get('expected_tests', [])
+                # An absent v1.2 plan cannot inherit previous completeness credit.
+                if a['schema_version'] != '1.2' or b['schema_version'] != '1.2':
+                    expected = []
+                audit = reconcile(expected, tests, matrix)
+                a['test_manifest_audit'] = b['test_manifest_audit'] = audit
                 for test in tests:
                     if test['status'] == 'INCOMPATIBLE':
                         findings.append(finding(test.get('dimension', 'runtime' if test['kind'] == 'runtime' else 'headers'),
@@ -129,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
             a['cross_matrix'] = b['cross_matrix'] = matrix
             result = build_results(a, b, findings, tests, matrix, config)
             generate(output, a, b, result, config)
-            print(f"{result['status']}: {len(findings)} findings; coverage gate {result['quality_gate']['status']}; report {output / 'index.html'}")
+            print(f"{result['status']}: {len(findings)} findings; quality gate {result['quality_gate']['status']} (compatibility={result['quality_gate']['compatibility_status']}, coverage={result['quality_gate']['coverage_status']}); report {output / 'index.html'}")
             threshold = SEVERITIES.index(config['ci']['fail_on'])
             fail = any(f['status'] == 'INCOMPATIBLE' and SEVERITIES.index(f['severity']) <= threshold for f in findings)
             fail |= config['ci']['strict'] and (any(f['status'] == 'UNKNOWN' for f in findings) or any(c['unknown'] for c in result['coverage'].values()))
