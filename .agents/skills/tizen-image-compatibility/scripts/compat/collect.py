@@ -146,7 +146,7 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
             evidence = 'evidence/' + digest(raw) + '.txt'
             (tools.output / evidence).write_bytes(raw)
             if is_header:
-                m['public_headers'].append({'path': virtual, 'sha256': digest(raw), 'evidence': [evidence], **parse_header(normalized)})
+                m['public_headers'].append({'origin': 'runtime_image', 'path': virtual, 'sha256': digest(raw), 'evidence': [evidence], **parse_header(normalized)})
             if is_config:
                 entry = {'path': virtual, 'normalized': normalized, 'keys': parse_keys(normalized), 'evidence': [evidence]}
                 m['configurations'].append(entry)
@@ -210,6 +210,9 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
         m['capabilities'].append({'dimension': 'hardware', 'status': 'NOT_APPLICABLE', 'reason': 'No multimedia userspace interface detected; physical hardware presence is unknown.'})
     else:
         m['limitations'].append(limitation('hardware', 'Driver/codec inventory does not establish device behavior or hardware acceleration.'))
+    m['loader_environment'] = tools.config['loader']['environments'].get(label, {})
+    m['loader_configuration'] = [x for x in m['configurations'] if x['path'] == '/etc/ld.so.conf' or x['path'].startswith('/etc/ld.so.conf.d/')]
+    m['collection_complete'] = image.format != 'rpm-collection' and not image.errors and not any(x['dimension'] == 'filesystem' for x in m['limitations'])
     for key, value in m.items():
         if isinstance(value, list):
             value.sort(key=canonical)

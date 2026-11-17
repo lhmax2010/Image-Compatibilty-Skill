@@ -35,7 +35,13 @@ class ExecutionTests(unittest.TestCase):
         manifests = tuple(collect(image, 'SYNTHETIC', label, 'static', self.tools, self.workspace)
                           for image, label in zip(images, ('baseline', 'candidate')))
         # Minimal SDK deliberately cannot build runtime probes; header probes can run.
-        sdk = self.root / 'sdk'; sdk.mkdir()
+        sdk = self.root / 'sdk'; (sdk / 'usr/include').mkdir(parents=True)
+        # The SDK gets the fixture public header paths below.
+        for header in manifests[0]['public_headers']:
+            target = sdk / header['path'].lstrip('/')
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text('int sdk_function(void);\n')
+        self.config['cross_compilation']['builds'] = {'gcc': {'sdk': 'candidate', 'reference_image': 'candidate', 'provenance': 'synthetic-gcc-sdk'}}
         self.config['cross_compilation'].update(sysroots={'baseline': str(sdk), 'candidate': str(sdk)},
             compilers={'gcc': {'c': shutil.which('gcc')}}, cpp_tests=False)
         tests, matrix, findings = run_matrix(manifests, images, self.tools, 'full')
@@ -47,14 +53,22 @@ class ExecutionTests(unittest.TestCase):
 
     def mock_environments(self):
         adapter = self.root / 'adapter.py'
-        adapter.write_text('import sys\nprint("base" if sys.argv[1] == "baseline" else "different")\n')
+        adapter.write_text('''import sys, json, hashlib
+from pathlib import Path
+label = sys.argv[1]
+source = Path(sys.argv[3]) / sys.argv[2].lstrip('/')
+print(json.dumps(dict(schema='tizen-compat-runner/v1', environment_id='SYNTHETIC-ADAPTER-' + label,
+    binary_sha256=hashlib.sha256(source.read_bytes()).hexdigest(), deployment='ok', execution='ok',
+    returncode=0, stdout='base' if label == 'baseline' else 'different', stderr='')))
+''')
         images = []
         for label in ('baseline', 'candidate'):
             path = self.root / label; path.mkdir()
+            (path / 'never-executed').write_text('synthetic adapter input; never execute')
             images.append(Image(path, self.workspace, self.tools, label))
         self.config['runtime'].update(enabled=True, authorized=True,
             environments={label: {'id': 'SYNTHETIC-ADAPTER-' + label,
-                                  'runner': [sys.executable, str(adapter), '{image}', '{binary}']}
+                                  'runner': [sys.executable, str(adapter), '{image}', '{binary}', '{rootfs}']}
                           for label in ('baseline', 'candidate')},
             probes=[{'name': 'synthetic-output', 'dimension': 'commands', 'argv': ['/never-executed']}])
         manifests = tuple({'public_headers': [], 'elf_objects': [], 'test_results': []} for _ in range(2))

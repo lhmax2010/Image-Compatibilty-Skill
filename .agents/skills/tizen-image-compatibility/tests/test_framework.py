@@ -73,11 +73,11 @@ class SourceTests(Environment):
         b['public_headers'] = []
         self.assertEqual(compare_api(a, b)[0]['status'], 'INCOMPATIBLE')
 
-    def test_comment_only_header_is_compatible(self):
+    def test_comment_only_header_is_lexically_equal_but_semantics_unknown(self):
         a, b = self.blank(), self.blank()
         a['public_headers'] = [{'path': '/usr/include/a.h', 'sha256': 'a', **parse_header('int old(void);')}]
         b['public_headers'] = [{'path': '/usr/include/a.h', 'sha256': 'b', **parse_header('/* note */ int old(void);')}]
-        self.assertEqual(compare_api(a, b)[0]['status'], 'COMPATIBLE')
+        self.assertEqual(compare_api(a, b)[0]['status'], 'UNKNOWN')
 
     def test_dbus_argument_names_are_not_wire_contract(self):
         a = parse_dbus('<node><interface name="org.Test"><method name="M"><arg type="s" name="before"/></method></interface></node>')
@@ -146,7 +146,7 @@ class ComparisonTests(Environment):
         a, b = self.blank(), self.blank()
         a['elf_objects'], b['elf_objects'] = [self.obj()], [self.obj('new@@V2')]
         result = compare_elf(a, b)
-        self.assertTrue(any(f['interface'] == 'old@V1' and f['status'] == 'INCOMPATIBLE' for f in result))
+        self.assertTrue(any(f['interface'] == 'old@@V1' and f['status'] == 'INCOMPATIBLE' for f in result))
 
     def test_function_size_not_abi_failure(self):
         a, b = self.blank(), self.blank()
@@ -159,6 +159,8 @@ class ComparisonTests(Environment):
         a['elf_objects'], b['elf_objects'] = [self.obj()], [self.obj()]
         b['elf_objects'][0].update(soname='libtest.so.2', needed=['libmissing.so.1'])
         self.assertTrue(any(f['interface'] == 'soname' for f in compare_elf(a, b)))
+        b['collection_complete'] = True
+        b['loader_environment'] = {'model': 'glibc', 'environment_complete': True, 'cache_complete': True, 'default_dirs': ['/lib']}
         self.assertTrue(any(f['status'] == 'INCOMPATIBLE' for f in dependency_checks(b, 'candidate')))
 
     def test_missing_tool_no_false_removals(self):

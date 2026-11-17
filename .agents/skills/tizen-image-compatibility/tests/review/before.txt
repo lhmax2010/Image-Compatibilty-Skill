@@ -1,0 +1,7 @@
+P0-1 hidden provider / unsatisfied import: []
+P0-2 parsed version relationships: {'version_definitions': None, 'version_requirements': None}
+P0-2 raw exports vs lookup keys: ['V1', 'V2', 'foo@@V2', 'foo@V1', 'new_impl', 'old_impl'] ['V1', 'V2', 'foo@V2', 'foo', 'foo@V1', 'new_impl', 'old_impl']
+P0-4 two no-DWARF libraries: [('*', 'DWARF coverage')]
+P1-1 token equality: ['COMPATIBLE']
+P1-2 coverage fields: None None
+P0-3 candidate-built artifact with own-image failure: [('baseline', 'COMPATIBLE', 0), ('candidate', 'INCOMPATIBLE', 1)]

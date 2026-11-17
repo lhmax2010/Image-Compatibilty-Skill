@@ -63,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
                 config['cross_compilation']['compilers'].setdefault(family, {})[language] = str(path.resolve())
         paths = [p.resolve() for p in (args.baseline, args.candidate, args.baseline_sysroot, args.candidate_sysroot) if p]
         paths += [Path(p).resolve() for p in config['cross_compilation']['sysroots'].values()]
+        paths += [Path(p).resolve() for roots in config['debuginfo']['roots'].values() for p in roots]
         output = args.output.resolve()
         for writable in [output] + ([args.cache.resolve()] if args.cache else []):
             for source in paths:
@@ -128,10 +129,11 @@ def main(argv: list[str] | None = None) -> int:
             a['cross_matrix'] = b['cross_matrix'] = matrix
             result = build_results(a, b, findings, tests, matrix, config)
             generate(output, a, b, result, config)
-            print(f"{result['status']}: {len(findings)} findings; report {output / 'index.html'}")
+            print(f"{result['status']}: {len(findings)} findings; coverage gate {result['quality_gate']['status']}; report {output / 'index.html'}")
             threshold = SEVERITIES.index(config['ci']['fail_on'])
             fail = any(f['status'] == 'INCOMPATIBLE' and SEVERITIES.index(f['severity']) <= threshold for f in findings)
-            fail |= config['ci']['strict'] and any(f['status'] == 'UNKNOWN' for f in findings)
+            fail |= config['ci']['strict'] and (any(f['status'] == 'UNKNOWN' for f in findings) or any(c['unknown'] for c in result['coverage'].values()))
+            fail |= result['quality_gate']['status'] == 'FAIL'
             return 1 if fail else 0
     except (InputError, ValueError) as exc:
         print(f'Input error: {exc}', file=sys.stderr)

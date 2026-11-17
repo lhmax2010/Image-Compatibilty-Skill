@@ -1,0 +1,51 @@
+test_actual_rpm_archive_query (test_execution.ExecutionTests.test_actual_rpm_archive_query) ... ok
+test_authorized_adapter_detects_behavior_difference (test_execution.ExecutionTests.test_authorized_adapter_detects_behavior_difference) ... ok
+test_real_header_compile_matrix (test_execution.ExecutionTests.test_real_header_compile_matrix) ... ok
+test_runtime_exclusion_prevents_execution (test_execution.ExecutionTests.test_runtime_exclusion_prevents_execution) ... ok
+test_trusted_probe_sources_on_host (test_execution.ExecutionTests.test_trusted_probe_sources_on_host) ... ok
+test_unauthorized_adapter_is_never_run (test_execution.ExecutionTests.test_unauthorized_adapter_is_never_run) ... ok
+test_function_size_not_abi_failure (test_framework.ComparisonTests.test_function_size_not_abi_failure) ... ok
+test_missing_tool_no_false_removals (test_framework.ComparisonTests.test_missing_tool_no_false_removals) ... ok
+test_missing_versioned_symbol (test_framework.ComparisonTests.test_missing_versioned_symbol) ... ok
+test_rpm_release_is_compatible (test_framework.ComparisonTests.test_rpm_release_is_compatible) ... ok
+test_rpm_xml (test_framework.ComparisonTests.test_rpm_xml) ... ok
+test_severity_override_and_exclude (test_framework.ComparisonTests.test_severity_override_and_exclude) ... ok
+test_soname_difference_and_needed (test_framework.ComparisonTests.test_soname_difference_and_needed) ... ok
+test_weak_import_is_not_missing_export (test_framework.ComparisonTests.test_weak_import_is_not_missing_export) ... ok
+test_elf_collection_and_cache (test_framework.EndToEndTests.test_elf_collection_and_cache) ... ok
+test_full_offline_cli_and_reuse (test_framework.EndToEndTests.test_full_offline_cli_and_reuse) ... ok
+test_identical_strict_and_threshold (test_framework.EndToEndTests.test_identical_strict_and_threshold) ... ok
+test_oci_layer_layout_rejected (test_framework.ImageTests.test_oci_layer_layout_rejected) ... ok
+test_reject_tar_escape (test_framework.ImageTests.test_reject_tar_escape) ... ok
+test_reject_tar_symlink_write (test_framework.ImageTests.test_reject_tar_symlink_write) ... ok
+test_safe_tar_preserves_metadata (test_framework.ImageTests.test_safe_tar_preserves_metadata) ... ok
+test_symlink_stays_inside_image (test_framework.ImageTests.test_symlink_stays_inside_image) ... ok
+test_unsupported_image (test_framework.ImageTests.test_unsupported_image) ... ok
+test_config_rejects_types_and_unknown_keys (test_framework.InfrastructureTests.test_config_rejects_types_and_unknown_keys) ... ok
+test_missing_tool (test_framework.InfrastructureTests.test_missing_tool) ... ok
+test_no_runtime_means_unknown (test_framework.InfrastructureTests.test_no_runtime_means_unknown) ... ok
+test_report_escaping_and_manifest (test_framework.InfrastructureTests.test_report_escaping_and_manifest) ... ok
+test_source_output_guard (test_framework.InfrastructureTests.test_source_output_guard) ... Input error: Output/cache must be outside all source images and SDK sysroots
+ok
+test_timeout_records_evidence (test_framework.InfrastructureTests.test_timeout_records_evidence) ... ok
+test_comment_only_header_is_compatible (test_framework.SourceTests.test_comment_only_header_is_compatible) ... ok
+test_comments_preserve_strings_and_tokens (test_framework.SourceTests.test_comments_preserve_strings_and_tokens) ... ok
+test_dbus_argument_names_are_not_wire_contract (test_framework.SourceTests.test_dbus_argument_names_are_not_wire_contract) ... ok
+test_dbus_nested_paths (test_framework.SourceTests.test_dbus_nested_paths) ... ok
+test_function_macro_spacing_matters (test_framework.SourceTests.test_function_macro_spacing_matters) ... ok
+test_header_comparison (test_framework.SourceTests.test_header_comparison) ... ok
+test_normalization (test_framework.SourceTests.test_normalization) ... ok
+
+----------------------------------------------------------------------
+Ran 36 tests in 1.049s
+
+OK
+Synthetic fixture written to /tmp/tmp1b445orj/images; NOT a real Tizen compatibility result.
+Synthetic fixture written to /tmp/tmp93qii0o7/images; NOT a real Tizen compatibility result.
+Synthetic fixture written to /tmp/tmpluc6uc_7/images; NOT a real Tizen compatibility result.
+INCOMPATIBLE: 53 findings; report /tmp/tmpluc6uc_7/cli-report/index.html
+INCOMPATIBLE: 53 findings; report /tmp/tmpluc6uc_7/reuse/index.html
+Synthetic fixture written to /tmp/tmpo32_erih/images; NOT a real Tizen compatibility result.
+UNKNOWN: 39 findings; report /tmp/tmpo32_erih/same/index.html
+UNKNOWN: 39 findings; report /tmp/tmpo32_erih/strict/index.html
+INCOMPATIBLE: 53 findings; report /tmp/tmpo32_erih/critical/index.html

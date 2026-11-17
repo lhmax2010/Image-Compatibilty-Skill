@@ -6,6 +6,9 @@
 
 > 当前版本提供可运行的离线分析、SDK 编译探针和可配置的目标运行适配器。无法完成或证据不足的检查标为 `UNKNOWN`。仓库中的示例全部为合成数据，不代表任何真实 Tizen 版本的兼容性结论。
 
+**正确性整改（1.1）**：已补充受加载路径约束的依赖/导入符号检查、完整版本关系、显式 SDK/构建来源矩阵、ARM EABI/浮点调用约定校验、Build-ID 拆分 DWARF 和逐维度覆盖率门禁。词法相同、库名存在、适配器退出 0 都不能单独作为兼容结论。详见 [问题复现](REVIEW_FINDINGS.md)、[整改说明](CORRECTNESS_REMEDIATION.md) 和 [验证记录](VALIDATION_RESULTS.md)。目前没有真实 Tizen TV 镜像、SDK、设备的端到端验收结果。
+
+
 ## 快速开始
 
 检测程序应在 Linux 环境中使用 Python 3.10 或更新版本。Windows 用户可让 Cline 在 WSL、Linux 容器或远程 Linux 环境中执行；当前实现使用 `os.killpg`、POSIX 进程组及 Linux 扩展属性，未支持原生 Windows 执行。
@@ -196,7 +199,7 @@ python3 "$SKILL/scripts/tizen_compat.py" --list-tools --output ./reports/tools
 
 ## SDK 与四向测试
 
-头文件矩阵覆盖 GCC 镜像/LLVM 镜像分别使用 GCC 和 Clang 编译。运行矩阵把同一个 GCC 产物和同一个 Clang 产物分别送入两个目标环境执行，避免把“重新编译成功”误当作二进制兼容。
+头文件矩阵使用各自 SDK 中的头文件，并分别配置 GCC 和 Clang。运行矩阵把同一个编译产物送入两个目标环境；通过 `cross_compilation.builds` 显式指定每个编译器的 SDK、原生参考镜像和构建来源，不再由编译器名字推断 baseline/candidate。自身参考环境失败时，两侧都不会被算作已验证兼容。适配器须返回带环境 ID、产物哈希、部署/执行状态的 JSON 回执；旧式 stdout/退出码适配器需要升级。
 
 ```bash
 python3 "$SKILL/scripts/tizen_compat.py" \
@@ -212,6 +215,8 @@ python3 "$SKILL/scripts/tizen_compat.py" \
   --config ./compat-config.yaml \
   --output ./reports/sdk-matrix
 ```
+
+运行探针还需在配置中提供 `builds: {gcc: {sdk: baseline, reference_image: baseline, provenance: 实际GBS构建标识}, clang: {sdk: candidate, reference_image: candidate, provenance: 实际GBS构建标识}}`；示例角色可调换。
 
 Clang 的目标三元组及 SDK 专用参数应配置在 `cross_compilation.compilers` 中。框架不会用宿主默认编译器替代缺失的 SDK 编译器。
 
@@ -256,7 +261,7 @@ python3 "$SKILL/scripts/tizen_compat.py" \
 | `UNKNOWN` | 工具、输入或环境缺失，或语义证据不足 |
 | `NOT_APPLICABLE` | 该限定检查未检测到适用的用户态子系统 |
 
-严重性分为 `CRITICAL`、`HIGH`、`MEDIUM`、`LOW`、`INFO`。差异不会自动被判为不兼容，例如 RPM release 变化和仅有注释/空白的头文件变化。
+严重性分为 `CRITICAL`、`HIGH`、`MEDIUM`、`LOW`、`INFO`。差异不会自动被判为不兼容，例如 RPM release 变化。仅有注释/空白的头文件变化保留词法相等证据，语义兼容结论仍为 UNKNOWN，需 SDK/宏/目标上下文验证。
 
 ```bash
 python3 "$SKILL/scripts/tizen_compat.py" \
@@ -268,7 +273,7 @@ python3 "$SKILL/scripts/tizen_compat.py" \
 | 退出码 | 含义 |
 |---|---|
 | `0` | 没有命中所配置失败阈值，不代表所有检查通过 |
-| `1` | 不兼容项达到阈值，或 `--strict` 检测到 UNKNOWN |
+| `1` | 不兼容项达到阈值、最低覆盖率未达到，或 `--strict` 检测到 UNKNOWN |
 | `2` | 输入或配置无效 |
 | `3` | 执行基础设施错误 |
 
@@ -283,7 +288,7 @@ python3 -m http.server 8000 --bind 127.0.0.1 \
   --directory "$SKILL/examples/synthetic-report"
 ```
 
-访问 `http://127.0.0.1:8000/`。示例故意移除符号、修改数据大小和 D-Bus 签名等，报告包含 **7 条不兼容 finding**。其运行时矩阵全部为 UNKNOWN，两个镜像夹具均由宿主编译器生成，不能作为真实 GCC/LLVM Tizen 对比结果。
+访问 `http://127.0.0.1:8000/`。仓库保留的历史 schema 1.0 示例故意移除符号、修改数据大小和 D-Bus 签名等，旧报告包含 **7 条不兼容 finding**。其运行时矩阵全部为 UNKNOWN，两个镜像夹具均由宿主编译器生成，不能作为真实 GCC/LLVM Tizen 对比结果。
 
 重新生成自己的合成输入和报告：
 
@@ -303,7 +308,7 @@ python3 -m unittest discover -s "$SKILL/tests" -v
 python3 -m compileall -q "$SKILL/scripts" "$SKILL/tests"
 ```
 
-已验证的套件包含 36 项测试，覆盖实际 ELF/RPM 采集、语义归一化、源文件不变性、归档路径安全、缺失工具、缓存、manifest 复用、报告、CI 阈值、GCC 头文件编译和合成运行适配器。依赖宿主工具的测试在工具缺失时可能跳过。当前测试环境没有完成真实 Tizen、Clang SDK、libabigail 或设备/QEMU 集成验证。
+原有 36 项测试保留，并补充了正确性回归和可选真实 Clang/libabigail 工具测试。最新数量、完整命令、工具来源和结果见 [VALIDATION_RESULTS.md](VALIDATION_RESULTS.md)。测试使用真实构造的 ELF/RPM 和模拟适配器；已验证 Clang AST/ARM 对象及 libabigail 嵌入/拆分 DWARF，尚未完成真实 Tizen SDK、设备/QEMU 集成验收。依赖工具的测试在工具缺失时明确跳过。
 
 ## 目录与进一步阅读
 
@@ -328,3 +333,16 @@ python3 -m compileall -q "$SKILL/scripts" "$SKILL/tests"
 - [采集、证据、归一化与缓存](.agents/skills/tizen-image-compatibility/references/detection_methods.md)
 - [JSON manifest 与报告结构](.agents/skills/tizen-image-compatibility/references/report_schema.md)
 - [实现清单、验证记录与已知限制](.agents/skills/tizen-image-compatibility/references/implementation.md)
+
+### 覆盖率质量门禁
+
+```yaml
+ci:
+  minimum_coverage: {abi: 90, linking: 95, runtime: 100}
+```
+
+`results.json.coverage` 每个维度提供 applicable、verified、compatible、incompatible、unknown、coverage_percent 和 compatibility_percent。统计单位是 baseline 组件接口契约，ABI 区分导出表与类型布局；不是 finding 条数，也不是所有第三方 API 的穷举。覆盖率 = verified / applicable；兼容率 = compatible / applicable，UNKNOWN 留在分母。缺失工具/环境不会算作兼容，低于门槛返回 1。没有配置门槛时，退出 0 仍不代表全量通过。
+
+加载器环境默认未知，不能仅凭 rootfs 内存在 SONAME 判定可加载。声明完整 loader environment 前，必须核实目标搜索路径及有效缓存；配置样例、尚不支持的 glibc 行为、拆分 debuginfo 输入和 AST 限制见 [正确性边界](.agents/skills/tizen-image-compatibility/references/correctness.md)。
+
+HTML 只展开前 1000 条 finding，Markdown 列出前 200 条不兼容详情；完整数据保存在 JSON/CSV。Schema 1.0 manifest 可读取，但旧成功测试/矩阵结论需重新验证，不能直接作为 1.1 门禁通过证据。

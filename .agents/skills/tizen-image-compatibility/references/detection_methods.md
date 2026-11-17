@@ -29,3 +29,7 @@ Only generated timestamp-comment lines and preprocessor line markers are normali
 Readelf captures the declared dependency graph, and provider inventory checks every object plus baseline consumers against the candidate. The graph detects cycles, but does not implement the runtime linker's search/cache/namespace/version-resolution semantics. Never report an available filename as a proven successful load. Platform consolidation and compatibility symlinks are inventory evidence, not hardcoded glibc assumptions.
 
 System files are never executed: unit ExecStart, shell scripts, udev rules, package scriptlets and configuration commands are text evidence only. XML parsing does not fetch remote entities. HTML escapes all image-controlled strings; CSV protects formula-leading cells. Reports can contain configuration values and should be handled as image-derived artifacts.
+
+## Correctness changes in 1.1
+
+Read [correctness.md](correctness.md) for loader search/closure, version relationships, ARM ABI checks, split Build-ID DWARF, SDK/AST context and coverage denominators. Lexical equality and rootfs-wide SONAME presence do not establish semantic or loader compatibility.

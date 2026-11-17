@@ -59,3 +59,11 @@ python3 "$SKILL/scripts/tizen_compat.py" \
 The last command deliberately returns **1** because the fixture removes a versioned export, changes a data symbol and removes a command. A pre-generated example is in [examples/synthetic-report/index.html](examples/synthetic-report/index.html).
 
 For supported tools/dependencies read [tool_requirements.md](references/tool_requirements.md). For implementation, raw evidence, caching and normalization read [detection_methods.md](references/detection_methods.md). For consumers of JSON/CSV read [report_schema.md](references/report_schema.md). The detailed delivery/validation record is [implementation.md](references/implementation.md).
+
+## Correctness and migration gates (1.1)
+
+Before claiming GCC-to-LLVM migration compatibility, read [correctness.md](references/correctness.md). Preserve exact versions (`@` / `@@`), actual provider paths and baseline-consumer direction. Do not dismiss C++/ASAN/generated-symbol removals from export counts or naming alone. Same-build-type comparisons reduce confounding but do not establish compatibility themselves.
+
+Require explicit compiler → SDK/native-reference/build-provenance mappings for the four-way matrix. SDK headers and runtime-image headers are separate evidence. Own-reference failure or missing deployment/execution receipts means UNKNOWN. Never execute target artifacts directly on the host.
+
+Report each dimension's applicable/verified/compatible/incompatible/unknown contracts and both percentage denominators. Missing tools/DWARF/SDK/devices must remain visible. Configure `ci.minimum_coverage` for actual quality gates; an exit 0 with no coverage threshold is not a full pass. Loader verification is conditional on a complete declared target search environment; unknown caches/namespace behavior must not be guessed. Schema 1.0 successful observations require revalidation under 1.1.

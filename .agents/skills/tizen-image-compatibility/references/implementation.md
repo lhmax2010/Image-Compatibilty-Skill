@@ -1,3 +1,5 @@
+> Historical 1.0 delivery record. For current 1.1 behavior, see [correctness.md](correctness.md), [report_schema.md](report_schema.md), and repository-root VALIDATION_RESULTS.md. Counts and missing-tool statements below describe the original delivery, not the current remediation.
+
 # Implementation delivery record
 
 Implemented on 2026-11-15 in `.agents/skills/tizen-image-compatibility/`. Existing `require.md` and `design.md` were left unchanged. The starting directory contained only these documents and no Git repository, AGENTS.md, build system or reusable image tooling.

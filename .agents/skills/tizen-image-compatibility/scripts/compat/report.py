@@ -7,6 +7,7 @@ import html
 import json
 from pathlib import Path
 from typing import Any
+from .coverage import coverage_report
 from .core import DIMENSIONS, SCHEMA, STATUSES, canonical, write_json
 
 
@@ -15,7 +16,13 @@ def build_results(a: dict[str, Any], b: dict[str, Any], findings: list[dict[str,
     counts = Counter(f['status'] for f in findings)
     test_counts = Counter(t['status'] for t in tests)
     status = 'INCOMPATIBLE' if counts['INCOMPATIBLE'] else 'UNKNOWN' if counts['UNKNOWN'] else 'COMPATIBLE' if findings else 'UNKNOWN'
-    return {'schema_version': SCHEMA, 'direction': 'baseline consumers on candidate',
+    coverage, gate = coverage_report(a, b, findings, tests, matrix, config)
+    if status == 'COMPATIBLE' and any(x['unknown'] for x in coverage.values()):
+        status = 'UNKNOWN'
+    return {'coverage': coverage, 'quality_gate': gate,
+        'coverage_policy': {'unit': 'baseline component contract; ABI has separate export and type-layout obligations',
+                            'coverage_denominator': 'applicable', 'compatibility_denominator': 'applicable',
+                            'verified': 'compatible + incompatible; UNKNOWN never receives credit'}, 'schema_version': SCHEMA, 'direction': 'baseline consumers on candidate',
         'baseline': a['image'], 'candidate': b['image'], 'status': status,
         'summary': {'findings': len(findings), 'by_status': {s: counts[s] for s in STATUSES},
             'total_tests': len(tests), 'passed_tests': test_counts['COMPATIBLE'] + test_counts['IDENTICAL'],
@@ -60,7 +67,11 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
             f"Tests: {summary['total_tests']}; passed: {summary['passed_tests']}; failed: {summary['failed_tests']}; unknown: {summary['unknown_tests']}.",
             f"Findings: {summary['findings']}; incompatible: {summary['by_status']['INCOMPATIBLE']}; unknown: {summary['by_status']['UNKNOWN']}.", '',
             'Static findings are not executable test counts. No runtime execution means no runtime pass.', '', '## Risks', '']
-        for item in results['findings']:
+        lines += ['## Coverage', '', '| Dimension | Applicable | Verified | Compatible | Incompatible | Unknown | Coverage % | Compatible / applicable % |', '|---|---:|---:|---:|---:|---:|---:|---:|']
+        for dim, cov in results['coverage'].items():
+            lines.append('| ' + ' | '.join(str(x) for x in [dim, *[cov[k] for k in ('applicable', 'verified', 'compatible', 'incompatible', 'unknown', 'coverage_percent', 'compatibility_percent')]]) + ' |')
+        lines += ['', 'Coverage gate: ' + results['quality_gate']['status'], '', '## Incompatible interfaces (first 200; full list in JSON/CSV)', '']
+        for item in [f for f in results['findings'] if f['status'] == 'INCOMPATIBLE'][:200]:
             if item['status'] == 'INCOMPATIBLE':
                 lines.append(f"- {item['severity']} `{esc(item['component'])}` / `{esc(item['interface'])}`: {esc(item['potential_impact'])} ({item['id']})")
         lines += ['', '## Cross-compatibility matrix', '', '| Compiler | Image | Headers | Runtime | Overall |', '|---|---|---|---|---|']
@@ -76,16 +87,20 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
         content += '<p class="status">' + esc(results['status']) + '</p>'
         content += table([[a['image'], b['image'], summary]], ['Baseline image', 'Candidate image', 'Tests and findings'])
         content += '<p>Direction: baseline consumers on candidate. UNKNOWN is not a pass. Static findings and executable tests are counted separately.</p>'
+        content += '<h2>Coverage and gate</h2>' + table([[d, {k: v for k, v in c.items() if k != 'units'}] for d, c in results['coverage'].items()], ['Dimension', 'Coverage'])
+        content += '<p>Coverage gate: ' + esc(results['quality_gate']) + '</p>'
         content += '<h2>Compatibility overview</h2>' + table([[k, v] for k, v in results['dimensions'].items()], ['Dimension', 'Statuses'])
         content += '<h2>Cross-compatibility matrix</h2>' + table([[c.get(k, '') for k in ('compiler', 'image', 'header_status', 'runtime_status', 'status', 'reason', 'runtime_reason')] for c in results['matrix']],
             ['Compiler', 'Image', 'Headers', 'Runtime', 'Overall', 'Compile coverage', 'Runtime coverage'])
         content += '<h2>Detailed differences</h2><input id="filter" aria-label="Filter findings" placeholder="Filter findings…">'
-        for item in results['findings']:
+        content += '<p>First 1000 findings shown; complete details are in results.json and findings.csv.</p>'
+        for item in results['findings'][:1000]:
             content += '<details class="finding"><summary>' + esc(f"{item['severity']} · {item['status']} · {item['component']} · {item['interface']}") + '</summary>'
             content += table([[k, v] for k, v in item.items()], ['Field', 'Value'])
             content += '</details>'
         for title, key in [('Missing interfaces', 'missing_interfaces'), ('Normalized differences', 'normalized_differences')]:
-            content += '<h2>' + title + '</h2>' + table([[f['id'], f['component'], f['interface'], f['potential_impact']] for f in results['findings'] if f['id'] in results[key]], ['ID', 'Component', 'Interface', 'Reason / impact'])
+            selected = set(results[key])
+            content += '<h2>' + title + ' (first 1000)</h2>' + table([[f['id'], f['component'], f['interface'], f['potential_impact']] for f in results['findings'][:1000] if f['id'] in selected], ['ID', 'Component', 'Interface', 'Reason / impact'])
         content += '<h2>Normalization policy</h2><ul>' + ''.join('<li>' + esc(v) + '</li>' for v in results['normalization_policy']) + '</ul>'
         content += '<h2>Limitations</h2>' + table([[x['dimension'], x['component'], x['reason']] for x in results['limitations']], ['Dimension', 'Component', 'Reason'])
         content += '<p>Excluded dimensions: ' + esc(results['excluded_dimensions']) + '</p>'

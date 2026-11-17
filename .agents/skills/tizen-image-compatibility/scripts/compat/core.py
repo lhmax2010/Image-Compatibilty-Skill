@@ -13,8 +13,8 @@ import tempfile
 import threading
 from typing import Any
 
-VERSION = '1.0.0'
-SCHEMA = '1.0'
+VERSION = '1.1.0'
+SCHEMA = '1.1'
 DIMENSIONS = ('elf', 'abi', 'api', 'headers', 'linking', 'compiler_runtime', 'kernel',
               'ipc', 'commands', 'filesystem', 'packages', 'services', 'security',
               'runtime', 'hardware', 'network', 'performance')
@@ -28,14 +28,16 @@ DEFAULTS: dict[str, Any] = {
                  'workers': 4, 'timeout_seconds': 60, 'max_text_bytes': 4194304,
                  'max_extract_bytes': 107374182400, 'max_extract_files': 2000000},
     'tools': {},
+    'loader': {'environments': {}},
+    'debuginfo': {'roots': {}},
     'runtime': {'enabled': False, 'authorized': False, 'timeout_seconds': 60,
                 'environments': {}, 'probes': []},
     'cross_compilation': {'enabled': True, 'c_tests': True, 'cpp_tests': True,
                           'sysroots': {}, 'compilers': {}, 'header_limit': 50,
-                          'include_dirs': ['usr/include'], 'probes': []},
+                          'include_dirs': ['usr/include'], 'probes': [], 'builds': {}, 'semantic_headers': False},
     'performance': {'enabled': False, 'tolerance_percent': 10},
     'report': {'html': True, 'json': True, 'markdown': True, 'csv': True},
-    'ci': {'fail_on': 'HIGH', 'strict': False},
+    'ci': {'fail_on': 'HIGH', 'strict': False, 'minimum_coverage': {}},
     'severity_overrides': {},
 }
 
@@ -130,6 +132,27 @@ def validate_config(c: dict[str, Any]) -> None:
         runner = spec.get('runner')
         require(isinstance(runner, list) and bool(runner) and all(isinstance(x, str) for x in runner), 'runner must be argv array')
         require(any('{binary}' in x for x in runner), 'runner must reference {binary}')
+    for compiler, build in cc['builds'].items():
+        require(compiler in ('gcc', 'clang') and isinstance(build, dict), 'Invalid build provenance')
+        require(set(build) <= {'sdk', 'reference_image', 'provenance'}, 'Unknown build provenance key')
+        require(build.get('sdk') in ('baseline', 'candidate') and build.get('reference_image') in ('baseline', 'candidate'), 'Build needs sdk and reference_image')
+        require(isinstance(build.get('provenance'), str) and bool(build['provenance']), 'Build needs provenance identifier')
+    for label, paths in c['debuginfo']['roots'].items():
+        require(label in ('baseline', 'candidate') and isinstance(paths, list) and all(isinstance(p, str) for p in paths), 'Debuginfo roots must map image to directory array')
+    for dim, threshold in c['ci']['minimum_coverage'].items():
+        require(dim in DIMENSIONS and type(threshold) in (int, float) and 0 <= threshold <= 100, 'Coverage threshold must be dimension: percentage (0..100)')
+    for label, env in c['loader']['environments'].items():
+        require(label in ('baseline', 'candidate') and isinstance(env, dict), 'Invalid loader environment')
+        require(set(env) <= {'model', 'default_dirs', 'library_path', 'cache', 'cache_complete', 'environment_complete'}, 'Unknown loader environment key')
+        require(env.get('model', 'unknown') in ('unknown', 'glibc'), 'Unsupported loader model')
+        require(all(type(env.get(k, False)) is bool for k in ('cache_complete', 'environment_complete')), 'Loader completeness must be boolean')
+        for key in ('default_dirs', 'library_path'):
+            require(isinstance(env.get(key, []), list) and all(isinstance(v, str) and v.startswith('/') and '$' not in v and '..' not in Path(v).parts for v in env.get(key, [])), 'Loader directories must be absolute virtual paths')
+        cache = env.get('cache', {})
+        require(isinstance(cache, dict), 'Loader cache must be a mapping')
+        require(all(isinstance(k, str) and isinstance(v, list) and all(isinstance(p, str) and p.startswith('/') and '..' not in Path(p).parts for p in v) for k, v in cache.items()), 'Loader cache paths must be absolute virtual paths')
+    probe_names = [p['name'] for p in cc['probes'] if isinstance(p, dict) and isinstance(p.get('name'), str)]
+    require(len(set(probe_names)) == len(probe_names) and not set(probe_names) & {'c-behavior', 'cpp-behavior'}, 'Compile probe names must be unique and not built-in names')
     for probe in cc['probes']:
         require(isinstance(probe, dict) and set(probe) <= {'name', 'source', 'language', 'flags'}, 'Invalid compile probe')
         require(all(isinstance(probe.get(k), str) for k in ('name', 'source', 'language')) and probe['language'] in ('c', 'cpp'), 'Probe needs name, source and language')
@@ -240,7 +263,7 @@ def limitation(dimension: str, reason: str, component: str = '*') -> dict[str, s
 def read_manifest(path: Path) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text())
-        if data['schema_version'] != SCHEMA or not isinstance(data['image'], dict):
+        if data['schema_version'] not in ('1.0', SCHEMA) or not isinstance(data['image'], dict):
             raise ValueError('unsupported schema')
         if not isinstance(data['image'].get('name'), str):
             raise ValueError('image.name must be a string')
@@ -248,7 +271,7 @@ def read_manifest(path: Path) -> dict[str, Any]:
             if not isinstance(data[key], list):
                 raise ValueError(f'invalid {key}')
         for key in ('elf_objects', 'public_headers', 'packages', 'limitations', 'test_results',
-                    'filesystem', 'services', 'commands', 'configurations', 'security_interfaces',
+                    'filesystem', 'services', 'commands', 'configurations', 'security_interfaces', 'sdk_headers',
                     'kernel', 'hardware', 'network', 'development', 'runtime_libraries', 'ipc', 'capabilities', 'cross_matrix'):
             if key in data and (not isinstance(data[key], list) or any(not isinstance(v, dict) for v in data[key])):
                 raise ValueError(f'invalid {key} records')
@@ -259,8 +282,14 @@ def read_manifest(path: Path) -> dict[str, Any]:
                 if not isinstance(obj.get('exports'), list):
                     raise ValueError('invalid ELF exports')
                 for symbol in obj.get('exports', []):
-                    if not isinstance(symbol, dict) or not all(k in symbol for k in ('name', 'type', 'binding', 'visibility', 'size')):
+                    if not isinstance(symbol, dict) or not all(isinstance(symbol.get(k), str) for k in ('name', 'type', 'binding', 'visibility')) or type(symbol.get('size')) is not int:
                         raise ValueError('invalid ELF symbol')
+            for key in ('rpath', 'runpath', 'dynamic_flags'):
+                if key in obj and (not isinstance(obj[key], list) or any(not isinstance(v, str) for v in obj[key])):
+                    raise ValueError('invalid ELF search metadata')
+            for key in ('arm_abi', 'arm_attributes'):
+                if key in obj and not isinstance(obj[key], dict):
+                    raise ValueError('invalid ARM ABI metadata')
             if 'needed' in obj and (not isinstance(obj['needed'], list) or any(not isinstance(x, str) for x in obj['needed'])):
                 raise ValueError('invalid ELF dependencies')
         for obj in data['public_headers']:
@@ -269,7 +298,7 @@ def read_manifest(path: Path) -> dict[str, Any]:
             if not all(isinstance(obj[k], dict) for k in ('macros', 'declarations')) or not all(isinstance(obj[k], list) for k in ('tokens', 'conditions', 'includes', 'body_tokens', 'context_hints')):
                 raise ValueError('invalid public header types')
         for section in ('filesystem', 'services', 'commands', 'configurations', 'security_interfaces',
-                        'kernel', 'hardware', 'network', 'development', 'runtime_libraries'):
+                        'kernel', 'hardware', 'network', 'development', 'runtime_libraries', 'sdk_headers'):
             if any(not isinstance(obj.get('path'), str) for obj in data.get(section, [])):
                 raise ValueError(f'invalid {section} path')
         for obj in data.get('filesystem', []):
@@ -290,6 +319,30 @@ def read_manifest(path: Path) -> dict[str, Any]:
         for obj in data.get('cross_matrix', []):
             if not all(obj.get(k) in STATUSES for k in ('header_status', 'runtime_status', 'status')) or not all(k in obj for k in ('compiler', 'image')):
                 raise ValueError('invalid cross matrix')
+        extra = copy.deepcopy(DEFAULTS)
+        if 'loader_environment' in data:
+            extra['loader']['environments']['baseline'] = data['loader_environment']
+        validate_config(extra)
+        if 'collection_complete' in data and type(data['collection_complete']) is not bool:
+            raise ValueError('invalid collection completeness')
+        for obj in data['elf_objects']:
+            if 'imports' in obj and (not isinstance(obj['imports'], list) or any(not isinstance(v, dict) or not isinstance(v.get('name'), str) for v in obj['imports'])):
+                raise ValueError('invalid ELF imports')
+            for key in ('version_definitions', 'version_requirements'):
+                if key in obj and (not isinstance(obj[key], list) or any(not isinstance(v, dict) or not isinstance(v.get('name'), str) for v in obj[key])):
+                    raise ValueError('invalid ELF versions')
+            if any(not isinstance(v.get('file'), str) for v in obj.get('version_requirements', [])):
+                raise ValueError('invalid version requirement file')
+        if data['schema_version'] == '1.0':
+            for test in data['test_results']:
+                if test['status'] in ('COMPATIBLE', 'IDENTICAL'):
+                    test['recorded_status'] = test['status']
+                    test['status'] = 'UNKNOWN'
+                    test['reason'] = 'Legacy 1.0 provenance/receipt semantics require revalidation'
+            for cell in data.get('cross_matrix', []):
+                for key in ('status', 'runtime_status', 'header_status'):
+                    if cell[key] in ('COMPATIBLE', 'IDENTICAL'):
+                        cell[key] = 'UNKNOWN'
         return data
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise InputError(f'Invalid manifest {path}: {exc}') from exc

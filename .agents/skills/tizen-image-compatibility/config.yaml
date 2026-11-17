@@ -15,6 +15,10 @@ analysis:
   max_extract_bytes: 107374182400
   max_extract_files: 2000000
 tools: {} # Example: {readelf: /opt/bin/aarch64-linux-gnu-readelf, abidiff: false}
+loader:
+  environments: {} # Unknown by default; see references/correctness.md before asserting completeness.
+debuginfo:
+  roots: {} # e.g. baseline: [/artifacts/gcc-debuginfo-root], candidate: [/artifacts/llvm-debuginfo-root]
 runtime:
   enabled: false
   authorized: false
@@ -30,6 +34,8 @@ cross_compilation:
   include_dirs: [usr/include]
   header_limit: 50
   probes: []
+  builds: {} # Explicit compiler -> {sdk, reference_image, provenance}; no implicit GCC/Clang mapping.
+  semantic_headers: false # Optional configured Clang AST evidence, not whole-API proof.
 performance:
   enabled: false
   tolerance_percent: 10
@@ -41,4 +47,5 @@ report:
 ci:
   fail_on: HIGH
   strict: false
+  minimum_coverage: {} # e.g. {abi: 90, linking: 95, runtime: 100}; percentages of applicable contracts
 severity_overrides: {} # Example: {performance: MEDIUM}

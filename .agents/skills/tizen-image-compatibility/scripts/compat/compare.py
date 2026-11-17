@@ -4,6 +4,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 from .core import DIMENSIONS, SEVERITIES, Tools, canonical, finding
+from .elf import symbol_identity, target_abi_matches, arm_abi
+from .linker import dependency_checks
+from .debuginfo import advanced_abi
 
 
 def index(items: list[dict[str, Any]], key: str = 'path') -> dict[str, dict[str, Any]]:
@@ -29,13 +32,7 @@ def virtual_alias(path: str, files: dict[str, dict[str, Any]]) -> str:
 
 
 def exports(obj: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    result = {}
-    for symbol in obj.get('exports', []):
-        name = symbol['name']
-        result[name.replace('@@', '@')] = symbol
-        if '@@' in name:
-            result[name.split('@@')[0]] = symbol
-    return result
+    return {symbol['name']: symbol for symbol in obj.get('exports', [])}
 
 
 def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
@@ -61,14 +58,43 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
                 findings.append(finding('elf' if key != 'soname' else 'linking', path, key, obj.get(key), other.get(key),
                     'INCOMPATIBLE' if incompatible else 'UNKNOWN', 'CRITICAL' if incompatible else 'HIGH', evidence=ev,
                     impact='Existing binary consumers may require a different ABI or dynamic loader.'))
+        if obj.get('machine') == other.get('machine') == 'ARM':
+            old_arm, new_arm = obj.get('arm_abi') or arm_abi(obj), other.get('arm_abi') or arm_abi(other)
+            for key in ('eabi', 'float'):
+                if old_arm.get(key) and new_arm.get(key) and old_arm[key] != new_arm[key]:
+                    findings.append(finding('elf', path, 'ARM ' + key, old_arm[key], new_arm[key], 'INCOMPATIBLE', 'CRITICAL', evidence=ev))
+        findings.append(finding('elf', path, 'target ABI metadata',
+            {k: obj.get(k) for k in ('class', 'machine', 'endianness', 'arm_abi')},
+            {k: other.get(k) for k in ('class', 'machine', 'endianness', 'arm_abi')},
+            'COMPATIBLE' if target_abi_matches(obj, other) else 'UNKNOWN', 'INFO', 'ELF target ABI metadata only', ev))
         left, right = exports(obj), exports(other)
+        versions = {}
+        defaults = {}
+        for exported in right.values():
+            identity = symbol_identity(exported['name'])
+            versions.setdefault((identity['base_name'], identity['version']), []).append(exported)
+            if identity['default_version'] or identity['version'] is None:
+                defaults.setdefault(identity['base_name'], []).append(exported)
         for name, symbol in left.items():
-            if name not in right:
+            identity = symbol_identity(name)
+            # Explicit version imports accept either default or non-default definition.
+            alternatives = versions.get((identity['base_name'], identity['version']), [])
+            if identity['version'] is None and not alternatives:
+                alternatives = defaults.get(identity['base_name'], [])
+            next_symbol = right.get(name) or (alternatives[0] if alternatives else None)
+            if identity['default_version']:
+                default_candidates = defaults.get(identity['base_name'], [])
+                if not default_candidates:
+                    findings.append(finding('abi', path, identity['base_name'] + ':default lookup', name, None,
+                        'INCOMPATIBLE', 'HIGH', 'ELF default-version lookup', ev))
+                elif default_candidates[0]['name'] != name:
+                    findings.append(finding('abi', path, identity['base_name'] + ':default lookup', name, default_candidates[0]['name'],
+                        'UNKNOWN', 'HIGH', 'ELF default-version lookup', ev))
+            if next_symbol is None:
                 findings.append(finding('abi', path, name, symbol, None, 'INCOMPATIBLE', 'HIGH',
                     'ELF dynamic export/version comparison', ev, 'Previously linkable symbol or default symbol version is absent.',
                     'Restore the exported ABI/version or rebuild and validate all affected consumers.', 'high'))
             else:
-                next_symbol = right[name]
                 if '@' not in name and symbol['name'] != next_symbol['name']:
                     findings.append(finding('abi', path, name + ':default symbol version', symbol['name'], next_symbol['name'],
                         'UNKNOWN', 'HIGH', evidence=ev, impact='Unversioned lookup now selects a different symbol version.'))
@@ -89,50 +115,6 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
     return findings
 
 
-def dependency_checks(manifest: dict[str, Any], label: str, consumers: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
-    objects = manifest['elf_objects']
-    files = index(manifest.get('filesystem', []))
-    names = {Path(obj['path']).name for obj in objects}
-    names |= {obj['soname'] for obj in objects if obj.get('soname')}
-    names |= {Path(p).name for p, entry in files.items() if entry['type'] == 'symlink' and entry.get('resolved')}
-    complete = all(obj.get('complete') for obj in objects) and bool(objects)
-    complete = complete and not any(x['dimension'] == 'filesystem' for x in manifest['limitations'])
-    findings = []
-    for obj in consumers if consumers is not None else objects:
-        if not obj.get('complete'):
-            continue
-        needed = obj.get('needed', [])
-        for lib in needed:
-            if lib not in names:
-                findings.append(finding('linking', obj['path'], label + ':DT_NEEDED:' + lib, lib, None,
-                    'INCOMPATIBLE' if complete else 'UNKNOWN', 'HIGH', 'whole-rootfs provider inventory',
-                    obj.get('evidence'), 'Required SONAME has no detected provider in this rootfs.',
-                    'Supply the required runtime library or prove a loader-supported equivalent.', 'high' if complete else 'low'))
-        loader = obj.get('interpreter')
-        resolved_loader = virtual_alias(loader, files) if loader else None
-        if loader and (resolved_loader not in files or (files[resolved_loader]['type'] == 'symlink' and not files[resolved_loader].get('resolved'))):
-            findings.append(finding('linking', obj['path'], label + ':dynamic loader', loader, None,
-                'INCOMPATIBLE' if complete else 'UNKNOWN', 'CRITICAL', evidence=obj.get('evidence')))
-    # Detect cycles without recursion so large dependency graphs do not overflow Python's stack.
-    graph = {o['soname']: set(o.get('needed', [])) for o in objects if o.get('soname')}
-    for start in sorted(graph):
-        pending = [(start, [start])]
-        visited = set()
-        while pending:
-            node, chain = pending.pop()
-            if node in visited:
-                continue
-            visited.add(node)
-            for child in sorted(graph.get(node, [])):
-                if child == start and len(chain) > 1:
-                    findings.append(finding('linking', start, label + ':dependency cycle', None, chain + [start],
-                        'UNKNOWN', 'LOW', impact='Dependency cycles can be legal; initializer order needs runtime validation.'))
-                    pending = []
-                    break
-                if child not in visited:
-                    pending.append((child, chain + [child]))
-    return findings
-
 
 def compare_api(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
     findings = []
@@ -146,8 +128,8 @@ def compare_api(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
         ev = evidence(header, other)
         if all(header[k] == other[k] for k in ('tokens', 'macros', 'conditions', 'includes')):
             findings.append(finding('api', path, 'normalized public declarations', 'same token sequence', 'same token sequence',
-                'IDENTICAL' if header['sha256'] == other['sha256'] else 'COMPATIBLE', 'INFO', 'C/C++ token normalization', ev,
-                'Comments and non-semantic whitespace do not change declarations.'))
+                'UNKNOWN', 'INFO', 'C/C++ token normalization (lexical evidence only)', ev,
+                'Tokens match; SDK, macros, target ABI and included declarations have not been semantically verified.'))
             continue
         for name in sorted(set(header['declarations']) | set(other['declarations'])):
             old, new = header['declarations'].get(name), other['declarations'].get(name)
@@ -246,27 +228,6 @@ def compare_static(a: dict[str, Any], b: dict[str, Any], config: dict[str, Any])
             out.append(finding(cap['dimension'], label, 'subsystem detection', None, cap['reason'], cap['status'], 'INFO'))
     return finalize(out, config)
 
-
-def advanced_abi(a: dict[str, Any], b: dict[str, Any], roots: tuple[Any, Any], tools: Tools) -> list[dict[str, Any]]:
-    binary = tools.path('abidiff')
-    if not binary:
-        return [finding('abi', '*', 'libabigail', None, 'abidiff unavailable', 'UNKNOWN', 'INFO')]
-    out = []
-    right = index(b['elf_objects'])
-    for obj in a['elf_objects']:
-        other = right.get(obj['path'])
-        if not other or not obj.get('debug_info') or not other.get('debug_info'):
-            continue
-        before, after = roots[0].resolve(obj['path']), roots[1].resolve(obj['path'])
-        if not before or not after:
-            continue
-        result = tools.run([binary, '--no-default-suppression', '--fail-no-debug-info', str(before), str(after)])
-        code = result['returncode']
-        status = 'UNKNOWN' if code < 0 or code & 3 else 'INCOMPATIBLE' if code & 8 else 'UNKNOWN' if code & 4 else 'COMPATIBLE'
-        out.append(finding('abi', obj['path'], 'DWARF type/layout ABI', code if status == 'UNKNOWN' else 'DWARF ABI', result['stdout'],
-            status, 'HIGH' if status == 'INCOMPATIBLE' else 'INFO', 'libabigail abidiff',
-            [result['stdout_evidence'], result['stderr_evidence']], confidence='high' if status != 'UNKNOWN' else 'low'))
-    return out or [finding('abi', '*', 'DWARF coverage', None, 'No matched ELF pair with embedded .debug_info; split debug files are not automatically located.', 'UNKNOWN', 'INFO')]
 
 
 def finalize(findings: list[dict[str, Any]], config: dict[str, Any]) -> list[dict[str, Any]]:
