@@ -378,3 +378,10 @@ python3 "$SKILL/tests/review/benchmark_v12.py" \
 ```
 
 默认预算是合成测试的回归警戒值，不是实际 Tizen 镜像的性能承诺。正式验收仍需匹配的产品 rootfs、RPM 数据库、SDK、debuginfo 和授权隔离运行环境。
+
+
+### v1.2 release candidate 本地冻结
+
+PR #1 最终审查修复及逐项证据见 [V1_2_FINAL_REVIEW.md](V1_2_FINAL_REVIEW.md)，静态产品测试准备结论见 [V1_2_RELEASE_READINESS.md](V1_2_RELEASE_READINESS.md)。拟用的 [真实 Tizen 静态验收输入记录](V1_2_STATIC_ACCEPTANCE_INPUT.json) 需由产品方填入镜像、来源、RPM 清单和覆盖要求；它不是 CLI 配置文件。
+
+此次 collector 标识为 `1.2.0-rc.1`，报告 schema 仍为 1.2；旧 ELF 缓存会重新采集。修复仅涉及 ARM ABI/ISA 区分、自定义探针调度、解析完整度、candidate 新增包状态及 HTML 缺失接口预览。产品静态测试准备就绪不等于 GCC/LLVM 镜像兼容已获证明。

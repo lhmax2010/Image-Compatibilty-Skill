@@ -25,7 +25,7 @@ def symbol(name, binding='GLOBAL', kind='FUNC'):
 
 
 def obj(path, needed=(), imports=(), exports=(), **kw):
-    return dict(path=path, needed=list(needed), imports=list(imports), exports=list(exports), complete=True,
+    return dict(path=path, needed=list(needed), imports=list(imports), exports=list(exports), complete=True, resolution_metadata_complete=True,
                 machine='Advanced Micro Devices X86-64', **{'class': 'ELF64'}, endianness="2's complement, little endian",
                 **kw)
 

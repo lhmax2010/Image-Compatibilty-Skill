@@ -143,7 +143,8 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
             content += '</details>'
         for title, key in [('Missing interfaces', 'missing_interfaces'), ('Normalized differences', 'normalized_differences')]:
             selected = set(results[key])
-            content += '<h2>' + title + ' (first 1000)</h2>' + table([[f['id'], f['component'], f['interface'], f['potential_impact']] for f in results['findings'][:1000] if f['id'] in selected], ['ID', 'Component', 'Interface', 'Reason / impact'])
+            preview = list(islice((f for f in results['findings'] if f['id'] in selected), 1000))
+            content += '<h2>' + title + '</h2><p>Total: ' + str(len(selected)) + '; shown: ' + str(len(preview)) + '; hidden: ' + str(len(selected) - len(preview)) + '.</p>' + table([[f['id'], f['component'], f['interface'], f['potential_impact']] for f in preview], ['ID', 'Component', 'Interface', 'Reason / impact'])
         content += '<h2>Normalization policy</h2><ul>' + ''.join('<li>' + esc(v) + '</li>' for v in results['normalization_policy']) + '</ul>'
         content += '<h2>Limitations</h2>' + table([[x['dimension'], x['component'], x['reason']] for x in results['limitations']], ['Dimension', 'Component', 'Reason'])
         content += '<p>Excluded dimensions: ' + esc(results['excluded_dimensions']) + '</p>'

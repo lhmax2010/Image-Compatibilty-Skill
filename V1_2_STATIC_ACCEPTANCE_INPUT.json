@@ -1,0 +1,121 @@
+{
+  "purpose": "Proposed operator input record for real Tizen STATIC acceptance; not a CLI --config file or compatibility result",
+  "collector_version": "1.2.0-rc.1",
+  "reviewed_base_commit": "d5085a5ff0cc3231c8f4228aafd338ab6ad2ae50",
+  "direction": "baseline consumers on candidate",
+  "product": {
+    "name": null,
+    "expected_architecture": "armv7l",
+    "hardware_model": null,
+    "isa_capability_evidence": null
+  },
+  "baseline": {
+    "rootfs_path": null,
+    "image_archive": {
+      "path": null,
+      "sha256": null
+    },
+    "build": {
+      "id": null,
+      "compiler_provenance": null,
+      "instrumentation": null
+    },
+    "rpm": {
+      "database_path": null,
+      "expected_installed_count": null,
+      "independent_inventory_export": null
+    },
+    "debuginfo_root": null,
+    "source_snapshot_record": null
+  },
+  "candidate": {
+    "rootfs_path": null,
+    "image_archive": {
+      "path": null,
+      "sha256": null
+    },
+    "build": {
+      "id": null,
+      "compiler_provenance": null,
+      "instrumentation": null
+    },
+    "rpm": {
+      "database_path": null,
+      "expected_installed_count": null,
+      "independent_inventory_export": null
+    },
+    "debuginfo_root": null,
+    "source_snapshot_record": null
+  },
+  "optional_sdk": {
+    "baseline_sysroot": null,
+    "candidate_sysroot": null,
+    "installed_package_manifests": {},
+    "provenance": null
+  },
+  "operator_decisions": {
+    "required_static_contracts": null,
+    "minimum_coverage_thresholds": null,
+    "accepted_unknowns_with_reason": [],
+    "loader_environment_evidence": null
+  },
+  "static_config": {
+    "analysis": {
+      "modes": [
+        "elf",
+        "abi",
+        "api",
+        "linking",
+        "compiler_runtime",
+        "kernel",
+        "ipc",
+        "commands",
+        "filesystem",
+        "packages",
+        "services",
+        "security",
+        "hardware",
+        "network"
+      ]
+    },
+    "runtime": {
+      "enabled": false,
+      "authorized": false
+    },
+    "cross_compilation": {
+      "enabled": false
+    },
+    "loader": {
+      "environments": {}
+    },
+    "ci": {
+      "fail_on": "HIGH",
+      "strict": false,
+      "minimum_coverage": {}
+    }
+  },
+  "run": {
+    "mode": "static",
+    "output_directory": null,
+    "cache_directory": null,
+    "execute_target_artifacts": false
+  },
+  "required_outputs": [
+    "baseline-manifest.json",
+    "candidate-manifest.json",
+    "results.json",
+    "findings.csv",
+    "packages.csv",
+    "summary.md",
+    "index.html",
+    "collection.log",
+    "evidence/"
+  ],
+  "notes": [
+    "Fill null product fields before the product run; source RPM counts must be independently reconciled.",
+    "static_config is an existing CLI configuration subset; serialize that object separately to use --config.",
+    "No coverage policy has been approved by this template. Empty thresholds are not an acceptance pass.",
+    "SDK compilation, runtime behavior and hardware proof remain outside this static run.",
+    "Declare loader completeness only from actual target evidence; defaults stay unknown."
+  ]
+}

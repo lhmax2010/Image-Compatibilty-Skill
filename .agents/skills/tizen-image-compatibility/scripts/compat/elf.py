@@ -101,7 +101,7 @@ def parse_readelf(text: str) -> dict[str, Any]:
 
 
 def collect_elf(path: Path, virtual: str, tools: Tools, mode: str) -> dict[str, Any]:
-    obj: dict[str, Any] = {'path': virtual, 'size': path.stat().st_size, 'complete': False}
+    obj: dict[str, Any] = {'path': virtual, 'size': path.stat().st_size, 'complete': False, 'resolution_metadata_complete': False}
     tool = tools.path('readelf')
     if tool:
         flags = ['-W', '-h', '-l', '-d', '--dyn-syms', '-V', '-S', '-A', '-n']
@@ -111,6 +111,14 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str) -> dict[str, 
         obj.update(parse_readelf(result['stdout']))
         obj['evidence'] = [result['stdout_evidence'], result['stderr_evidence']]
         obj['complete'] = result['returncode'] == 0 and not result['stdout_truncated'] and 'machine' in obj
+        # Only a successful full dynamic-symbol/dynamic-section observation earns lookup credit.
+        symbols = re.search(r"Symbol table '\.dynsym' contains (\d+) entries:\n(.*?)(?:\n\n|\Z)", result['stdout'], re.S)
+        rows = re.findall(r'^\s*(\d+):\s+[0-9a-fA-F]+\s+\d+\s+\S+\s+\S+\s+\S+\s+\S+', symbols[2], re.M) if symbols else []
+        obj['resolution_metadata_complete'] = bool(obj['complete'] and not result['stderr'].strip()
+            and all(obj.get(k) for k in ('class', 'endianness', 'type'))
+            and 'Dynamic section at offset' in result['stdout'] and symbols
+            and len(rows) == int(symbols[1]) and all(int(row) == i for i, row in enumerate(rows)))
+        obj['resolution_metadata_evidence'] = obj['evidence'] if obj['resolution_metadata_complete'] else []
         if not obj['complete']:
             obj['error'] = result['error'] or result['stderr'] or 'Incomplete ELF parse'
     else:
@@ -203,19 +211,29 @@ def verify_compile_target(elf, manifest, config, label):
     result = abi_relation(elf, primary)
     if not elf.get('type', '').startswith('REL'):
         result['conflicts'].append('compile target must be ET_REL'); result['status'] = 'INCOMPATIBLE'
+    isa = {'status': 'NOT_APPLICABLE'}
     if elf.get('machine') == 'ARM':
         want = (primary.get('arm_abi') or arm_abi(primary)).get('cpu_arch')
         got = (elf.get('arm_abi') or arm_abi(elf)).get('cpu_arch')
+        isa = {'status': 'COMPATIBLE' if want and got and want == got else 'UNKNOWN',
+               'probe_cpu_arch': got, 'reference_cpu_arch': want,
+               'reason': 'CPU attribute agreement only; not hardware/extension validation' if want and got and want == got
+                         else 'ISA requirements differ or are missing; reference object/SDK is not a hardware capability inventory'}
         if not want or not got:
             result['missing'].append('cpu_arch')
             if result['status'] != 'INCOMPATIBLE': result['status'] = 'UNKNOWN'
         elif want != got:
-            result['conflicts'].append('cpu_arch'); result['status'] = 'INCOMPATIBLE'
+            result['missing'].append('ISA compatibility / target hardware evidence')
+            if result['status'] != 'INCOMPATIBLE': result['status'] = 'UNKNOWN'
     supporting = [{'path': p, 'status': 'UNKNOWN', 'missing': ['authoritative runtime object unavailable'], 'conflicts': []} for p in selected_paths if p not in {o['path'] for o in selected}]
     for o in selected:
         r = abi_relation(elf, o); supporting.append({'path': o['path'], **r})
         if r['status'] == 'INCOMPATIBLE':
             result['status'] = 'INCOMPATIBLE'; result['conflicts'].append(o['path'])
     mixed = [{'path': o['path'], **abi_relation(primary, o)} for o in objects if o.get('complete') and not o.get('type', '').startswith('REL')]
-    return {**result, 'source': source, 'selected_objects': supporting,
+    abi_status = abi_relation(elf, primary)['status']
+    if any(r['status'] == 'INCOMPATIBLE' for r in supporting): abi_status = 'INCOMPATIBLE'
+    return {**result, 'abi_status': abi_status, 'isa_assessment': isa,
+            'hardware_assessment': {'status': 'UNKNOWN', 'reason': 'No target hardware capability validation performed'},
+            'source': source, 'selected_objects': supporting,
             'other_objects': [r for r in mixed if r['status'] != 'COMPATIBLE']}

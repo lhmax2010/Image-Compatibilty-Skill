@@ -161,6 +161,7 @@ class ComparisonTests(Environment):
         self.assertTrue(any(f['interface'] == 'soname' for f in compare_elf(a, b)))
         b['collection_complete'] = True
         b['loader_environment'] = {'model': 'glibc', 'environment_complete': True, 'cache_complete': True, 'default_dirs': ['/lib']}
+        for elf in b['elf_objects']: elf['resolution_metadata_complete'] = True  # complete synthetic lookup evidence
         self.assertTrue(any(f['status'] == 'INCOMPATIBLE' for f in dependency_checks(b, 'candidate')))
 
     def test_missing_tool_no_false_removals(self):

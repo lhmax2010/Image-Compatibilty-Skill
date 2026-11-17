@@ -62,16 +62,16 @@ def dependency_checks(manifest, label, consumers=None):
         root_scope = bool(root.get('interpreter')) or root.get('type', '').startswith('EXEC')
         loader = root.get('interpreter')
         loader_obj = objects.get(alias(loader, files)) if loader else None
-        local_known = known and env.get('namespace', 'base') == 'base'
+        local_known = known and env.get('namespace', 'base') == 'base' and root.get('resolution_metadata_complete') is True
         preload = next((x.get('normalized', '') for x in manifest.get('configurations', []) if x['path'] == '/etc/ld.so.preload'), '')
         mode = int(files.get(root['path'], {}).get('mode', '0'), 8)
         if any(line.split('#')[0].strip() for line in preload.splitlines()) or mode & 0o6000:
             local_known = False
             emit(root, 'loader context', None, 'preload or secure-execution semantics not modeled', 'unknown_search_environment')
         scope_known = local_known and inventory
-        symbol_scope_known = root.get('resolution_metadata_complete', True) and root_scope and env.get('symbol_scope') == 'startup' and env.get('namespace', 'base') == 'base'
+        symbol_scope_known = root.get('resolution_metadata_complete') is True and root_scope and env.get('symbol_scope') == 'startup' and env.get('namespace', 'base') == 'base'
         if loader:
-            valid = bool(loader_obj and loader_obj.get('complete') and target_abi_matches(root, loader_obj))
+            valid = bool(loader_obj and loader_obj.get('complete') and loader_obj.get('resolution_metadata_complete') is True and target_abi_matches(root, loader_obj))
             emit(root, 'dynamic loader', loader, loader_obj.get('path') if loader_obj else None,
                  'verified' if valid and local_known else 'missing_provider' if not loader_obj else 'unknown_loader_abi',
                  'INCOMPATIBLE' if not loader_obj and inventory and local_known else None, 'CRITICAL')
@@ -86,6 +86,8 @@ def dependency_checks(manifest, label, consumers=None):
             if obj['path'] in seen:
                 continue
             seen.add(obj['path']); closure.append(obj)
+            object_known = local_known and obj.get('resolution_metadata_complete') is True
+            scope_known &= object_known
             origin = posixpath.dirname(obj['path'])
             rpaths = [expand(v, origin) for v in obj.get('rpath', [])] if not obj.get('runpath') else []
             runpaths = [expand(v, origin) for v in obj.get('runpath', [])]
@@ -123,7 +125,7 @@ def dependency_checks(manifest, label, consumers=None):
                         break
                     if actual in files and files[actual].get('type') == 'file':
                         ambiguous = True  # present but unparsed/not a usable ELF
-                verified = local_known and inventory and not ambiguous and provider is not None
+                verified = object_known and inventory and not ambiguous and provider is not None and provider.get('resolution_metadata_complete') is True
                 if provider:
                     state = 'verified' if verified else 'unknown_search_environment'
                     loaded.setdefault(needed, provider)
@@ -131,7 +133,7 @@ def dependency_checks(manifest, label, consumers=None):
                     queue.append((provider, inherited_next))
                 else:
                     state = 'unresolvable_provider' if needed in global_names else 'missing_provider'
-                    if not local_known or ambiguous or not inventory:
+                    if not object_known or ambiguous or not inventory:
                         state = 'unknown_search_environment'
                 emit(obj, 'DT_NEEDED:' + needed, needed, provider['path'] if provider else None, state,
                      'INCOMPATIBLE' if state in ('missing_provider', 'unresolvable_provider') else None)

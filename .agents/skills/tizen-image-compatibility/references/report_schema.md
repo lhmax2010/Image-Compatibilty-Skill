@@ -70,7 +70,7 @@ Loader findings add `resolution`, check_id, consumer_path/image, root_consumer/i
 
 ## Migration
 
-Importing schema 1.0/1.1 preserves confirmed failures, but prior successful tests and matrix cells become UNKNOWN with recorded_status on tests and migration_notes. Legacy ELF lookup completeness is untrusted. No old completeness credit or absent expected-test IDs are inferred. Recollect for 1.2 lookup, provenance and ownership metadata. Collector version 1.2.0 invalidates old ELF cache entries. A reused manifest contains historical observations, not a new execution. Compare percentages only after aligning schema/denominators and required checks.
+Importing schema 1.0/1.1 preserves confirmed failures, but prior successful tests and matrix cells become UNKNOWN with recorded_status on tests and migration_notes. Legacy ELF lookup completeness is untrusted. No old completeness credit or absent expected-test IDs are inferred. Recollect for 1.2 lookup, provenance and ownership metadata. Collector version 1.2.0-rc.1 invalidates earlier ELF cache entries. A reused manifest contains historical observations, not a new execution. Compare percentages only after aligning schema/denominators and required checks.
 
 ## Acceptance supplement (additive 1.2 fields)
 
@@ -82,3 +82,11 @@ Importing schema 1.0/1.1 preserves confirmed failures, but prior successful test
 - `finding_integrity`: unique_findings, source_occurrences and deduplicated ID/occurrence counts. Exact duplicates are combined visibly. Conflicting ID payloads or unfinalized duplicate IDs are rejected instead of silently overwriting. CSV exports one row per unique finding; occurrence accounting is in JSON. Linker IDs include consumer/root/provider context so distinct affected roots are not duplicates.
 - `quality_gate.compatibility_obligation_failures`: confirmed failing obligations without associated finding rows, treated as HIGH severity subject to fail_on. Global status includes confirmed obligation/test/package failures. Missing expected metadata invalidates prior successful matrix checks; recorded failures remain PARTIAL.
 - HTML package/finding elements carry escaped data IDs/statuses for consistency auditing. Preview limits do not remove machine records. Candidate-only inventory is displayed separately.
+
+## Final review / release candidate
+
+Schema stays 1.2; collector is 1.2.0-rc.1. `elf_objects.resolution_metadata_complete` must be a boolean when supplied; absence is not a pass. Successful dynamic readelf collection records `resolution_metadata_evidence`. Old/incomplete manifests need recollection for lookup verification; do not manually add true to obtain coverage.
+
+Compile target diagnostics separate `abi_status`, `isa_assessment` (probe/reference CPU tags) and `hardware_assessment`. ABI conflicts can remain INCOMPATIBLE while ISA evidence is UNKNOWN. CPU tag inequality alone is UNKNOWN; tag equality is not hardware capability proof.
+
+`candidate_additions[].inventory_status` is ADDED; its compatibility `status` is UNKNOWN. Candidate assessment records likewise do not claim an untested package compatible. Missing-interfaces and normalized-differences HTML sections now filter first, then display up to 1000 matching records, with total/shown/hidden counts. JSON/CSV remain complete.

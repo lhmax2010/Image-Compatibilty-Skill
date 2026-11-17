@@ -69,7 +69,9 @@ def run_matrix(manifests: tuple[dict[str, Any], dict[str, Any]], roots: tuple[An
                 findings.append(finding('headers', label, compiler + ':header coverage', len(sdk_headers), len(headers),
                     'UNKNOWN', 'INFO', impact='Only configured header_limit headers were probed; increase it for full coverage.'))
             for language in ('c', 'cpp'):
-                if not cc[language + '_tests']:
+                builtin_enabled = cc[language + '_tests']
+                explicit_probes = [p for p in cc['probes'] if p['language'] == language]
+                if not builtin_enabled and not explicit_probes:
                     continue
                 binary = spec.get(language)
                 if not binary or not Path(binary).is_file():
@@ -117,7 +119,7 @@ def run_matrix(manifests: tuple[dict[str, Any], dict[str, Any]], roots: tuple[An
                         'evidence': [target['stdout_evidence'], target['stderr_evidence']]})
                     continue
                 probes: list[tuple[str, Path, list[str], bool]] = []
-                for i, header in enumerate(headers):
+                for i, header in enumerate(headers if builtin_enabled else []):
                     if language == 'c' and Path(header['path']).suffix != '.h':
                         continue
                     # Resolve in the virtual image namespace, never use a host-root symlink.
@@ -132,10 +134,10 @@ def run_matrix(manifests: tuple[dict[str, Any], dict[str, Any]], roots: tuple[An
                     src.write_text(f'#include "{escaped}"\n')
                     probes.append(('header:' + header['path'], src, [], False))
                 if label == build_image:
-                    probes.append((language + '-behavior', ASSETS / ('behavior' + extension), ['-pthread', '-ldl', '-lm'], True))
-                    for probe in cc['probes']:
-                        if probe['language'] == language:
-                            probes.append((probe['name'], Path(probe['source']).resolve(), probe.get('flags', []), True))
+                    if builtin_enabled:
+                        probes.append((language + '-behavior', ASSETS / ('behavior' + extension), ['-pthread', '-ldl', '-lm'], True))
+                    for probe in explicit_probes:
+                        probes.append((probe['name'], Path(probe['source']).resolve(), probe.get('flags', []), True))
                 for number, (name, source, extra, link) in enumerate(probes):
                     planned_test = planned.get((compiler + ':' + language + ':' + name, label, 'compile'))
                     artifact = tools.output / planned_test['expected_artifact'] if link and planned_test else build_dir / f'{compiler}-{label}-{language}-{number}.bin'

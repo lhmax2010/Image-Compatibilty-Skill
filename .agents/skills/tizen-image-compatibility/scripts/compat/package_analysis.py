@@ -214,7 +214,7 @@ def analyze_packages(a, b, findings, coverage):
                'candidate_package_count': scopes[('candidate', 'runtime')].inventory.get('installed_count'),
                'matched_packages': [{'baseline': k, 'candidate': v} for k, v in sorted(matches.items())],
                'baseline_only': baseline_only, 'candidate_only': candidate_only, 'unresolved_matches': unresolved,
-               'candidate_additions': [{'id': i, 'package': candidate[i][0], 'status': 'COMPATIBLE', 'scope': candidate[i][1], 'reason': 'Inventory addition only; no whole-package compatibility claim'} for i in candidate_only],
+               'candidate_additions': [{'id': i, 'package': candidate[i][0], 'inventory_status': 'ADDED', 'status': 'UNKNOWN', 'scope': candidate[i][1], 'reason': 'Inventory addition only; ABI/API compatibility unverified'} for i in candidate_only],
                'available_archives': {'baseline': a.get('available_packages', []), 'candidate': b.get('available_packages', [])},
                'count_reconciliation': {label + ':' + scope: owner.reconciliation for (label, scope), owner in scopes.items()},
                'unverified_package_records': [{'image': label, 'scope': scope, 'package': p, 'status': 'UNKNOWN'} for (label, scope), owner in scopes.items() for p in owner.manifest.get('packages', []) if p.get('provenance', {}).get('kind') != 'installed_rpmdb'],

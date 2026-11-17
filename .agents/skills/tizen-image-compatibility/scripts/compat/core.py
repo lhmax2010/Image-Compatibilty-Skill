@@ -13,7 +13,7 @@ import tempfile
 import threading
 from typing import Any
 
-VERSION = '1.2.0'
+VERSION = '1.2.0-rc.1'
 SCHEMA = '1.2'
 DIMENSIONS = ('elf', 'abi', 'api', 'headers', 'linking', 'compiler_runtime', 'kernel',
               'ipc', 'commands', 'filesystem', 'packages', 'services', 'security',
@@ -293,6 +293,8 @@ def read_manifest(path: Path) -> dict[str, Any]:
             if key in data and (not isinstance(data[key], list) or any(not isinstance(v, dict) for v in data[key])):
                 raise ValueError(f'invalid {key} records')
         for obj in data['elf_objects']:
+            if 'resolution_metadata_complete' in obj and type(obj['resolution_metadata_complete']) is not bool:
+                raise ValueError('Invalid symbol-resolution completeness marker')
             if not isinstance(obj.get('path'), str) or type(obj.get('complete')) is not bool:
                 raise ValueError('invalid ELF object')
             if obj['complete']:

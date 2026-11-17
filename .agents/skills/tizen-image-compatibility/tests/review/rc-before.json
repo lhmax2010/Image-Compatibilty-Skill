@@ -1,0 +1,21 @@
+{
+  "major1": {
+    "status": "INCOMPATIBLE",
+    "conflicts": [
+      "cpu_arch"
+    ]
+  },
+  "major2": {
+    "explicit_builds": 0
+  },
+  "major3": {
+    "missing_marker_import_status": "COMPATIBLE"
+  },
+  "minor1": {
+    "candidate_addition_status": "COMPATIBLE"
+  },
+  "minor2": {
+    "late_missing_id_in_preview": false,
+    "machine_finding_count": 1001
+  }
+}
