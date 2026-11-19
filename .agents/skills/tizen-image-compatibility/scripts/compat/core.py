@@ -13,7 +13,7 @@ import tempfile
 import threading
 from typing import Any
 
-VERSION = '1.2.0-rc.1'
+VERSION = '1.3.1-phase7a'
 SCHEMA = '1.2'
 DIMENSIONS = ('elf', 'abi', 'api', 'headers', 'linking', 'compiler_runtime', 'kernel',
               'ipc', 'commands', 'filesystem', 'packages', 'services', 'security',
@@ -293,6 +293,8 @@ def read_manifest(path: Path) -> dict[str, Any]:
             if key in data and (not isinstance(data[key], list) or any(not isinstance(v, dict) for v in data[key])):
                 raise ValueError(f'invalid {key} records')
         for obj in data['elf_objects']:
+            if 'export_inventory_complete' in obj and type(obj['export_inventory_complete']) is not bool:
+                raise ValueError('Invalid export inventory completeness marker')
             if 'resolution_metadata_complete' in obj and type(obj['resolution_metadata_complete']) is not bool:
                 raise ValueError('Invalid symbol-resolution completeness marker')
             if not isinstance(obj.get('path'), str) or type(obj.get('complete')) is not bool:
@@ -312,6 +314,10 @@ def read_manifest(path: Path) -> dict[str, Any]:
             if 'needed' in obj and (not isinstance(obj['needed'], list) or any(not isinstance(x, str) for x in obj['needed'])):
                 raise ValueError('invalid ELF dependencies')
         for obj in data['public_headers']:
+            if 'simple_declarations_complete' in obj and type(obj['simple_declarations_complete']) is not bool:
+                raise ValueError('invalid header parse completeness')
+            if 'include_directives' in obj and (not isinstance(obj['include_directives'], list) or any(not isinstance(d, dict) or not isinstance(d.get('name'), str) or type(d.get('quoted')) is not bool for d in obj['include_directives'])):
+                raise ValueError('invalid header include directives')
             if not all(k in obj for k in ('path', 'tokens', 'macros', 'conditions', 'includes', 'sha256', 'declarations', 'body_tokens', 'context_hints')):
                 raise ValueError('invalid public header record')
             if not all(isinstance(obj[k], dict) for k in ('macros', 'declarations')) or not all(isinstance(obj[k], list) for k in ('tokens', 'conditions', 'includes', 'body_tokens', 'context_hints')):
@@ -323,6 +329,9 @@ def read_manifest(path: Path) -> dict[str, Any]:
         for obj in data.get('filesystem', []):
             if not isinstance(obj.get('type'), str):
                 raise ValueError('invalid filesystem type')
+        for obj in data.get('filesystem', []) + [o.get('execution_metadata', {}) for o in data['elf_objects']]:
+            if not isinstance(obj, dict) or any(k in obj and type(obj[k]) is not bool for k in ('security_metadata_complete', 'has_file_capabilities')):
+                raise ValueError('invalid execution metadata')
         for obj in data.get('ipc', []):
             if not all(isinstance(obj.get(k), str) for k in ('path', 'name')):
                 raise ValueError('invalid IPC record')
@@ -344,6 +353,10 @@ def read_manifest(path: Path) -> dict[str, Any]:
         validate_config(extra)
         if 'collection_complete' in data and type(data['collection_complete']) is not bool:
             raise ValueError('invalid collection completeness')
+        if 'header_inventory_complete' in data and type(data['header_inventory_complete']) is not bool:
+            raise ValueError('invalid header inventory completeness')
+        if 'header_include_roots' in data and (not isinstance(data['header_include_roots'], list) or any(not isinstance(r, str) or not r.startswith('/') for r in data['header_include_roots'])):
+            raise ValueError('invalid header include roots')
         for obj in data['elf_objects']:
             if 'imports' in obj and (not isinstance(obj['imports'], list) or any(not isinstance(v, dict) or not isinstance(v.get('name'), str) for v in obj['imports'])):
                 raise ValueError('invalid ELF imports')
@@ -364,7 +377,10 @@ def read_manifest(path: Path) -> dict[str, Any]:
                 raise ValueError('Invalid expected test checks')
         if data['schema_version'] in ('1.0', '1.1'):
             data['migration_notes'] = ['Coverage and expected-test semantics changed in 1.2; no old completeness credit is reused.']
-            for obj in data['elf_objects']: obj['resolution_metadata_complete'] = False
+            data['header_inventory_complete'] = False
+            for obj in data['elf_objects']:
+                obj['resolution_metadata_complete'] = False
+                obj['export_inventory_complete'] = False
             for test in data['test_results']:
                 if test['status'] in ('COMPATIBLE', 'IDENTICAL'):
                     test['recorded_status'] = test['status']

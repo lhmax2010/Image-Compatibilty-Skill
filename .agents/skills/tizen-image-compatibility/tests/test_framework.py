@@ -67,6 +67,7 @@ class SourceTests(Environment):
 
     def test_header_comparison(self):
         a, b = self.blank(), self.blank()
+        a['header_inventory_complete'] = b['header_inventory_complete'] = True
         a['public_headers'] = [{'path': '/usr/include/a.h', 'sha256': 'a', **parse_header('int old(void);')}]
         b['public_headers'] = [{'path': '/usr/include/a.h', 'sha256': 'b', **parse_header('int next(void);')}]
         self.assertTrue(any(f['status'] == 'INCOMPATIBLE' and f['interface'] == 'old' for f in compare_api(a, b)))
@@ -139,7 +140,8 @@ class ImageTests(Environment):
 
 class ComparisonTests(Environment):
     def obj(self, name='old@@V1'):
-        return dict(path='/lib/libtest.so.1', complete=True, soname='libtest.so.1', needed=[], machine='A',
+        return dict(path='/lib/libtest.so.1', complete=True, export_inventory_complete=True,
+            execution_metadata=dict(mode='0o755', security_metadata_complete=True, has_file_capabilities=False), soname='libtest.so.1', needed=[], machine='A',
             exports=[dict(name=name, size=10, type='FUNC', binding='GLOBAL', visibility='DEFAULT')])
 
     def test_missing_versioned_symbol(self):
@@ -157,7 +159,7 @@ class ComparisonTests(Environment):
     def test_soname_difference_and_needed(self):
         a, b = self.blank(), self.blank()
         a['elf_objects'], b['elf_objects'] = [self.obj()], [self.obj()]
-        b['elf_objects'][0].update(soname='libtest.so.2', needed=['libmissing.so.1'])
+        b['elf_objects'][0].update(soname='libtest.so.2', needed=['libmissing.so.1'], type='EXEC')
         self.assertTrue(any(f['interface'] == 'soname' for f in compare_elf(a, b)))
         b['collection_complete'] = True
         b['loader_environment'] = {'model': 'glibc', 'environment_complete': True, 'cache_complete': True, 'default_dirs': ['/lib']}

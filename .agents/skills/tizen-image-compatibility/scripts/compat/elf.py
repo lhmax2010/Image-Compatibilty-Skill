@@ -60,7 +60,7 @@ def parse_readelf(text: str) -> dict[str, Any]:
                 symbol['version_index'] = int(version_index[1]) if version_index else None
                 if section == 'UND':
                     obj['imports'].append(symbol)
-                elif binding in ('GLOBAL', 'WEAK', 'UNIQUE') and visibility in ('DEFAULT', 'PROTECTED'):
+                elif binding in ('GLOBAL', 'WEAK', 'UNIQUE', 'GNU_UNIQUE') and visibility in ('DEFAULT', 'PROTECTED'):
                     obj['exports'].append(symbol)
         match = re.search(r'\((NEEDED|SONAME|RPATH|RUNPATH)\).*?\[(.*?)\]', line)
         if match:
@@ -101,7 +101,8 @@ def parse_readelf(text: str) -> dict[str, Any]:
 
 
 def collect_elf(path: Path, virtual: str, tools: Tools, mode: str) -> dict[str, Any]:
-    obj: dict[str, Any] = {'path': virtual, 'size': path.stat().st_size, 'complete': False, 'resolution_metadata_complete': False}
+    obj: dict[str, Any] = {'path': virtual, 'size': path.stat().st_size, 'complete': False, 'resolution_metadata_complete': False,
+                           'export_inventory_complete': False, 'export_inventory_status': 'UNKNOWN'}
     tool = tools.path('readelf')
     if tool:
         flags = ['-W', '-h', '-l', '-d', '--dyn-syms', '-V', '-S', '-A', '-n']
@@ -111,13 +112,41 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str) -> dict[str, 
         obj.update(parse_readelf(result['stdout']))
         obj['evidence'] = [result['stdout_evidence'], result['stderr_evidence']]
         obj['complete'] = result['returncode'] == 0 and not result['stdout_truncated'] and 'machine' in obj
-        # Only a successful full dynamic-symbol/dynamic-section observation earns lookup credit.
+        # ELF-header success is independent of complete negative export evidence.
         symbols = re.search(r"Symbol table '\.dynsym' contains (\d+) entries:\n(.*?)(?:\n\n|\Z)", result['stdout'], re.S)
-        rows = re.findall(r'^\s*(\d+):\s+[0-9a-fA-F]+\s+\d+\s+\S+\s+\S+\s+\S+\s+\S+', symbols[2], re.M) if symbols else []
-        obj['resolution_metadata_complete'] = bool(obj['complete'] and not result['stderr'].strip()
+        rows = re.findall(r'^\s*(\d+):\s+[0-9a-fA-F]+\s+\d+\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)(?:[ \t]+(\S+))?[^\n]*$', symbols[2], re.M) if symbols else []
+        rows_valid = bool(symbols and result['stdout'].count("Symbol table '.dynsym' contains") == 1
+            and int(symbols[1]) >= 1 and len(rows) == int(symbols[1])
+            and all(int(row[0]) == i and row[1] in ('NOTYPE', 'OBJECT', 'FUNC', 'SECTION', 'FILE', 'COMMON', 'TLS', 'IFUNC', 'GNU_IFUNC')
+                    and row[2] in ('LOCAL', 'GLOBAL', 'WEAK', 'UNIQUE', 'GNU_UNIQUE')
+                    and row[3] in ('DEFAULT', 'INTERNAL', 'HIDDEN', 'PROTECTED')
+                    and (i == 0 or (row[5] and '[...]' not in row[5])) for i, row in enumerate(rows))
+            and rows[0][1:5] == ('NOTYPE', 'LOCAL', 'DEFAULT', 'UND') and not rows[0][5])
+        # Advertised version records and every observed versioned symbol must reconcile.
+        version_valid = True
+        for title, key in [('definition', 'version_definitions'), ('needs', 'version_requirements')]:
+            section = re.search(r'Version ' + title + r' section .*? contains (\d+) entr(?:y|ies):\n(.*?)(?:\n\n|\Z)', result['stdout'], re.S)
+            if section:
+                count = len(obj[key]) if title == 'definition' else len(re.findall(r'File:\s*\S+', section[2]))
+                version_valid &= count == int(section[1])
+                if title == 'needs':
+                    version_valid &= sum(int(n) for n in re.findall(r'Cnt:\s*(\d+)', section[2])) == len(obj[key])
+        definitions = {v['name'] for v in obj['version_definitions']}
+        requirements = {v['name'] for v in obj['version_requirements']}
+        version_valid &= all(not s['version'] or s['version'] in definitions for s in obj['exports'])
+        version_valid &= all(not s['version'] or s['version'] in requirements for s in obj['imports'])
+        obj['export_inventory_complete'] = bool(obj['complete'] and not result.get('error') and not result.get('stderr_truncated')
+            and not result['stderr'].strip() and rows_valid and version_valid
+            and all(obj.get(k) for k in ('class', 'endianness', 'type')))
+        obj['export_inventory_status'] = ('COMPLETE' if obj['export_inventory_complete'] else
+            'NOT_APPLICABLE' if not symbols and obj.get('type', '').startswith('REL') and obj['complete'] else 'UNKNOWN')
+        obj['export_inventory_reason'] = ('All advertised dynsym rows and observed symbol versions reconciled.' if obj['export_inventory_complete'] else
+            'No dynamic symbol table on ET_REL.' if obj['export_inventory_status'] == 'NOT_APPLICABLE' else
+            'Tool failure/warning, truncated output, missing or unsupported dynsym/version records; absence unproven.')
+        obj['export_inventory_evidence'] = obj['evidence']
+        obj['resolution_metadata_complete'] = bool(obj['export_inventory_complete']
             and all(obj.get(k) for k in ('class', 'endianness', 'type'))
-            and 'Dynamic section at offset' in result['stdout'] and symbols
-            and len(rows) == int(symbols[1]) and all(int(row) == i for i, row in enumerate(rows)))
+            and 'Dynamic section at offset' in result['stdout'])
         obj['resolution_metadata_evidence'] = obj['evidence'] if obj['resolution_metadata_complete'] else []
         if not obj['complete']:
             obj['error'] = result['error'] or result['stderr'] or 'Incomplete ELF parse'

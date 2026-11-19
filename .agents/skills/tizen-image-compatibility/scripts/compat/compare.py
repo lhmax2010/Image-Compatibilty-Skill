@@ -4,10 +4,11 @@ from __future__ import annotations
 from pathlib import Path
 from collections import defaultdict
 from typing import Any
-from .core import DIMENSIONS, SEVERITIES, Tools, canonical, finding
+from .core import DIMENSIONS, SEVERITIES, Tools, canonical, digest, finding
 from .elf import symbol_identity, target_abi_matches, arm_abi
 from .linker import dependency_checks
 from .debuginfo import advanced_abi
+from .source import declaration_reachability, header_inventory_complete
 
 
 def index(items: list[dict[str, Any]], key: str = 'path') -> dict[str, dict[str, Any]]:
@@ -69,6 +70,13 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
             {k: other.get(k) for k in ('class', 'machine', 'endianness', 'arm_abi')},
             'COMPATIBLE' if target_abi_matches(obj, other) else 'UNKNOWN', 'INFO', 'ELF target ABI metadata only', ev))
         left, right = exports(obj), exports(other)
+        old_exports_complete = obj.get('export_inventory_complete') is True
+        new_exports_complete = other.get('export_inventory_complete') is True
+        if not (old_exports_complete and new_exports_complete):
+            findings.append(finding('abi', path, 'dynamic export collection coverage',
+                obj.get('export_inventory_complete'), other.get('export_inventory_complete'), 'UNKNOWN', 'HIGH',
+                'ELF dynamic export inventory completeness', ev,
+                'Observed symbols remain usable evidence; an incomplete inventory cannot prove absence.'))
         versions = {}
         defaults = {}
         for exported in right.values():
@@ -87,13 +95,13 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
                 default_candidates = defaults.get(identity['base_name'], [])
                 if not default_candidates:
                     findings.append(finding('abi', path, identity['base_name'] + ':default lookup', name, None,
-                        'INCOMPATIBLE', 'HIGH', 'ELF default-version lookup', ev))
+                        'INCOMPATIBLE' if new_exports_complete else 'UNKNOWN', 'HIGH', 'ELF default-version lookup', ev))
                 elif default_candidates[0]['name'] != name:
                     findings.append(finding('abi', path, identity['base_name'] + ':default lookup', name, default_candidates[0]['name'],
                         'UNKNOWN', 'HIGH', 'ELF default-version lookup', ev))
             if next_symbol is None:
-                findings.append(finding('abi', path, name, symbol, None, 'INCOMPATIBLE', 'HIGH',
-                    'ELF dynamic export/version comparison', ev, 'Previously linkable symbol or default symbol version is absent.',
+                findings.append(finding('abi', path, name, symbol, None, 'INCOMPATIBLE' if new_exports_complete else 'UNKNOWN', 'HIGH',
+                    'ELF dynamic export/version comparison', ev, 'Previously linkable symbol or default symbol version is absent.' if new_exports_complete else 'Symbol not observed in an incomplete dynamic export inventory; absence is unproven.',
                     'Restore the exported ABI/version or rebuild and validate all affected consumers.', 'high'))
             else:
                 if '@' not in name and symbol['name'] != next_symbol['name']:
@@ -105,12 +113,12 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
                         findings.append(finding('abi', path, name + ':' + key, symbol.get(key), next_symbol.get(key),
                             'INCOMPATIBLE' if key in ('size', 'type') else 'UNKNOWN', 'HIGH', evidence=ev))
         for name in sorted(set(right) - set(left)):
-            findings.append(finding('abi', path, name, None, right[name], 'COMPATIBLE', 'INFO', evidence=ev,
+            findings.append(finding('abi', path, name, None, right[name], 'COMPATIBLE' if old_exports_complete else 'UNKNOWN', 'INFO', evidence=ev,
                                     impact='Additional exported interface; existing exports are compared separately.'))
         if obj.get('needed') != other.get('needed'):
             findings.append(finding('linking', path, 'DT_NEEDED', obj.get('needed'), other.get('needed'), 'UNKNOWN', 'MEDIUM', evidence=ev,
                 impact='Runtime implementation/dependency changed; dependency availability is checked separately.'))
-        if all(obj.get(k) == other.get(k) for k in ('exports', 'needed', 'soname', 'machine', 'class')):
+        if old_exports_complete and new_exports_complete and all(obj.get(k) == other.get(k) for k in ('exports', 'needed', 'soname', 'machine', 'class')):
             findings.append(finding('abi', path, 'dynamic interface surface', 'collected ELF surface', 'same collected ELF surface',
                 'IDENTICAL', 'INFO', evidence=ev, impact='Symbol-level surface matches; type/layout and behavioral coverage remain separate.'))
     return findings
@@ -123,8 +131,9 @@ def compare_api(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
     for path, header in left.items():
         other = right.get(path)
         if not other:
-            unreadable = any(x['component'] == path for x in b['limitations'])
-            findings.append(finding('api', path, 'public header', path, None, 'UNKNOWN' if unreadable else 'INCOMPATIBLE', 'HIGH', evidence=header.get('evidence')))
+            complete = header_inventory_complete(b, path)
+            findings.append(finding('api', path, 'public header', path, None, 'INCOMPATIBLE' if complete else 'UNKNOWN', 'HIGH', evidence=header.get('evidence'),
+                impact='Header path absent from a complete header inventory.' if complete else 'Header not observed; incomplete header inventory cannot prove removal.'))
             continue
         ev = evidence(header, other)
         if all(header[k] == other[k] for k in ('tokens', 'macros', 'conditions', 'includes')):
@@ -135,10 +144,19 @@ def compare_api(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
         for name in sorted(set(header['declarations']) | set(other['declarations'])):
             old, new = header['declarations'].get(name), other['declarations'].get(name)
             if old != new:
-                removed = old is not None and new is None and name not in other['tokens'] and not header['conditions'] and not other['conditions']
-                findings.append(finding('api', path, name, old, new, 'INCOMPATIBLE' if removed else 'UNKNOWN', 'HIGH',
+                reach = declaration_reachability(b, path, name, old) if old is not None and new is None else None
+                baseline_simple = old is not None and declaration_reachability(a, path, name, old)['state'] == 'PROVEN_PRESENT'
+                status = ('COMPATIBLE' if reach and baseline_simple and reach['state'] == 'PROVEN_PRESENT' else
+                          'INCOMPATIBLE' if reach and baseline_simple and reach['state'] == 'PROVEN_ABSENT' else 'UNKNOWN')
+                closure_evidence = [ref for h in b['public_headers'] if reach and h['path'] in reach['visited'] for ref in h.get('evidence', [])]
+                item = finding('api', path, name, old, new, status, 'HIGH',
                     'lexical function declaration comparison', ev,
-                    'Declaration changed; parameter names, typedefs and conditional context require SDK compilation to establish semantic impact.'))
+                    'Declaration changed; literal include closure can establish only identical plain C prototype availability. Other contexts require SDK compilation.')
+                if reach:
+                    item['declaration_reachability'] = reach
+                    item['evidence'] = sorted(set(item['evidence'] + closure_evidence))
+                    item['id'] = 'TC-' + digest(canonical({k: v for k, v in item.items() if k != 'id'}).encode())[:16]
+                findings.append(item)
         for name in sorted(set(header['macros']) | set(other['macros'])):
             old, new = header['macros'].get(name), other['macros'].get(name)
             if old != new:
@@ -186,7 +204,7 @@ def compare_static(a: dict[str, Any], b: dict[str, Any], config: dict[str, Any])
                 out.append(finding('elf', obj['path'], 'build ID (non-interface metadata)', obj.get('build_id'), peer.get('build_id'),
                     'COMPATIBLE', 'INFO', impact='Build ID differences do not establish ABI differences.'))
     out += dependency_checks(b, 'candidate')
-    out += dependency_checks(b, 'baseline consumers on candidate', a['elf_objects'])
+    out += dependency_checks(b, 'baseline consumers on candidate', a['elf_objects'], consumer_manifest=a)
     for dimension, key in [('filesystem', 'filesystem'), ('commands', 'commands'), ('services', 'services'),
         ('filesystem', 'configurations'), ('security', 'security_interfaces'), ('kernel', 'kernel'),
         ('hardware', 'hardware'), ('network', 'network'), ('packages', 'development'), ('compiler_runtime', 'runtime_libraries')]:

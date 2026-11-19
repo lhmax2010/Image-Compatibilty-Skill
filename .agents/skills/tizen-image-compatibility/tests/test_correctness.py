@@ -25,7 +25,8 @@ def symbol(name, binding='GLOBAL', kind='FUNC'):
 
 
 def obj(path, needed=(), imports=(), exports=(), **kw):
-    return dict(path=path, needed=list(needed), imports=list(imports), exports=list(exports), complete=True, resolution_metadata_complete=True,
+    return dict(path=path, needed=list(needed), imports=list(imports), exports=list(exports), complete=True, resolution_metadata_complete=True, export_inventory_complete=True,
+                execution_metadata=dict(mode='0o755', security_metadata_complete=True, has_file_capabilities=False),
                 machine='Advanced Micro Devices X86-64', **{'class': 'ELF64'}, endianness="2's complement, little endian",
                 **kw)
 
@@ -137,7 +138,7 @@ class LoaderTests(Environment):
         self.assertTrue(all(f['status'] == 'UNKNOWN' for f in self.results(m, c)))
         m['configurations'] = []
         m['filesystem'] = [dict(path='/bin/app', type='file', mode='4755')]
-        self.assertTrue(all(f['status'] == 'UNKNOWN' for f in self.results(m, c)))
+        self.assertTrue(all(f['status'] == 'UNKNOWN' for f in dependency_checks(m, 'baseline consumers on candidate', [c], consumer_manifest=m)))
 
     def test_dependency_cycle_terminates(self):
         a = obj('/lib/a.so', needed=['b.so']); b = obj('/lib/b.so', needed=['a.so'])
@@ -195,6 +196,7 @@ class RealELFTests(Environment):
         _, client = self.build('client', 'extern int foo(void); int use(void){return foo();}', extra=(str(path),))
         lib['path'] = '/opt/hidden/x.so'
         client.update(path='/bin/client', type='EXEC')
+        client['execution_metadata'] = dict(mode=oct(path.stat().st_mode & 0o7777), security_metadata_complete=True, has_file_capabilities=False)
         m = self.blank(); m.update(elf_objects=[lib], collection_complete=True,
                                   loader_environment=dict(model='glibc', cache_complete=True, environment_complete=True, symbol_scope='startup', namespace='base', default_dirs=['/lib']))
         self.assertTrue(any(f['resolution'] == 'unresolvable_provider' for f in dependency_checks(m, 'test', [client])))

@@ -91,7 +91,8 @@ def coverage_report(a, b, findings, tests, matrix, config):
             if dim == 'abi':
                 layout = [f for f in fs if f['interface'] == 'DWARF type/layout ABI']
                 surface = [f for f in fs if f not in layout]
-                complete = bool(peer and obj.get('complete') and peer.get('complete'))
+                complete = bool(peer and obj.get('complete') and peer.get('complete')
+                                and obj.get('export_inventory_complete') is True and peer.get('export_inventory_complete') is True)
                 checks = [check('collection', 'COMPATIBLE' if complete else 'UNKNOWN')]
                 by_symbol = defaultdict(list)
                 for f in surface: by_symbol[f['interface'].split(':', 1)[0]].append(f)

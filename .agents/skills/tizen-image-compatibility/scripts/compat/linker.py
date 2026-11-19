@@ -31,9 +31,11 @@ def expand(value, origin):
     return posixpath.normpath(value)
 
 
-def dependency_checks(manifest, label, consumers=None):
+def dependency_checks(manifest, label, consumers=None, consumer_manifest=None):
     objects = {o['path']: o for o in manifest['elf_objects']}
     files = {f['path']: f for f in manifest.get('filesystem', [])}
+    source_files = ({f['path']: f for f in consumer_manifest.get('filesystem', [])}
+                    if consumer_manifest is not None else files if consumers is None else {})
     env = manifest.get('loader_environment', {})
     known = (env.get('model') == 'glibc' and env.get('environment_complete') is True
              and env.get('cache_complete') is True)
@@ -62,16 +64,30 @@ def dependency_checks(manifest, label, consumers=None):
         root_scope = bool(root.get('interpreter')) or root.get('type', '').startswith('EXEC')
         loader = root.get('interpreter')
         loader_obj = objects.get(alias(loader, files)) if loader else None
-        local_known = known and env.get('namespace', 'base') == 'base' and root.get('resolution_metadata_complete') is True
+        local_known = (known and root_scope and env.get('namespace', 'base') == 'base'
+                       and root.get('resolution_metadata_complete') is True and root.get('export_inventory_complete') is True)
         preload = next((x.get('normalized', '') for x in manifest.get('configurations', []) if x['path'] == '/etc/ld.so.preload'), '')
-        mode = int(files.get(root['path'], {}).get('mode', '0'), 8)
-        if any(line.split('#')[0].strip() for line in preload.splitlines()) or mode & 0o6000:
+        # Root execution context belongs to the consumer image, providers/search
+        # paths belong to the candidate. Never use candidate same-path mode for a
+        # baseline executable. Explicit per-object metadata supports direct callers.
+        actual_root = alias(root['path'], source_files)
+        context = source_files.get(actual_root, {}) if actual_root in source_files else ({} if consumer_manifest is not None else root.get('execution_metadata', {}))
+        try:
+            mode = int(context['mode'], 8)
+            mode_known = mode >= 0 and mode <= 0o177777
+        except (KeyError, ValueError, TypeError):
+            mode, mode_known = 0, False
+        normal_context = mode_known and not mode & 0o6000 and context.get('security_metadata_complete') is True and context.get('has_file_capabilities') is False
+        if any(line.split('#')[0].strip() for line in preload.splitlines()) or not normal_context:
             local_known = False
-            emit(root, 'loader context', None, 'preload or secure-execution semantics not modeled', 'unknown_search_environment')
+            emit(root, 'loader context', None, {'reason': 'preload or secure-execution context not proven normal',
+                'metadata_image': 'baseline' if consumers is not None else 'candidate', 'metadata': context,
+                'boundary': 'Mode/capability evidence cannot determine credentials, mount policy or AT_SECURE at runtime.'}, 'unknown_search_environment')
         scope_known = local_known and inventory
         symbol_scope_known = root.get('resolution_metadata_complete') is True and root_scope and env.get('symbol_scope') == 'startup' and env.get('namespace', 'base') == 'base'
         if loader:
-            valid = bool(loader_obj and loader_obj.get('complete') and loader_obj.get('resolution_metadata_complete') is True and target_abi_matches(root, loader_obj))
+            valid = bool(loader_obj and loader_obj.get('complete') and loader_obj.get('resolution_metadata_complete') is True
+                         and loader_obj.get('export_inventory_complete') is True and target_abi_matches(root, loader_obj))
             emit(root, 'dynamic loader', loader, loader_obj.get('path') if loader_obj else None,
                  'verified' if valid and local_known else 'missing_provider' if not loader_obj else 'unknown_loader_abi',
                  'INCOMPATIBLE' if not loader_obj and inventory and local_known else None, 'CRITICAL')
@@ -81,12 +97,21 @@ def dependency_checks(manifest, label, consumers=None):
         closure = []
         edges = {}
         loaded = {}
+        loaded_proven = {}
+        # The root and its validated interpreter precede dependency expansion.
+        # An isolated DSO has no proven caller/load namespace and earns no credit.
+        for initial in (root, loader_obj):
+            if initial and initial.get('complete') and target_abi_matches(root, initial):
+                names = [initial['path'], initial.get('soname')]
+                for initial_name in filter(None, names):
+                    loaded.setdefault(initial_name, initial)
+                    loaded_proven.setdefault(initial_name, bool(local_known and inventory and initial.get('resolution_metadata_complete') is True and initial.get('export_inventory_complete') is True))
         while queue:
             obj, inherited = queue.popleft()
             if obj['path'] in seen:
                 continue
             seen.add(obj['path']); closure.append(obj)
-            object_known = local_known and obj.get('resolution_metadata_complete') is True
+            object_known = local_known and obj.get('resolution_metadata_complete') is True and obj.get('export_inventory_complete') is True
             scope_known &= object_known
             origin = posixpath.dirname(obj['path'])
             rpaths = [expand(v, origin) for v in obj.get('rpath', [])] if not obj.get('runpath') else []
@@ -111,6 +136,8 @@ def dependency_checks(manifest, label, consumers=None):
                     if not nodeflib:
                         paths += [posixpath.join(d, needed) for d in env.get('default_dirs', [])]
                 provider = loaded.get(needed)
+                if provider and (not loaded_proven.get(needed) or not provider.get('complete') or not target_abi_matches(obj, provider)):
+                    ambiguous = True
                 for path in ([] if provider else paths):
                     if path is None:
                         ambiguous = True
@@ -125,10 +152,18 @@ def dependency_checks(manifest, label, consumers=None):
                         break
                     if actual in files and files[actual].get('type') == 'file':
                         ambiguous = True  # present but unparsed/not a usable ELF
-                verified = object_known and inventory and not ambiguous and provider is not None and provider.get('resolution_metadata_complete') is True
+                verified = (object_known and inventory and not ambiguous and provider is not None
+                            and provider.get('resolution_metadata_complete') is True and provider.get('export_inventory_complete') is True)
                 if provider:
                     state = 'verified' if verified else 'unknown_search_environment'
                     loaded.setdefault(needed, provider)
+                    loaded_proven.setdefault(needed, bool(verified))
+                    # Only objects reached by this root's load order are reusable.
+                    # Register SONAME after a real load, never by global-name scan.
+                    soname = provider.get('soname')
+                    if soname and '/' not in soname and '$' not in soname:
+                        loaded.setdefault(soname, provider)
+                        loaded_proven.setdefault(soname, bool(verified))
                     edges[(obj['path'], needed)] = provider
                     queue.append((provider, inherited_next))
                 else:
@@ -138,6 +173,11 @@ def dependency_checks(manifest, label, consumers=None):
                 emit(obj, 'DT_NEEDED:' + needed, needed, provider['path'] if provider else None, state,
                      'INCOMPATIBLE' if state in ('missing_provider', 'unresolvable_provider') else None)
                 scope_known &= verified
+        if loader_obj and loader_obj['path'] not in seen:
+            closure.append(loader_obj)
+            # Nonstandard interpreters with their own dependencies need a full
+            # loader adapter; do not infer a closed symbol scope from this subset.
+            scope_known &= not loader_obj.get('needed')
         export_scope = {}
         for provider in closure:
             for exported in provider.get('exports', []):

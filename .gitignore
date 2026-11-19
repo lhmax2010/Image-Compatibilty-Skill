@@ -11,3 +11,13 @@ __pycache__/
 /synthetic-images/
 /synthetic-report/
 /compat-config.yaml
+
+# Local migration backups, private inputs and credentials are never published.
+/.local-backups/
+/design.md
+/require.md
+.env
+.env.*
+!.env.example
+*.pem
+*.key

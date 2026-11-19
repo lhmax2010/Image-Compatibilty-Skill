@@ -44,7 +44,7 @@ def fixture(packages=2000, symbols=10):
             provenance={'kind': 'installed_rpmdb', 'source': 'SIMULATED metadata, not a queried DB'}))
         a['filesystem'] += [dict(path=p, type='file') for p in files]
         exports = [dict(name=f'public_{j}', type='FUNC', binding='GLOBAL', visibility='DEFAULT', size=0) for j in range(symbols)]
-        a['elf_objects'].append(dict(path=path, type='DYN', complete=True, exports=exports, imports=[], needed=[]))
+        a['elf_objects'].append(dict(path=path, type='DYN', complete=True, export_inventory_complete=True, exports=exports, imports=[], needed=[]))
         fs += [finding('abi', path, s['name'], s, None, 'INCOMPATIBLE', 'HIGH') for s in exports]
         if i % 10 == 0:
             a['public_headers'].append(dict(path=header, sha256=digest(b'int api(void);'), origin='runtime_image', **parse_header('int api(void);')))

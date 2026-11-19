@@ -68,6 +68,7 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
         'development': [], 'runtime_libraries': [], 'capabilities': [], 'test_results': [], 'limitations': []}
     active = set(tools.config['analysis']['modes'])
     elf_jobs = []
+    header_failures = []
     max_bytes = tools.config['analysis']['max_text_bytes']
     if cache:
         cache.mkdir(parents=True, exist_ok=True)
@@ -104,6 +105,9 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
             if target and target.is_file() and ('/include/' in virtual or virtual.startswith('/etc/') or '/systemd/' in virtual):
                 path, kind = target, 'file'
             else:
+                if '/include/' in virtual and Path(virtual).suffix in ('.h', '.hpp', '.hh', '.hxx'):
+                    header_failures.append(virtual)
+                    m['limitations'].append(limitation('api', 'Header symlink unresolved or unreadable', virtual))
                 continue
         if kind != 'file' or not path.is_file():
             continue
@@ -116,17 +120,20 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
                 m['hardware'].append({'path': virtual})
             if NETWORK.search(virtual):
                 m['network'].append({'path': virtual})
-            is_header = path.suffix in ('.h', '.hpp', '.hh', '.hxx') and '/include/' in virtual
+            is_header = Path(virtual).suffix in ('.h', '.hpp', '.hh', '.hxx') and '/include/' in virtual
             is_service = '/systemd/' in virtual and path.suffix in ('.service', '.socket', '.target', '.timer', '.mount', '.conf')
             is_development = path.suffix == '.pc' or path.name.endswith(('Config.cmake', '-config.cmake'))
             is_kernel = virtual.startswith('/boot/config') or '/include/linux/' in virtual or '/include/asm' in virtual
             is_config = virtual.startswith('/etc/') or is_service or is_development or is_kernel or '/dbus-1/' in virtual or '/tmpfiles.d/' in virtual or '/udev/' in virtual
             if kind == 'file' and ('security' in active):
                 xattrs = {}
+                metadata['security_metadata_complete'] = False
                 try:
                     for attr in sorted(os.listxattr(path, follow_symlinks=False)):
                         if attr.startswith(('security.', 'system.posix_acl')):
                             xattrs[attr] = os.getxattr(path, attr, follow_symlinks=False).hex()
+                    metadata['security_metadata_complete'] = image.format not in ('tar', 'squashfs')
+                    metadata['has_file_capabilities'] = 'security.capability' in xattrs
                 except OSError as exc:
                     m['limitations'].append(limitation('security', f'xattr unreadable: {exc.strerror}', virtual))
                 if xattrs or int(metadata['mode'], 8) & 0o6000:
@@ -134,14 +141,25 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
             if not (is_header or is_config or SECURITY.search(virtual)):
                 continue
             if path.stat().st_size > max_bytes:
+                if is_header:
+                    header_failures.append(virtual)
                 m['limitations'].append(limitation('api' if is_header else 'filesystem', 'Text exceeds max_text_bytes', virtual))
                 continue
             raw = path.read_bytes()
             if b'\x00' in raw:
+                if is_header:
+                    header_failures.append(virtual)
+                    m['limitations'].append(limitation('api', 'Header contains NUL; not parsed', virtual))
                 if SECURITY.search(virtual):
                     m['security_interfaces'].append({'path': virtual, 'policy_hash': digest(raw)})
                 continue
             text = raw.decode('utf-8', 'replace')
+            if is_header:
+                try:
+                    raw.decode('utf-8', 'strict')
+                except UnicodeDecodeError:
+                    header_failures.append(virtual)
+                    m['limitations'].append(limitation('api', 'Header decode failed; replacement text is observation only', virtual))
             normalized = normalize_text(text, tools.config['analysis']['normalize_build_paths'])
             evidence = 'evidence/' + digest(raw) + '.txt'
             (tools.output / evidence).write_bytes(raw)
@@ -193,7 +211,11 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
     if active & {'elf', 'abi', 'linking', 'compiler_runtime', 'performance'}:
         with ThreadPoolExecutor(max_workers=int(tools.config['analysis']['workers'])) as pool:
             m['elf_objects'] = sorted(pool.map(elf_job, elf_jobs), key=lambda x: x['path'])
+    source_files = {f['path']: f for f in m['filesystem']}
     for obj in m['elf_objects']:
+        # Content caches never establish permissions/capabilities: observe the source again.
+        source_metadata = source_files.get(obj['path'], {})
+        obj['execution_metadata'] = {k: source_metadata[k] for k in ('mode', 'security_metadata_complete', 'has_file_capabilities') if k in source_metadata}
         if not obj['complete']:
             m['limitations'].append(limitation('elf', obj.get('error', 'Incomplete ELF'), obj['path']))
         if RUNTIMES.search(Path(obj['path']).name):
@@ -213,6 +235,11 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
     m['loader_environment'] = tools.config['loader']['environments'].get(label, {})
     m['loader_configuration'] = [x for x in m['configurations'] if x['path'] == '/etc/ld.so.conf' or x['path'].startswith('/etc/ld.so.conf.d/')]
     m['collection_complete'] = image.format != 'rpm-collection' and not image.errors and not any(x['dimension'] == 'filesystem' for x in m['limitations'])
+    m['header_inventory_complete'] = m['collection_complete'] and not header_failures
+    m['header_inventory_scope'] = 'Readable installed .h/.hpp/.hh/.hxx paths under include directories; not SDK or semantic completeness'
+    # Compiler include search roots are not inferred from filenames; quoted includes
+    # resolve relative to their entry. SDK-specific angle paths need recorded roots.
+    m['header_include_roots'] = []
     for key, value in m.items():
         if isinstance(value, list):
             value.sort(key=canonical)

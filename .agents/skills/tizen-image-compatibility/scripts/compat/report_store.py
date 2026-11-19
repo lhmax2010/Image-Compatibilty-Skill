@@ -186,7 +186,8 @@ class Store:
                 same = len({a[1] for a in aliases}) == 1 and all(a[2] for a in aliases)
                 required = ('name', 'type', 'binding', 'visibility', 'size')
                 attrs_complete = all(all(key in s and s[key] is not None for key in required) for s in obj.get('exports', []))
-                complete = obj.get('complete') is True and 'exports' in obj and same and not ambiguity and attrs_complete
+                complete = (obj.get('complete') is True and 'exports' in obj and same and not ambiguity and attrs_complete
+                            and obj.get('export_inventory_complete') is True)
                 meta = {k: v for k, v in obj.items() if k not in ('exports', 'imports', 'cxx')}
                 meta.update(alias_metadata_consistent=same, ambiguous_symbol_count=ambiguity,
                             identity_basis='image/scope/recorded virtual symlink resolution; hardlink identity unavailable')
