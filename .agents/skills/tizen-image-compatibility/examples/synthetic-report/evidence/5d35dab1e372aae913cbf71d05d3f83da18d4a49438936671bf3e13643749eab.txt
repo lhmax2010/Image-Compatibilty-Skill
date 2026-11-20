@@ -1,1 +1,0 @@
-<node name="/test"><interface name="org.synthetic.Test"><method name="Call"><arg type="i" direction="in"/></method></interface></node>

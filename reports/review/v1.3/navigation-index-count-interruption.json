@@ -1,4 +1,0 @@
-{
-  "stopped_epoch": 1794924535.587959,
-  "reason": "Initial index-repair pre-count reproduced the same full Group Key index scan; replace it with already reconciled overview count and verify through the new covering index. No limits raised."
-}

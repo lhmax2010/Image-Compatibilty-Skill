@@ -1,2 +1,0 @@
-int public_add(int a, int b);
-int public_added(void);

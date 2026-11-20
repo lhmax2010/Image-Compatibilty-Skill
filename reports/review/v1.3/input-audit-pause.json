@@ -1,7 +1,0 @@
-{
-  "pid": 902700,
-  "paused_epoch": 1794924323.1365666,
-  "reason": "Serialize report index repair/browser verification and read-only input hashing to avoid disk contention; resume the same audit process afterward",
-  "resumed_epoch": 1794924994.6855273,
-  "paused_seconds": 671.54896068573
-}

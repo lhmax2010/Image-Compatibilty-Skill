@@ -42,19 +42,15 @@ Reports include all baseline rows in `package_results` and `packages.csv`. JSON 
 
 ## Scale and boundaries
 
-Ownership, component coverage and SDK header checks use indexes; complete JSON output streams to disk. Large RPM XML queries stream from full raw evidence rather than the bounded command-output preview; malformed raw XML remains UNKNOWN. JSON still contains the full manifests, exports, checks and evidence associations, so large images require disk and memory proportional to collected records and relationships. Reports are not a database-backed browser; HTML search only covers its displayed subset. The synthetic benchmark at `tests/review/benchmark_v12.py` checks 2000 package pairs and 20000 findings, including full CSV rows and a partial incompatible result. It is metadata stress evidence, not measured performance on a real Tizen image. See repository-root `V1_2_VALIDATION.md` for measured time/RSS and remaining limitations.
+Ownership, component coverage and SDK header checks use indexes; complete JSON output streams to disk. Large RPM XML queries stream from full raw evidence rather than the bounded command-output preview; malformed raw XML remains UNKNOWN. JSON still contains the full manifests, exports, checks and evidence associations, so large images require disk and memory proportional to collected records and relationships. The original offline HTML limits previews. For full paginated navigation, use the enhanced SQLite report.
 
 RPM dependency solving, automatic rename/split identification, exhaustive public-API policy and target runtime behavior still need product-specific evidence. Current package ownership does not execute package payloads or install into source images.
 
 - [RPM query options and database interface](https://rpm.org/docs/4.20.x/man/rpm.8)
 
-## Acceptance accounting and regression budgets
+## Acceptance accounting
 
 Count reconciliation is explicit for runtime and SDK inventories. Every reliable candidate package also appears in `candidate_assessments`; unsupported-provenance records remain in `unverified_package_records`. Provider/consumer edges and interface-path finding indexes make associations inspectable. Replacement hints distinguish possible renames/replacements and splits from unrelated candidate additions; shared paths alone never verify a relationship. Data-only packages with complete N/A evidence have overall NOT_APPLICABLE, not a package compatibility pass.
-
-The version-2 stress fixture includes 2000 package pairs, 20000 export-removal findings, 2000 cross-package linking findings, 200 API gaps and one unowned finding (22201 total). Its verifier reads JSON/CSV back and compares exact ID multisets, statuses, ownership and dependency edges, plus exact HTML previews and Markdown package rows. It checks no finding is lost between package associations and global unassigned records. Default budgets are 30 seconds and 768 MiB including serialization/readback; configure these for the runner. `--reference previous/benchmark.json --max-regression-factor 2` rejects significant measured regression at the same fixture version/scale. Reference validation is not a proof of asymptotic complexity or actual Tizen performance.
-
-A small generated report is available in [examples/package-report](../examples/package-report/README.md). Full regression mapping, measured results and production prerequisites are linked from the repository README.
 
 ## Report-only export accounting (v1.3)
 

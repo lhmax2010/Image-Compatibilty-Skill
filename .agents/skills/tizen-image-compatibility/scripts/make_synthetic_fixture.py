@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import sys
 
-FIXTURES = Path(__file__).resolve().parents[1] / 'tests' / 'fixtures'
+FIXTURES = Path(__file__).resolve().parents[1] / 'assets' / 'synthetic-fixture'
 
 
 def create(destination: Path) -> None:

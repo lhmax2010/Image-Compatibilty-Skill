@@ -1,7 +1,0 @@
-{
-  "purpose": "One read-only sequential pre-read of in-progress SQLite file to reduce observed random-I/O stalls; NOT a database consistency snapshot or hash",
-  "bytes": 3826196480,
-  "wall_seconds": 624.2131637479761,
-  "peak_rss_bytes": 15044608,
-  "file_written": false
-}
