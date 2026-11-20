@@ -85,6 +85,7 @@ class Store:
           summary TEXT);
         CREATE TABLE differences(n INTEGER PRIMARY KEY,pair_id TEXT,name TEXT,version TEXT,
           difference_type TEXT,status TEXT,row_json TEXT);
+        CREATE TABLE probe_observations(n INTEGER PRIMARY KEY,id TEXT,compiler TEXT,image TEXT,kind TEXT,status TEXT,summary TEXT);
         ''')
         self.files = defaultdict(dict)
         self.manifests = {}
@@ -286,7 +287,7 @@ class Store:
                 'performance', 'runtime')
         inventory_arrays = ('candidate_assessments', 'unassigned_finding_ids', 'unassigned_interfaces',
                             'provider_consumers', 'interface_findings')
-        arrays = {('findings',), ('package_results',), ('missing_interfaces',), ('normalized_differences',)}
+        arrays = {('findings',), ('package_results',), ('missing_interfaces',), ('normalized_differences',), ('tests',), ('expected_tests',)}
         arrays |= {('coverage', dim, 'units') for dim in dims}
         arrays |= {('package_inventory', key) for key in inventory_arrays}
         objects = {('coverage',), ('package_inventory',)} | {('coverage', dim) for dim in dims}
@@ -299,6 +300,13 @@ class Store:
                 self._package('candidate', value)
             elif path == ('package_inventory', 'unassigned_finding_ids'):
                 self.db.execute('INSERT INTO unassigned VALUES(?)', (value,))
+            elif path == ('tests',):
+                keys = ('id', 'name', 'compiler', 'image', 'kind', 'status', 'compile_status', 'link_status',
+                        'deployment_status', 'execution_status', 'behavior_status', 'reason', 'runtime_reason',
+                        'artifact_sha256', 'returncode', 'environment_id', 'evidence')
+                summary = {k: value[k] for k in keys if k in value}
+                self.db.execute('INSERT INTO probe_observations(id,compiler,image,kind,status,summary) VALUES(?,?,?,?,?,?)',
+                                (*[summary.get(k) for k in ('id','compiler','image','kind','status')], canonical(summary)))
             self.check()
         metadata, sha = ReportStream(self.source / 'results.json', arrays, objects, record, self.check).read()
         self.metadata = metadata

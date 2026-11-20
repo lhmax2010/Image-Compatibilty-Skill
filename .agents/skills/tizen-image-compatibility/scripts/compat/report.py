@@ -69,6 +69,16 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
                 row = {k: canonical(finding[k]) if isinstance(finding[k], (dict, list)) else str(finding[k]) for k in columns}
                 # Avoid spreadsheet formula injection from image-controlled paths and strings.
                 writer.writerow({k: "'" + v if v.startswith(('=', '+', '-', '@', '\t', '\r')) else v for k, v in row.items()})
+        test_columns = ('id', 'logical_id', 'name', 'compiler', 'image', 'kind', 'status', 'compile_status',
+                        'link_status', 'deployment_status', 'execution_status', 'behavior_status', 'reference_image',
+                        'returncode', 'runtime_reason', 'evidence')
+        with (output / 'test-results.csv').open('w', newline='') as stream:
+            writer = csv.writer(stream)
+            writer.writerow(test_columns)
+            for test in results['tests']:
+                values = [test.get(key, '') for key in test_columns]
+                writer.writerow(["'" + v if isinstance(v, str) and v.startswith(('=', '+', '-', '@', '\t', '\r'))
+                                 else canonical(v) if isinstance(v, (dict, list)) else v for v in values])
         package_columns = ['id', 'name', 'scope', 'arch', 'baseline_version', 'candidate_version', 'abi', 'api', 'linking', 'overall', 'verification', 'coverage_percent', 'finding_ids', 'limitations']
         with (output / 'packages.csv').open('w', newline='') as stream:
             writer = csv.DictWriter(stream, fieldnames=package_columns); writer.writeheader()
@@ -102,9 +112,10 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
         for package in results['package_results'][:200]:
             lines.append('| ' + ' | '.join(esc(v) for v in [package['scope'] + ':' + package['name'], package['baseline_version'], package['candidate_version'], package['abi']['status'], package['api']['status'], package['linking']['status'], package['coverage']['coverage_percent'], package['overall']]) + ' |')
         lines += ['', 'First 200 packages shown; full records, ownership, findings and gaps are in results.json and packages.csv.']
-        lines += ['', '## Cross-compatibility matrix', '', '| Compiler | Image | Headers | Runtime | Overall |', '|---|---|---|---|---|']
+        lines += ['', '## Cross-compatibility matrix', '', '| Compiler | Image | Compile | Link | Deploy | Execute | Behavior | Overall |', '|---|---|---|---|---|---|---|---|']
         for cell in results['matrix']:
-            lines.append('| ' + ' | '.join(cell[k] for k in ('compiler', 'image', 'header_status', 'runtime_status', 'status')) + ' |')
+            lines.append('| ' + ' | '.join(esc(cell.get(k, 'UNKNOWN')) for k in ('compiler', 'image', 'compile_status', 'link_status',
+                         'deployment_status', 'execution_status', 'behavior_status', 'status')) + ' |')
         lines += ['', '## Limitations', '']
         for reason in sorted({x['reason'] for x in results['limitations']}):
             lines.append('- ' + esc(reason))
@@ -118,8 +129,11 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
         content += '<h2>Coverage and gate</h2>' + table([[d, {k: v for k, v in c.items() if k != 'units'}] for d, c in results['coverage'].items()], ['Dimension', 'Coverage'])
         content += '<p>Quality gate: ' + esc(results['quality_gate']) + '</p>'
         content += '<h2>Compatibility overview</h2>' + table([[k, v] for k, v in results['dimensions'].items()], ['Dimension', 'Statuses'])
-        content += '<h2>Cross-compatibility matrix</h2>' + table([[c.get(k, '') for k in ('compiler', 'image', 'header_status', 'runtime_status', 'status', 'reason', 'runtime_reason')] for c in results['matrix']],
-            ['Compiler', 'Image', 'Headers', 'Runtime', 'Overall', 'Compile coverage', 'Runtime coverage'])
+        content += '<h2>Cross-compatibility matrix</h2>' + table([[c.get(k, 'UNKNOWN') for k in ('compiler', 'image', 'header_status', 'compile_status', 'link_status', 'deployment_status', 'execution_status', 'behavior_status', 'status')] for c in results['matrix']],
+            ['Compiler', 'Image', 'Headers', 'Compile', 'Link', 'Deploy', 'Execute', 'Behavior', 'Overall'])
+        content += '<h2>Compile and runtime observations</h2><p>First 100 tests. Full results in JSON and test-results.csv.</p>'
+        content += table([[t.get(k, '') for k in ('id', 'name', 'compiler', 'image', 'status', 'compile_status', 'link_status', 'deployment_status', 'execution_status', 'behavior_status', 'runtime_reason', 'evidence')]
+                          for t in results['tests'][:100]], ['ID', 'Test', 'Compiler', 'Image', 'Overall', 'Compile', 'Link', 'Deploy', 'Execute', 'Behavior', 'Reason', 'Evidence'])
         inventory = results['package_inventory']
         content += '<h2>Package compatibility</h2><p>Installed package counts: baseline=' + esc(inventory['baseline_package_count']) + '; candidate=' + esc(inventory['candidate_package_count']) + '. null means UNKNOWN. First 1000 packages shown; full records in JSON/CSV.</p>'
         content += '<input id="package-filter" aria-label="Filter packages" placeholder="Filter packages…">'

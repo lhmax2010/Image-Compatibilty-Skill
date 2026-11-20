@@ -31,7 +31,7 @@ def expand(value, origin):
     return posixpath.normpath(value)
 
 
-def dependency_checks(manifest, label, consumers=None, consumer_manifest=None):
+def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, checkpoint=None):
     objects = {o['path']: o for o in manifest['elf_objects']}
     files = {f['path']: f for f in manifest.get('filesystem', [])}
     source_files = ({f['path']: f for f in consumer_manifest.get('filesystem', [])}
@@ -58,6 +58,8 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None):
         item['id'] = 'TC-' + digest(canonical({k: v for k, v in item.items() if k != 'id'}).encode())[:16]
         out.append(item)
     for root in consumers if consumers is not None else objects.values():
+        if checkpoint:
+            checkpoint()
         if not root.get('complete'):
             emit(root, 'collection', None, None, 'unknown_collection')
             continue
@@ -107,6 +109,8 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None):
                     loaded.setdefault(initial_name, initial)
                     loaded_proven.setdefault(initial_name, bool(local_known and inventory and initial.get('resolution_metadata_complete') is True and initial.get('export_inventory_complete') is True))
         while queue:
+            if checkpoint:
+                checkpoint()
             obj, inherited = queue.popleft()
             if obj['path'] in seen:
                 continue
@@ -123,6 +127,8 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None):
                 scope_known = False
                 emit(obj, 'loader features', None, obj.get('dynamic_flags'), 'unknown_loader_feature')
             for needed in obj.get('needed', []):
+                if checkpoint:
+                    checkpoint()
                 ambiguous = unsupported
                 if '/' in needed or '$' in needed:
                     paths = [expand(needed, origin)]
@@ -181,6 +187,8 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None):
         export_scope = {}
         for provider in closure:
             for exported in provider.get('exports', []):
+                if checkpoint:
+                    checkpoint()
                 exp = symbol_identity(exported['name'])
                 if not (exported.get('value') == 0 and exported.get('section') != 'ABS' and exported.get('type') != 'TLS') and exported.get('binding') in ('GLOBAL', 'WEAK', 'UNIQUE', 'GNU_UNIQUE') and exported.get('visibility') in ('DEFAULT', 'PROTECTED') and exported.get('section') != 'UND' and exported.get('type') in ('NOTYPE', 'OBJECT', 'FUNC', 'COMMON', 'TLS', 'IFUNC', 'GNU_IFUNC'):
                     export_scope.setdefault(exp['base_name'], []).append((provider, exported, exp))
@@ -188,6 +196,8 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None):
         for obj in closure:
             failed_requirements = set()
             for req in obj.get('version_requirements', []):
+                if checkpoint:
+                    checkpoint()
                 provider = edges.get((obj['path'], req['file'])) or loaded.get(req['file'])
                 names = {v['name'] for v in (provider or {}).get('version_definitions', [])}
                 present = req['name'] in names
@@ -198,6 +208,8 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None):
                 emit(obj, 'version:' + str(req['file']) + ':' + req['name'], req, provider['path'] if provider else None, state,
                      'INCOMPATIBLE' if state == 'missing_version' else None)
             for symbol in obj.get('imports', []):
+                if checkpoint:
+                    checkpoint()
                 identity = symbol_identity(symbol['name'])
                 matches = []
                 for provider, exported, exp in export_scope.get(identity['base_name'], []):

@@ -102,6 +102,7 @@ async function render() {
       const cards = node('div', undefined, app, 'cards');
       for (const [key, count] of Object.entries(data.status_counts)) { const c = node('div', key, cards, 'card'); node('strong', count.toLocaleString(), c); }
       table(app, [['Image', r => r[0]], ['Installed RPM', r => r[1].inventory?.installed_count ?? null], ['Collected ELF rows', r => r[1].collected_elf_rows], ['Canonical ELFs', r => r[1].canonical_elf_count], ['Observed FUNC', r => r[1].observed_unique_export_counts.func], ['Incomplete ELFs', r => r[1].incomplete_canonical_elf_count]], Object.entries(data.images));
+      if (data.original_quality_gate) pretty(app, data.original_quality_gate, 'Original release gate');
       node('h2', 'Linking: recorded reasons', app);
       node('p', data.linking.raw_findings + ' original findings → ' + data.linking.groups + ' navigation groups; ' + data.linking.distinct_interfaces + ' distinct recorded interfaces. Groups are not merged compatibility conclusions.', app);
       table(app, [['Reason', (r, td) => { link(td, r.reason_category, 'groups/' + enc(r.reason_category)); }], ['Status', r => r.status], ['Findings', r => r.raw_finding_count], ['Groups', r => r.group_count], ['Interfaces', r => r.distinct_recorded_interface_count]], data.linking.reason_status_distribution);
@@ -143,6 +144,22 @@ async function render() {
       for (const [role, side] of [['consumer', ownership.consumer_image || data.consumer_image || 'baseline'], ['candidate_provider', 'candidate'], ['root_consumer', data.root_consumer_image || 'baseline']]) {
         for (const owner of ownership[role]?.owners || []) { const p = node('p', role + ': ', app); link(p, owner, 'package/' + enc(side) + '/' + enc(owner)); }
       }
+    } else if (route === 'tests') {
+      const overview = await api('overview'); if (token !== generation) return;
+      node('h2', 'Compile and runtime validation', app);
+      if (!overview.original_probe_summary) {
+        node('p', 'This earlier index lacks a probe projection. See the original report or rebuild the enhanced index.', app);
+        return;
+      }
+      pretty(app, overview.original_probe_summary, 'Expected and recorded probe counts');
+      table(app, [['Compiler', r => r.compiler], ['Image', r => r.image], ['Compile', r => r.compile_status],
+        ['Link', r => r.link_status], ['Deploy', r => r.deployment_status], ['Execute', r => r.execution_status],
+        ['Behavior', r => r.behavior_status], ['Overall', r => r.status]], overview.original_matrix || []);
+      await listing(app, 'tests', {}, [['Test', r => r.name || r.id], ['Compiler', r => r.compiler], ['Image', r => r.image],
+        ['Status', r => r.status], ['Compile', r => r.compile_status], ['Link', r => r.link_status],
+        ['Deploy', r => r.deployment_status], ['Execute', r => r.execution_status], ['Behavior', r => r.behavior_status],
+        ['Reason', r => r.runtime_reason || r.reason], ['Evidence', (r, td) => { evidence(td, r.evidence); }]],
+      [['compiler', 'Compiler'], ['image', 'Image', ['', 'baseline', 'candidate']], ['kind', 'Stage', ['', 'compile', 'runtime']], ['status', 'Status', statuses]]);
     } else if (route === 'findings') { node('h2', 'All original findings', app); await findings(app); }
     else throw new Error('Unknown report view');
   } catch (error) { if (token === generation) node('p', error.message, app, 'error'); }

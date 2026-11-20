@@ -149,6 +149,9 @@ def validate(store, row_counts):
                 count += 1
                 check()
         require('csv_rows:' + filename, count == expected)
+    recorded_tests = store.metadata.get('summary', {}).get('total_tests')
+    if type(recorded_tests) is int:
+        require('probe_observation_count', recorded_tests == db.execute('SELECT count(*) FROM probe_observations').fetchone()[0])
     return {'status': 'PASS', 'checks': checks, 'findings': n, 'status_counts': dict(store.histogram),
             'unassigned_findings': inv['unassigned_finding_ids']['record_count'], 'csv_rows': row_counts}
 
@@ -184,6 +187,8 @@ def overview(store, reasons):
             'symbol_difference_rows': dict(db.execute('SELECT difference_type,count(*) FROM differences GROUP BY difference_type')),
             'linking': linking, 'original_coverage': store.metadata.get('coverage'),
             'original_verification': store.metadata.get('verification'), 'original_overall': store.metadata.get('status'),
+            'original_probe_summary': store.metadata.get('summary'), 'original_matrix': store.metadata.get('matrix'),
+            'original_quality_gate': store.metadata.get('quality_gate'),
             'notice': 'Display statistics only. Dynamic exports are not public API. Original compatibility, coverage and verification are unchanged. Counts marked UNKNOWN lack sufficient evidence; observed counts are partial. Groups retain distinct consumers and original outcomes.'}
 
 

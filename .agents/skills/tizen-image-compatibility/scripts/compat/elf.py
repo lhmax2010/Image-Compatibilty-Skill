@@ -1,6 +1,7 @@
 """ELF extraction using binutils; raw readelf output remains authoritative."""
 from __future__ import annotations
 
+from collections import Counter
 import re
 from pathlib import Path
 from typing import Any
@@ -8,6 +9,37 @@ from .core import Tools
 
 HEADER_KEYS = {'Class': 'class', 'Data': 'endianness', 'OS/ABI': 'osabi',
                'ABI Version': 'abi_version', 'Type': 'type', 'Machine': 'machine', 'Flags': 'flags'}
+ELF_INVENTORY_REVISION = 2
+
+
+def arm_inventory(obj, text, complete, relocations_requested):
+    """Record observed ARM requirements without inferring hardware support."""
+    attrs = obj['arm_attributes']
+    stack = re.search(r'^\s*GNU_STACK\s+(?:0x[0-9a-fA-F]+\s+){5}([RWE ]+)\s+0x', text, re.M)
+    relocations = Counter()
+    advertised = 0
+    for line in text.splitlines():
+        header = re.match(r"Relocation section '.+' at offset .* contains (\d+) entr(?:y|ies):", line)
+        if header:
+            advertised += int(header[1])
+        row = re.match(r'^\s*[a-fA-F0-9]+\s+[a-fA-F0-9]+\s+(R_ARM_[\w]+)\b', line)
+        if row:
+            relocations[row[1]] += 1
+    count_verified = advertised == sum(relocations.values()) and (
+        advertised > 0 or re.search(r'^There are no relocations in this file\.', text, re.M))
+    return {'attributes': 'OBSERVED' if attrs else 'UNKNOWN',
+            'arm_isa': attrs.get('Tag_ARM_ISA_use'), 'thumb_isa': attrs.get('Tag_THUMB_ISA_use'),
+            'cpu_profile': attrs.get('Tag_CPU_arch_profile'),
+            'stack_alignment_needed': attrs.get('Tag_ABI_align_needed'),
+            'stack_alignment_preserved': attrs.get('Tag_ABI_align_preserved'),
+            'gnu_stack_flags': ''.join(stack[1].split()) if stack else None,
+            'unwind_sections': obj['unwind_sections'], 'tls_segments': obj['tls'],
+            'tls_symbols_observed': sum(s['type'] == 'TLS' for s in obj['imports'] + obj['exports']),
+            'relocations': dict(sorted(relocations.items())),
+            'tls_relocations': sorted(r for r in relocations if '_TLS_' in r),
+            'relocation_status': 'NOT_EXECUTED' if not relocations_requested else
+            'COMPLETE' if complete and count_verified else 'UNKNOWN',
+            'hardware_assessment': 'UNVERIFIED'}
 
 
 def parse_readelf(text: str) -> dict[str, Any]:
@@ -148,6 +180,9 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str) -> dict[str, 
             and all(obj.get(k) for k in ('class', 'endianness', 'type'))
             and 'Dynamic section at offset' in result['stdout'])
         obj['resolution_metadata_evidence'] = obj['evidence'] if obj['resolution_metadata_complete'] else []
+        if obj.get('machine') == 'ARM':
+            obj['arm_inventory'] = arm_inventory(obj, result['stdout'], obj['complete'] and not result['stderr'].strip()
+                                                  and not result.get('stderr_truncated'), mode != 'quick')
         if not obj['complete']:
             obj['error'] = result['error'] or result['stderr'] or 'Incomplete ELF parse'
     else:
@@ -183,7 +218,7 @@ def arm_abi(obj: dict[str, Any]) -> dict[str, Any]:
     # Missing attributes do not prove the base PCS; hand assembly often omits them.
     float_abi = 'hard' if bits & 0x400 else 'soft' if bits & 0x200 else None
     attr_float = 'hard' if vfp == 'VFP registers' else 'soft' if vfp == 'Base AAPCS' else None
-    conflict = bool(float_abi and attr_float and float_abi != attr_float)
+    conflict = bits & 0x600 == 0x600 or bool(float_abi and attr_float and float_abi != attr_float)
     return {'eabi': (bits >> 24) or None, 'float': float_abi or attr_float,
             'vfp_args': vfp, 'cpu_arch': attrs.get('Tag_CPU_arch'), 'conflict': conflict, 'pcs': 'vfp' if (float_abi or attr_float) == 'hard' else 'base' if (float_abi or attr_float) == 'soft' else None,
             'fp_arch': attrs.get('Tag_FP_arch')}

@@ -15,6 +15,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -35,7 +36,8 @@ static void *worker(void *arg) {
     assert(pthread_mutex_unlock(&mutex) == 0);
     return NULL;
 }
-int main(void) {
+int main(int argc, char **argv) {
+    if (argc == 2 && strcmp(argv[1], "--compat-child") == 0) return 23;
     void *p = NULL;
     assert(posix_memalign(&p, 64, 128) == 0 && (uintptr_t)p % 64 == 0);
     memset(p, 1, 128); free(p);
@@ -49,11 +51,24 @@ int main(void) {
     assert(sem_post(&sem) == 0 && sem_wait(&sem) == 0 && sem_destroy(&sem) == 0);
     assert(signal(SIGUSR1, handler) != SIG_ERR && raise(SIGUSR1) == 0 && caught == SIGUSR1);
     void *dl = dlopen(NULL, RTLD_NOW); assert(dl && dlsym(dl, "malloc")); assert(dlclose(dl) == 0);
-    FILE *f = tmpfile(); assert(f); assert(fwrite("abc", 1, 3, f) == 3);
+    /* TMPDIR is supplied by the authorized harness, or the isolated guest uses /tmp. */
+    const char *directory = getenv("TMPDIR");
+    if (!directory || !*directory) directory = "/tmp";
+    char temporary[4096];
+    int length = snprintf(temporary, sizeof(temporary), "%s/compat-probe-XXXXXX", directory);
+    assert(length > 0 && (size_t)length < sizeof(temporary));
+    int fd = mkstemp(temporary); assert(fd >= 0);
+    struct stat info; assert(fstat(fd, &info) == 0 && (info.st_mode & 077) == 0);
+    assert(unlink(temporary) == 0);
+    FILE *f = fdopen(fd, "w+"); assert(f); assert(fwrite("abc", 1, 3, f) == 3);
     rewind(f); char buf[4] = {0}; assert(fread(buf, 1, 3, f) == 3 && strcmp(buf, "abc") == 0); fclose(f);
     int pair[2]; assert(socketpair(AF_UNIX, SOCK_STREAM, 0, pair) == 0);
     assert(write(pair[0], "a", 1) == 1 && read(pair[1], buf, 1) == 1 && buf[0] == 'a'); close(pair[0]); close(pair[1]);
-    pid_t pid = fork(); assert(pid >= 0); if (!pid) _exit(23);
+    pid_t pid = fork(); assert(pid >= 0);
+    if (!pid) {
+        execl(argv[0], argv[0], "--compat-child", (char *)NULL);
+        _exit(126);
+    }
     int status; assert(waitpid(pid, &status, 0) == pid && WIFEXITED(status) && WEXITSTATUS(status) == 23);
     struct timespec t; assert(clock_gettime(CLOCK_MONOTONIC, &t) == 0);
     struct timespec delay = {0, 1000000}; assert(nanosleep(&delay, NULL) == 0);

@@ -1,6 +1,6 @@
 ---
 name: tizen-image-compatibility
-description: Compare GCC and LLVM Tizen images or SDKs for external-interface compatibility, audit ABI/API and missing libraries or symbols, investigate compatibility regressions, run cross-compiler probes, and generate evidence-based reports. Supports offline rootfs analysis and explicitly configured target environments.
+description: Compare GCC and LLVM Tizen images or SDKs for external-interface compatibility, audit ABI/API and missing libraries or symbols, identify potentially affected applications and packages from existing reports, and run explicitly configured cross-compiler probes.
 ---
 
 # Tizen Image Compatibility
@@ -89,3 +89,26 @@ For the v1.2 release candidate, distinguish ARM calling-convention conflicts fro
 For report usability work, reuse an existing schema-1.2 report rather than rerunning Static. Run `python3 scripts/enhance_report.py build --input EXISTING_REPORT --output NEW_DIRECTORY` from this skill directory. It streams manifests/results into a disk index, retains all original finding payloads/IDs/statuses, and reconciles original CSV fields, package assessments, group membership and symbol counts. Output must be separate and new; a failed run is retained for inspection, never overwritten automatically.
 
 Run `python3 scripts/enhance_report.py serve --report NEW_DIRECTORY` for the local, read-only browser at `http://127.0.0.1:8765/`. No Internet is required. Explain explicitly that `file://` only provides the static overview/CSV links; interactive package, ELF, symbol and Linking navigation needs the loopback server. Retain the original report/evidence directory. See [report_schema.md](references/report_schema.md) and [packages.md](references/packages.md) for counting contracts. Never interpret display differences, navigation groups or export counts as new compatibility proof. Resource failures stop processing and preserve `run.json`; do not raise limits or retry indefinitely.
+
+## Offline impact analysis (v1.4 RC)
+
+When asked which applications or packages may be affected, use the impact engine. If a validated v1.3 enhanced report already exists, reuse it. For an original schema 1.2 report, first run `enhance_report.py build` into a separate directory. If there is no report, run the authorized static workflow; retain its report and Evidence.
+
+```bash
+SKILL=.agents/skills/tizen-image-compatibility
+python3 "$SKILL/scripts/impact_report.py" build \
+  --input ./reports/enhanced --output ./reports/impact-rc1
+python3 "$SKILL/scripts/impact_report.py" serve \
+  --report ./reports/enhanced --impact ./reports/impact-rc1
+# Open the /impact URL printed by the loopback server.
+```
+
+Start with confirmed static contract impacts, then report possible impacts and unassessed observations with their reason counts. Follow each group through the recorded consumer, package role, original Finding and Evidence. Preserve the original Finding status. A Provider or root package role does not establish that package's compatibility or that all its components are affected.
+
+Historical input without a baseline binding supports inferred associations only. With the corresponding Phase 7A manifests and recorded loader settings, repeat `--replay-root /exact/baseline/executable` for targeted checks. The engine uses both manifests through the existing resolver and requires a matching original candidate Finding. This mode performs no target execution. Evidence or runtime gaps lead to proposed verification, not agent-generated verdicts. An incomplete or changed source needs a new bounded build in a separate directory. See the repository's [release architecture](../../../docs/release-v1.4/01_ARCHITECTURE_AND_FEATURES.md).
+
+## Historical regression and final validation
+
+Use `python3 scripts/history_report.py build --before OLDER_INDEX --after NEWER_INDEX --scope 'RECORDED PRODUCT LINEAGE AND DIRECTION' --output NEW_DIRECTORY` for two comparable, validated reports. `query` reads the result in bounded pages. Mount it through `enhance_report.py serve --report NEWER_INDEX --history NEW_DIRECTORY` at `/history`. An unpaired or disappeared observation is unresolved. A changed original ID requires a unique matching startup Linking context plus the same original requirement and detector before assigning a fixed or introduced risk. Keep before/after Finding IDs and coverage visible.
+
+For target work, provide both SDKs and compiler paths, native references and an authorized adapter. `cross_compilation.extended_runtime_probes: true` adds C++ cross-DSO and cancellation checks. `runtime.repetitions` checks reproducibility and runtime probe `requires` records capability gaps. Use the built-in rootless Podman backend with two preloaded, digest-pinned local images for userspace experiments, or a trusted adapter for a disposable VM/device. Container results do not establish Tizen kernel or hardware equivalence. Details and sample configuration are in [execution.md](references/execution.md) and the [final user guide](../../../docs/final-release/USER_GUIDE.md).

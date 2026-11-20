@@ -37,6 +37,15 @@ def exports(obj: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {symbol['name']: symbol for symbol in obj.get('exports', [])}
 
 
+def runtime_requirements(obj):
+    runtimes = ('libstdc++.', 'libc++.', 'libc++abi.', 'libgcc_s.', 'libunwind.', 'libclang_rt.', 'compiler-rt')
+    imports = ('__cxa_throw', '__cxa_begin_catch', '__cxa_thread_atexit', '__gxx_personality',
+               '_Unwind_', '_ZTI', 'pthread_cancel', 'pthread_setcancelstate')
+    return {'libraries': sorted(n for n in obj.get('needed', []) if n.startswith(runtimes)),
+            'imports': sorted({s['name'] for s in obj.get('imports', []) if s['name'].startswith(imports)}),
+            'unwind_sections': obj.get('unwind_sections', [])}
+
+
 def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
     findings = []
     old, new = index(a['elf_objects']), index(b['elf_objects'])
@@ -62,9 +71,16 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
                     impact='Existing binary consumers may require a different ABI or dynamic loader.'))
         if obj.get('machine') == other.get('machine') == 'ARM':
             old_arm, new_arm = obj.get('arm_abi') or arm_abi(obj), other.get('arm_abi') or arm_abi(other)
+            contradictory = old_arm.get('conflict') or new_arm.get('conflict')
             for key in ('eabi', 'float'):
                 if old_arm.get(key) and new_arm.get(key) and old_arm[key] != new_arm[key]:
-                    findings.append(finding('elf', path, 'ARM ' + key, old_arm[key], new_arm[key], 'INCOMPATIBLE', 'CRITICAL', evidence=ev))
+                    findings.append(finding('elf', path, 'ARM ' + key, old_arm[key], new_arm[key],
+                                            'UNKNOWN' if contradictory else 'INCOMPATIBLE', 'CRITICAL', evidence=ev))
+            before, after = obj.get('arm_inventory'), other.get('arm_inventory')
+            if before != after and (before or after):
+                findings.append(finding('elf', path, 'ARM ISA, TLS, relocations and unwind', before, after,
+                    'UNKNOWN', 'MEDIUM', 'ARM ELF requirement inventory', ev,
+                    'Observed requirements differ or are incomplete. Verify interworking, relocation and unwind on the target.'))
         findings.append(finding('elf', path, 'target ABI metadata',
             {k: obj.get(k) for k in ('class', 'machine', 'endianness', 'arm_abi')},
             {k: other.get(k) for k in ('class', 'machine', 'endianness', 'arm_abi')},
@@ -118,6 +134,12 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
         if obj.get('needed') != other.get('needed'):
             findings.append(finding('linking', path, 'DT_NEEDED', obj.get('needed'), other.get('needed'), 'UNKNOWN', 'MEDIUM', evidence=ev,
                 impact='Runtime implementation/dependency changed; dependency availability is checked separately.'))
+        before_runtime, after_runtime = runtime_requirements(obj), runtime_requirements(other)
+        if before_runtime != after_runtime and any(before_runtime[k] or after_runtime[k] for k in ('libraries', 'imports')):
+            findings.append(finding('compiler_runtime', path, 'C++ runtime boundary requirements', before_runtime, after_runtime,
+                'UNKNOWN', 'MEDIUM', 'ELF runtime requirement inventory', ev,
+                'Runtime names, imports and unwind metadata describe observed requirements.',
+                'Run cross-DSO exception, RTTI, object lifecycle, TLS and cancellation probes on the selected target.'))
         if old_exports_complete and new_exports_complete and all(obj.get(k) == other.get(k) for k in ('exports', 'needed', 'soname', 'machine', 'class')):
             findings.append(finding('abi', path, 'dynamic interface surface', 'collected ELF surface', 'same collected ELF surface',
                 'IDENTICAL', 'INFO', evidence=ev, impact='Symbol-level surface matches; type/layout and behavioral coverage remain separate.'))
@@ -224,14 +246,23 @@ def compare_static(a: dict[str, Any], b: dict[str, Any], config: dict[str, Any])
             if left != right:
                 out.append(finding(dimension, path, key, left, right, 'UNKNOWN',
                     'HIGH' if dimension == 'security' else 'MEDIUM', evidence=evidence(value, other)))
-    old, new = index(a.get('ipc', []), 'name'), index(b.get('ipc', []), 'name')
-    for name, member in old.items():
-        other = new.get(name)
+    old, new = {}, {}
+    for manifest, by_name in ((a, old), (b, new)):
+        for member in manifest.get('ipc', []):
+            by_name.setdefault(member['name'], []).append(member)
+    documents = b.get('ipc_documents')
+    for name, members in old.items():
+        member = members[0]
+        peers = new.get(name, [])
+        other = peers[0] if len(peers) == 1 else None
         if other is None or any(member.get(k) != other.get(k) for k in ('args', 'attributes')):
-            incomplete = any(x['dimension'] in ('filesystem', 'ipc') and x['component'] in ('*', member['path'])
-                             and ('failed' in x['reason'].lower() or 'invalid' in x['reason'].lower() or 'exceeds' in x['reason'].lower()) for x in b['limitations'])
-            out.append(finding('ipc', member['path'], name, member, other, 'UNKNOWN' if incomplete else 'INCOMPATIBLE', 'HIGH',
-                               'D-Bus introspection contract comparison', evidence(member, other or {}), confidence='high'))
+            known_baseline = a.get('ipc_documents', {}).get(member['path']) == 'COMPLETE'
+            known_candidate = isinstance(documents, dict) and (documents.get(other['path']) == 'COMPLETE' if other else
+                b.get('collection_complete') is True and all(status == 'COMPLETE' for status in documents.values()))
+            complete = known_baseline and known_candidate and len(members) == 1 and len(peers) <= 1
+            out.append(finding('ipc', member['path'], name, member, other, 'INCOMPATIBLE' if complete else 'UNKNOWN', 'HIGH',
+                               'D-Bus introspection contract comparison', evidence(member, other or {}),
+                               confidence='high' if complete else 'low'))
     if a['image'].get('os_version') != b['image'].get('os_version'):
         out.append(finding('kernel', 'image', 'OS/SDK provenance', a['image'].get('os_version'), b['image'].get('os_version'), 'UNKNOWN', 'LOW',
             impact='Environment versions differ; do not attribute all findings to GCC versus LLVM.'))

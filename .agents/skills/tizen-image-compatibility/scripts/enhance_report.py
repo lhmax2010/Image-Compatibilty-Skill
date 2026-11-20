@@ -15,11 +15,13 @@ def main():
     browse = sub.add_parser('serve', help='Read-only interactive browser; loopback only, no Internet')
     browse.add_argument('--report', required=True, type=Path)
     browse.add_argument('--port', type=int, default=8765)
+    browse.add_argument('--impact', type=Path, help='Mount a validated v1.4 impact sidecar')
+    browse.add_argument('--history', type=Path, help='Mount a completed historical regression report')
     args = parser.parse_args()
     if args.command == 'build':
         build(args.input, args.output)
     else:
-        serve(args.report, args.port)
+        serve(args.report, args.port, args.impact, args.history)
 
 
 if __name__ == '__main__':

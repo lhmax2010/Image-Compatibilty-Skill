@@ -10,14 +10,14 @@ import xml.etree.ElementTree as ET
 from typing import Any
 
 from .core import VERSION, SCHEMA, Tools, canonical, digest, hash_file, limitation, write_json
-from .elf import collect_elf
+from .elf import ELF_INVENTORY_REVISION, collect_elf
 from .images import Image
 from .packages import collect_package_inventory
 from .source import normalize_text, parse_header
 
 RUNTIMES = re.compile(r'lib(c\+\+|stdc\+\+|gcc|clang_rt|unwind|omp|gomp|atomic|asan|tsan|ubsan|c\.|m\.|pthread|dl\.)')
-HARDWARE = re.compile(r'(lib(EGL|GLES|GL\.|vulkan|drm|wayland|asound)|gstreamer|camera|/dri/)')
-NETWORK = re.compile(r'(lib(ssl|crypto|gnutls|nss)|/ssl/|/NetworkManager/|/connman/|/resolv.conf|/hosts$|/bluetooth/)')
+HARDWARE = re.compile(r'(lib(EGL|GLES|GL\.|vulkan|drm|wayland|asound|avcodec|avformat|swscale|v4l|va\.)|gstreamer|camera|/dri/|/vulkan/|/alsa/)')
+NETWORK = re.compile(r'(lib(ssl|crypto|gnutls|nss|curl|nghttp2)|/ssl/|/NetworkManager/|/connman/|/resolv\.conf$|/hosts$|/bluetooth/|/systemd/network/|/include/(net|netinet|arpa)/)')
 SECURITY = re.compile(r'(selinux|smack|apparmor|seccomp|/security/|/polkit|/sudoers|/passwd$|/group$|/dbus-1/system.d/)')
 
 
@@ -37,7 +37,13 @@ def parse_keys(text: str) -> dict[str, list[str]]:
 
 
 def parse_dbus(text: str) -> list[dict[str, Any]]:
+    # Real introspection files may reference the standard external DTD. ElementTree
+    # never fetches it. Declared entities and internal subsets are unnecessary here.
+    if re.search(r'<!ENTITY\b|<!DOCTYPE[^>]*\[', text, re.IGNORECASE):
+        raise ET.ParseError('D-Bus XML entity declarations are unsupported')
     root = ET.fromstring(text)
+    if root.tag != 'node':
+        raise ET.ParseError('D-Bus introspection requires a root node')
     result = []
     def visit(node: ET.Element, parent: str) -> None:
         name = node.get('name', '')
@@ -53,6 +59,8 @@ def parse_dbus(text: str) -> list[dict[str, Any]]:
         for child in node.findall('node'):
             visit(child, path)
     visit(root, '')
+    if len({member['name'] for member in result}) != len(result):
+        raise ET.ParseError('Ambiguous duplicate D-Bus members')
     return sorted(result, key=lambda x: x['name'])
 
 
@@ -65,7 +73,8 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
         'elf_objects': [], 'public_headers': [], 'packages': [], 'filesystem': [],
         'configurations': [], 'services': [], 'commands': [], 'ipc': [],
         'security_interfaces': [], 'kernel': [], 'hardware': [], 'network': [],
-        'development': [], 'runtime_libraries': [], 'capabilities': [], 'test_results': [], 'limitations': []}
+        'development': [], 'runtime_libraries': [], 'capabilities': [], 'test_results': [], 'limitations': [],
+        'ipc_documents': {}}
     active = set(tools.config['analysis']['modes'])
     elf_jobs = []
     header_failures = []
@@ -85,7 +94,7 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
         limitation('headers', 'Header compilation needs explicit compilers and matching SDK sysroots; lexical API collection is not a compile pass.'),
         limitation('compiler_runtime', 'Runtime-library inventory and ELF exports do not prove C++ ABI, builtin, sanitizer, atomic or OpenMP behavior.'),
         limitation('performance', 'Boot/load time, memory/CPU usage, throughput and stability benchmarks are not built in. Optional binary-size budget only.'),
-        limitation('runtime', 'Built-in C/C++ probes cover a representative subset. UTF-8 locale conversion, fork/exec, timer APIs, futex/epoll/mmap and target-specific Tizen APIs need configured custom probes.')]
+        limitation('runtime', 'Built-in probes cover a representative subset. UTF-8 locales, futex/epoll, hardware and target-specific Tizen APIs need configured probes.')]
     if image.format in ('tar', 'squashfs'):
         m['limitations'].append(limitation('security', 'Archive extraction cannot recover all xattrs, ACLs and original ownership (TAR uid/gid/mode are retained separately).'))
     if image.format == 'rpm-collection':
@@ -95,6 +104,9 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
             metadata['mtime_ns'] = path.lstat().st_mtime_ns
         m['filesystem'].append(metadata)
         kind = metadata['type']
+        is_ipc = '/dbus-1/interfaces/' in virtual and Path(virtual).suffix == '.xml' and kind in ('file', 'symlink')
+        if is_ipc:
+            m['ipc_documents'][virtual] = 'UNKNOWN'
         if kind in ('file', 'symlink') and re.match(r'^/(usr/)?s?bin/[^/]+$', virtual):
             if kind == 'symlink' or int(metadata['mode'], 8) & 0o111:
                 m['commands'].append({'path': virtual, 'target': metadata.get('target')})
@@ -102,7 +114,7 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
             metadata['resolved'] = '/' + image.resolve(virtual).relative_to(image.root).as_posix() if image.resolve(virtual) else None
             # File aliases expose their own public header/config installation paths.
             target = image.resolve(virtual)
-            if target and target.is_file() and ('/include/' in virtual or virtual.startswith('/etc/') or '/systemd/' in virtual):
+            if target and target.is_file() and ('/include/' in virtual or virtual.startswith('/etc/') or '/systemd/' in virtual or is_ipc):
                 path, kind = target, 'file'
             else:
                 if '/include/' in virtual and Path(virtual).suffix in ('.h', '.hpp', '.hh', '.hxx'):
@@ -176,10 +188,11 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
                     m['kernel'].append(entry)
                 if SECURITY.search(virtual):
                     m['security_interfaces'].append(entry)
-                if '/dbus-1/' in virtual and path.suffix == '.xml':
+                if is_ipc:
                     try:
-                        m['ipc'] += [{'path': virtual, **x, 'evidence': [evidence]} for x in parse_dbus(text)]
-                    except ET.ParseError as exc:
+                        m['ipc'] += [{'path': virtual, **x, 'evidence': [evidence]} for x in parse_dbus(raw.decode('utf-8'))]
+                        m['ipc_documents'][virtual] = 'COMPLETE'
+                    except (ET.ParseError, RecursionError, UnicodeError) as exc:
                         m['limitations'].append(limitation('ipc', f'Invalid D-Bus XML: {exc}', virtual))
         except OSError as exc:
             m['limitations'].append(limitation('filesystem', f'Unreadable: {exc.strerror}', virtual))
@@ -187,7 +200,7 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
         m['limitations'].append(limitation('filesystem', f'Directory traversal failed: {error.strerror}', '*'))
     def elf_job(job: tuple[Path, str]) -> dict[str, Any]:
         path, virtual = job
-        key = digest(canonical([VERSION, mode, virtual, hash_file(path), tools.versions.get('readelf'), tools.versions.get('nm')]).encode())
+        key = digest(canonical([VERSION, ELF_INVENTORY_REVISION, mode, virtual, hash_file(path), tools.versions.get('readelf'), tools.versions.get('nm')]).encode())
         cache_file = cache / (key + '.json') if cache else None
         if cache_file and cache_file.exists():
             try:

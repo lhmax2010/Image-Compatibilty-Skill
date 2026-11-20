@@ -6,11 +6,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
+import selectors
 import shutil
 import signal
 import subprocess
 import tempfile
 import threading
+import time
 from typing import Any
 
 VERSION = '1.3.1-phase7a'
@@ -31,8 +34,9 @@ DEFAULTS: dict[str, Any] = {
     'loader': {'environments': {}},
     'debuginfo': {'roots': {}},
     'runtime': {'enabled': False, 'authorized': False, 'timeout_seconds': 60,
-                'environments': {}, 'probes': []},
+                'environments': {}, 'probes': [], 'repetitions': 1},
     'cross_compilation': {'enabled': True, 'c_tests': True, 'cpp_tests': True,
+                          'extended_runtime_probes': False,
                           'sysroots': {}, 'compilers': {}, 'header_limit': 50,
                           'include_dirs': ['usr/include'], 'probes': [], 'builds': {}, 'semantic_headers': False, 'target_abis': {}, 'runtime_objects': {}, 'sdk_package_manifests': {}},
     'performance': {'enabled': False, 'tolerance_percent': 10},
@@ -130,11 +134,25 @@ def validate_config(c: dict[str, Any]) -> None:
                 for x in cc['include_dirs']), 'include_dirs must be sysroot-relative')
     for env, spec in c['runtime']['environments'].items():
         require(env in ('baseline', 'candidate') and isinstance(spec, dict), 'Invalid runtime environment')
-        require(set(spec) <= {'id', 'runner'}, 'Unknown runtime environment key')
         require(isinstance(spec.get('id'), str) and bool(spec['id']), 'Runtime environment needs id')
+        if spec.get('backend') == 'podman':
+            require(set(spec) <= {'backend', 'id', 'image', 'podman', 'storage_root', 'run_root', 'capabilities'}, 'Unknown Podman environment key')
+            require(isinstance(spec.get('image'), str) and re.fullmatch(r'sha256:[a-f0-9]{64}', spec['image']) is not None,
+                    'Podman environment needs an immutable local image ID')
+            require(all(isinstance(spec.get(k), str) and Path(spec[k]).is_absolute() for k in ('podman', 'storage_root', 'run_root')),
+                    'Podman executable and isolated storage paths must be explicit absolute paths')
+            require(spec['storage_root'] != spec['run_root'], 'Podman storage_root must differ from run_root')
+            continue
+        require(set(spec) <= {'id', 'runner', 'capabilities'}, 'Unknown runtime environment key')
         runner = spec.get('runner')
         require(isinstance(runner, list) and bool(runner) and all(isinstance(x, str) for x in runner), 'runner must be argv array')
         require(any('{binary}' in x for x in runner), 'runner must reference {binary}')
+    require(type(c['runtime']['repetitions']) is int and 1 <= c['runtime']['repetitions'] <= 5,
+            'runtime.repetitions must be an integer from 1 to 5')
+    for spec in c['runtime']['environments'].values():
+        capabilities = spec.get('capabilities', [])
+        require(isinstance(capabilities, list) and all(isinstance(tag, str) and re.fullmatch(r'[a-z][a-z0-9_-]{0,63}', tag)
+                                                        for tag in capabilities), 'Invalid runtime capability tags')
     for compiler, build in cc['builds'].items():
         require(compiler in ('gcc', 'clang') and isinstance(build, dict), 'Invalid build provenance')
         require(set(build) <= {'sdk', 'reference_image', 'provenance'}, 'Unknown build provenance key')
@@ -167,7 +185,7 @@ def validate_config(c: dict[str, Any]) -> None:
         require(isinstance(cache, dict), 'Loader cache must be a mapping')
         require(all(isinstance(k, str) and isinstance(v, list) and all(isinstance(p, str) and p.startswith('/') and '..' not in Path(p).parts for p in v) for k, v in cache.items()), 'Loader cache paths must be absolute virtual paths')
     probe_names = [p['name'] for p in cc['probes'] if isinstance(p, dict) and isinstance(p.get('name'), str)]
-    require(len(set(probe_names)) == len(probe_names) and not set(probe_names) & {'c-behavior', 'cpp-behavior'}, 'Compile probe names must be unique and not built-in names')
+    require(len(set(probe_names)) == len(probe_names) and not set(probe_names) & {'c-behavior', 'cpp-behavior', 'cpp-cross-dso', 'cpp-cancel'}, 'Compile probe names must be unique and not built-in names')
     for probe in cc['probes']:
         require(isinstance(probe, dict) and set(probe) <= {'name', 'source', 'language', 'flags'}, 'Invalid compile probe')
         require(all(isinstance(probe.get(k), str) for k in ('name', 'source', 'language')) and probe['language'] in ('c', 'cpp'), 'Probe needs name, source and language')
@@ -175,10 +193,15 @@ def validate_config(c: dict[str, Any]) -> None:
     runtime_names = [p['name'] for p in c['runtime']['probes'] if isinstance(p, dict) and isinstance(p.get('name'), str)]
     require(len(set(runtime_names)) == len(runtime_names), 'Runtime probe names must be unique')
     for probe in c['runtime']['probes']:
-        require(isinstance(probe, dict) and set(probe) <= {'name', 'dimension', 'argv', 'expected_stdout', 'expected_exit'}, 'Invalid runtime probe')
+        require(isinstance(probe, dict) and set(probe) <= {'name', 'dimension', 'argv', 'expected_stdout', 'expected_exit', 'requires'}, 'Invalid runtime probe')
         require(isinstance(probe.get('name'), str) and probe.get('dimension') in DIMENSIONS, 'Runtime probe needs name/dimension')
         require(isinstance(probe.get('argv'), list) and bool(probe['argv']) and all(isinstance(x, str) for x in probe['argv']), 'Runtime probe argv required')
+        command = probe['argv'][0]
+        require(command.startswith('/') and command != '/' and str(Path(command)) == command and '..' not in Path(command).parts
+                and not any(ord(c) < 32 for c in command), 'Runtime probe command must be a normalized absolute target path')
         require(isinstance(probe.get('expected_exit', 0), int) and isinstance(probe.get('expected_stdout', ''), str), 'Invalid runtime expectation')
+        require(isinstance(probe.get('requires', []), list) and all(isinstance(tag, str) and re.fullmatch(r'[a-z][a-z0-9_-]{0,63}', tag)
+                                                                   for tag in probe.get('requires', [])), 'Invalid runtime probe capability requirements')
 
 
 class Tools:
@@ -202,7 +225,7 @@ class Tools:
             text = text.replace(path, label)
         return text
 
-    def run(self, argv: list[str], timeout: float | None = None) -> dict[str, Any]:
+    def run(self, argv: list[str], timeout: float | None = None, *, max_capture_bytes: int | None = None) -> dict[str, Any]:
         timeout = timeout or self.config['analysis']['timeout_seconds']
         env = os.environ.copy()
         env.update({'LC_ALL': 'C', 'TZ': 'UTC'})
@@ -211,13 +234,16 @@ class Tools:
         error = ''
         with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
             try:
-                proc = subprocess.Popen(argv, stdout=stdout, stderr=stderr, env=env, start_new_session=True)
-                try:
-                    code = proc.wait(timeout=timeout)
-                except subprocess.TimeoutExpired:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                    proc.wait()
-                    code, error = -1, 'timeout'
+                if max_capture_bytes is not None:
+                    code, error = self.capture_bounded(argv, env, stdout, stderr, timeout, max_capture_bytes)
+                else:
+                    proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr, env=env, start_new_session=True)
+                    try:
+                        code = proc.wait(timeout=timeout)
+                    except subprocess.TimeoutExpired:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                        proc.wait()
+                        code, error = -1, 'timeout'
             except OSError as exc:
                 code, error = -1, str(exc)
             result: dict[str, Any] = {'argv': [self.normalize(a) for a in argv], 'returncode': code, 'error': error}
@@ -243,6 +269,43 @@ class Tools:
             with self.lock:
                 self.records.append({k: v for k, v in result.items() if k not in ('stdout', 'stderr')})
             return result
+
+    @staticmethod
+    def capture_bounded(argv, env, stdout, stderr, timeout, limit):
+        deadline, remaining = time.monotonic() + timeout, limit
+        with subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                              env=env, start_new_session=True) as proc, selectors.DefaultSelector() as selector:
+            selector.register(proc.stdout, selectors.EVENT_READ, stdout)
+            selector.register(proc.stderr, selectors.EVENT_READ, stderr)
+            error = ''
+            while selector.get_map():
+                wait = deadline - time.monotonic()
+                if wait <= 0:
+                    error = 'timeout'
+                    break
+                for key, _ in selector.select(wait):
+                    block = os.read(key.fd, min(65536, remaining + 1))
+                    if not block:
+                        selector.unregister(key.fileobj)
+                        continue
+                    key.data.write(block[:remaining])
+                    if len(block) > remaining:
+                        error = 'adapter output limit exceeded'
+                        break
+                    remaining -= len(block)
+                if error:
+                    break
+            if not error:
+                try:
+                    return proc.wait(timeout=max(0, deadline - time.monotonic())), ''
+                except subprocess.TimeoutExpired:
+                    error = 'timeout'
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            proc.wait()
+            return -1, error
 
     def discover(self) -> dict[str, Any]:
         for name in ('readelf', 'nm', 'objdump', 'abidiff', 'abi-dumper', 'abi-compliance-checker',

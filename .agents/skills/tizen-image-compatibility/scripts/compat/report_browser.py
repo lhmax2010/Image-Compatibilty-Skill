@@ -12,12 +12,28 @@ from .report_io import evidence_path
 
 
 class ReportBrowser:
-    def __init__(self, output):
+    def __init__(self, output, impact=None, history=None):
         self.output = Path(output).resolve()
         self.overview = json.loads((self.output / 'overview.json').read_text())
         self.source = Path(self.overview['source_directory']).resolve()
+        self.impact = None
+        self.history = None
+        if impact is not None:
+            from .impact_browser import ImpactBrowser
+            self.impact = ImpactBrowser(self.output, impact)
+        if history is not None:
+            from .history import HistoryBrowser
+            self.history = HistoryBrowser(history)
 
     def query(self, route, params):
+        if route.startswith('history/'):
+            if self.history is None:
+                raise KeyError('History report not mounted')
+            return self.history.query(route.removeprefix('history/'), params)
+        if route.startswith('impact/'):
+            if self.impact is None:
+                raise KeyError('Impact sidecar not mounted')
+            return self.impact.query(route.removeprefix('impact/'), params)
         db = sqlite3.connect((self.output / 'report-index.sqlite').as_uri() + '?mode=ro', uri=True)
         db.row_factory = sqlite3.Row
         deadline = time.monotonic() + 20
@@ -107,6 +123,12 @@ class ReportBrowser:
             if p('elf'):
                 where.append('id IN (SELECT finding_id FROM elf_refs WHERE elf_id IN (SELECT id FROM elf WHERE pair_id=?))')
                 args.append(p('elf'))
+        elif route == 'tests':
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='probe_observations'").fetchone():
+                return {'total': 0, 'offset': 0, 'limit': limit, 'rows': [], 'available': False}
+            table, selection, order = 'probe_observations', 'summary', 'n'
+            for key in ('compiler', 'image', 'kind', 'status'):
+                equal(key, key)
         else:
             raise KeyError('Unknown API route')
         clause = ' WHERE ' + ' AND '.join(where) if where else ''
@@ -152,6 +174,14 @@ class ReportBrowser:
                             self.send_error(403)
                             return
                         content_type = 'text/plain; charset=utf-8'
+                    elif browser.impact is not None and route in ('/impact', '/impact.js'):
+                        assets = Path(__file__).resolve().parents[2] / 'assets'
+                        path = assets / ('impact-report.html' if route == '/impact' else 'impact-report.js')
+                        content_type = 'text/html; charset=utf-8' if route == '/impact' else 'text/javascript; charset=utf-8'
+                    elif browser.history is not None and route in ('/history', '/history.js'):
+                        assets = Path(__file__).resolve().parents[2] / 'assets'
+                        path = assets / ('history-report.html' if route == '/history' else 'history-report.js')
+                        content_type = 'text/html; charset=utf-8' if route == '/history' else 'text/javascript; charset=utf-8'
                     else:
                         name = 'index.html' if route == '/' else route.lstrip('/')
                         allowed = {'index.html', 'enhanced-report.js', 'enhanced-report.css', 'overview.json', 'README.md'} | {p.name for p in browser.output.glob('*.csv')}
@@ -188,10 +218,14 @@ class ReportBrowser:
         return Handler
 
 
-def serve(output, port=8765):
-    browser = ReportBrowser(output)
+def serve(output, port=8765, impact=None, history=None):
+    browser = ReportBrowser(output, impact, history)
     server = ThreadingHTTPServer(('127.0.0.1', port), browser.handler())
     print('Read-only report: http://127.0.0.1:' + str(server.server_port) + '/', flush=True)
+    if impact is not None:
+        print('Impact analysis: http://127.0.0.1:' + str(server.server_port) + '/impact', flush=True)
+    if history is not None:
+        print('Historical regression: http://127.0.0.1:' + str(server.server_port) + '/history', flush=True)
     try:
         server.serve_forever()
     finally:

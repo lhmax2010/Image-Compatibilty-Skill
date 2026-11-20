@@ -100,6 +100,8 @@ Build tests require target ABI, compilation and linking. Header tests require ta
 
 ## ARMv7 primary ABI and supporting runtime objects
 
+The rootless Podman backend is configured separately from the external `runner` example. It requires a preloaded pinned image ID, a trusted local controller, and dedicated storage outside both input images and SDKs. Set `runtime.repetitions` from 1 to 5 and use each custom probe's `requires` tags to declare prerequisites. The built-in C++ cross-DSO probe is opt-in with `cross_compilation.extended_runtime_probes`. A matching external adapter can deploy `{companion}` alongside `{binary}` and must return the deployed `companion_sha256`. See the [final user guide](../../../../docs/final-release/USER_GUIDE.md) for configuration and limits.
+
 Configure the actual SDK ABI with provenance. The following values are examples, **not defaults for all Tizen products**:
 
 ```yaml

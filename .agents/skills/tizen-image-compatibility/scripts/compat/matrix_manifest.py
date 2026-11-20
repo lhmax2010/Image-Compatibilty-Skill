@@ -6,6 +6,14 @@ from .coverage import check, obligation, combined
 from .images import Image
 
 
+def builtin_probes(config, language, assets):
+    probes = [(language + '-behavior', assets / ('behavior.c' if language == 'c' else 'behavior.cpp'), ['-pthread', '-ldl', '-lm'])]
+    if language == 'cpp' and config.get('extended_runtime_probes'):
+        probes += [('cpp-cross-dso', assets / 'cross_dso.cpp', ['-pthread']),
+                   ('cpp-cancel', assets / 'cancel.cpp', ['-pthread'])]
+    return probes
+
+
 def prepare_sdks(manifests, tools):
     cc = tools.config['cross_compilation']; sdks = {}
     for label, manifest in zip(('baseline', 'candidate'), manifests):
@@ -53,6 +61,14 @@ def plan_expected(manifests, tools, assets):
                     'sdk_identity': {'label': sdk_label, 'path': cc['sysroots'].get(sdk_label)},
                     'build_provenance': build.get('provenance'), 'source_identity': {'path': str(source) if source else name, 'sha256': src_hash},
                     'target_abi': cc['target_abis'].get(sdk_label), 'reference_image': build.get('reference_image', 'baseline')}
+        if name == 'cpp-cross-dso':
+            identity['companion_source_sha256'] = hash_file(assets / 'cross_dso_lib.cpp')
+            identity['shared_header_sha256'] = hash_file(assets / 'cross_dso.hpp')
+        if kind == 'runtime' and destination in tools.config['runtime']['environments']:
+            environment = tools.config['runtime']['environments'][destination]
+            identity['target_environment'] = {'id': environment['id'], 'backend': environment.get('backend', 'operator-adapter'),
+                'image': environment.get('image'), 'configuration_sha256': digest(canonical(environment).encode()),
+                'repetitions': tools.config['runtime'].get('repetitions', 1)}
         ident = 'ET-' + digest(canonical(identity).encode())[:24]
         artifact = 'build/probe-' + digest(canonical([compiler, language, name, sdk_label]).encode())[:24] + '.bin' if kind in ('build', 'runtime') and compiler != 'custom' else None
         expected.append(dict(identity, id=ident, legacy_id=legacy_id, image=destination, required_stages=stages,
@@ -70,9 +86,9 @@ def plan_expected(manifests, tools, assets):
                         if language == 'c' and not h['path'].endswith('.h'): continue
                         add(compiler, language, 'header:' + h['path'], 'header', label, label, Path(h['source_path']) if h.get('source_path') else None,
                             compiler + ':' + language + ':header:' + h['path'], ['target_abi', 'compilation', 'reference'])
-            probes = [(language + '-behavior', assets / ('behavior.c' if language == 'c' else 'behavior.cpp'))] if language_enabled else []
-            probes += [(p['name'], Path(p['source'])) for p in cc['probes'] if p['language'] == language]
-            for name, source in probes:
+            probes = builtin_probes(cc, language, assets) if language_enabled else []
+            probes += [(p['name'], Path(p['source']), p.get('flags', [])) for p in cc['probes'] if p['language'] == language]
+            for name, source, _ in probes:
                 add(compiler, language, name, 'build', sdk_label, sdk_label, source, compiler + ':' + language + ':' + name,
                     ['target_abi', 'compilation', 'linking'])
                 for label in ('baseline', 'candidate'):
@@ -106,11 +122,17 @@ def reconcile(expected, tests, matrix):
                 if stage == 'target_abi': value = 'COMPATIBLE' if t.get('target_abi_verification', {}).get('status') == 'COMPATIBLE' else 'UNKNOWN'
                 elif stage in ('compilation', 'linking'):
                     record = build if e['kind'] == 'runtime' else t
-                    value = 'COMPATIBLE' if record.get('success') and record.get('artifact_path') == e['expected_artifact'] else 'UNKNOWN'
+                    key = 'compile_status' if stage == 'compilation' else 'link_status'
+                    if key in record:
+                        value = 'COMPATIBLE' if record[key] == 'SUCCESS' and record.get('artifact_path') == e['expected_artifact'] else 'UNKNOWN'
+                    else:
+                        value = 'COMPATIBLE' if record.get('success') and record.get('artifact_path') == e['expected_artifact'] else 'UNKNOWN'
                     if e['kind'] == 'header': value = t['status'] if t.get('success') is not None else 'UNKNOWN'
                 elif stage == 'artifact':
                     expected_hash = build.get('artifact_sha256') if e['compiler'] != 'custom' else t.get('expected_artifact_sha256')
                     value = 'COMPATIBLE' if expected_hash and t.get('receipt_sha256') == expected_hash else 'UNKNOWN'
+                    if e.get('companion_source_sha256') and (not build.get('companion') or t.get('companion_sha256') != build['companion']['sha256']):
+                        value = 'UNKNOWN'
                 elif stage in ('deployment', 'execution'): value = 'COMPATIBLE' if t.get(stage + '_status') == 'SUCCESS' else 'UNKNOWN'
                 elif stage in ('native_reference', 'reference'): value = 'COMPATIBLE' if t.get('native_reference_valid') else 'UNKNOWN'
                 elif stage == 'behavior': value = t.get('behavior_status', 'UNKNOWN')
@@ -149,5 +171,8 @@ def reconcile(expected, tests, matrix):
             group = [e for e in relevant if e['kind'] == kind]
             cell[field] = combined(e['status'] for e in group)
         cell['behavior_status'] = cell['runtime_status']
-        cell['compile_status'] = 'SUCCESS' if relevant and all(all(e['actual_stage_results'].get(k) in ('COMPATIBLE', 'IDENTICAL') for k in ('compilation',) if k in e['required_stages']) for e in relevant) else 'UNKNOWN'
+        for stage, field in (('compilation', 'compile_status'), ('linking', 'link_status'),
+                             ('deployment', 'deployment_status'), ('execution', 'execution_status')):
+            applicable = [e['actual_stage_results'].get(stage) for e in relevant if stage in e['required_stages']]
+            cell[field] = 'SUCCESS' if applicable and all(v in ('COMPATIBLE', 'IDENTICAL') for v in applicable) else 'UNKNOWN'
     return {'missing': sorted(expected_ids - set(actual)), 'duplicates': sorted(i for i, ts in actual.items() if len(ts) > 1), 'unexpected': unexpected}

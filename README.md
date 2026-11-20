@@ -6,7 +6,7 @@
 
 > 当前版本提供可运行的离线分析、SDK 编译探针和可配置的目标运行适配器。无法完成或证据不足的检查标为 `UNKNOWN`。仓库中的示例全部为合成数据，不代表任何真实 Tizen 版本的兼容性结论。
 
-**当前本地版本 1.2**：修正多提供者符号解析边界，把兼容结论与验证完整度分开；四向矩阵采用执行前生成的预期测试清单；ARMv7 优先验证配置的 SDK ABI 与选定运行库；新增按已安装 RPM 归属的包级 ABI/API/链接报告。详见 [1.2 实现与验证记录](V1_2_VALIDATION.md)。[1.1 问题复现](REVIEW_FINDINGS.md)、[1.1 整改说明](CORRECTNESS_REMEDIATION.md) 和 [1.1 验证记录](VALIDATION_RESULTS.md) 保留为历史记录。尚无真实 Tizen TV 镜像、SDK、设备的端到端验收结果。
+**当前本地交付**包含离线影响侧车、历史回归、ARM 静态检查和可独立查询的编译／运行阶段。真实报告规模和静态 ARM 样本已复核，真实 SDK 四象限和设备验证仍待执行。旧版本更改与验证记录保留在 [1.2 验证记录](V1_2_VALIDATION.md)。 [最终验收](docs/final-release/FINAL_ACCEPTANCE.md)
 
 
 ## 快速开始
@@ -409,3 +409,22 @@ python3 "$SKILL/scripts/enhance_report.py" serve --report /path/to/new/enhanced-
 直接打开 `index.html`（`file://`）仅支持静态概览和 CSV 链接，**完整交互浏览需要上述本机 HTTP 服务**。服务只绑定 `127.0.0.1`，仅提供只读分页查询。证据仍位于原始报告目录，移动增强报告时请保留或同步原始目录位置；不要删除原始报告。
 
 真实报告处理限制：进程树 RSS 3 GiB、新增报告 15 GiB、磁盘剩余至少 100 GiB；可用内存低于 3 GiB 持续 10 秒停止并写入失败证据。不会通过提高限制自动重试。统计采用动态导出表，不等同于 Public API；相同导出数量不证明 ABI 兼容。详见 [设计](V1_3_REPORT_DESIGN.md)、[验证](V1_3_REPORT_VALIDATION.md)、[性能](V1_3_PERFORMANCE.md)和[限制](V1_3_KNOWN_LIMITATIONS.md)。
+
+### v1.4 RC 离线影响分析
+
+已有 v1.3 增强报告可直接复用。如果只有原始 schema 1.2 报告，先按上一节生成增强报告。下面的命令为独立 SQLite 侧车生成影响组、消费者、软件包角色、原 Finding 引用与验证建议。
+
+```bash
+SKILL=.agents/skills/tizen-image-compatibility
+python3 "$SKILL/scripts/impact_report.py" build \
+  --input ./reports/enhanced --output ./reports/impact-rc1
+python3 "$SKILL/scripts/impact_report.py" serve \
+  --report ./reports/enhanced --impact ./reports/impact-rc1
+# 在浏览器打开终端显示的本机 /impact 地址
+```
+
+复用历史数据时，优先核对绑定证据和未知原因。若同源的 Phase 7A manifests 可用，可以重复传入 `--replay-root /bin/app` 以静态解析指定 baseline 根程序。确认直接影响需要基线已满足同一需求、候选原 Finding 明确失败，且重放记录精确吻合。每条结论限定于对应的静态上下文，运行环境和 C++ ABI 行为另需验证。详见 [v1.4 架构与能力](docs/release-v1.4/01_ARCHITECTURE_AND_FEATURES.md)。
+
+## Release 交付
+
+查看 [最终验收](docs/final-release/FINAL_ACCEPTANCE.md) 和 [使用指南](docs/final-release/USER_GUIDE.md)。现有报告可直接生成影响侧车。两个已验证、方向与产品谱系一致的报告可生成历史回归索引。只有显式配置的 GCC/Clang SDK 和已授权的隔离目标才能用于运行矩阵。
