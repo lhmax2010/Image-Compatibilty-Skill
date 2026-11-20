@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import shutil
 import sys
+import tarfile
 import tempfile
 
 from compat.collect import collect
@@ -14,6 +15,7 @@ from compat.compare import advanced_abi, compare_static, finalize
 from compat.core import (DIMENSIONS, SEVERITIES, InfrastructureError, InputError, Tools,
                          finding, load_config, read_manifest)
 from compat.images import Image
+from compat.preparation import identity, prepared_input
 from compat.report import build_results, generate
 from compat.testing import run_matrix
 from compat.matrix_manifest import reconcile
@@ -21,8 +23,8 @@ from compat.matrix_manifest import reconcile
 
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--baseline', type=Path, help='Baseline rootfs, TAR, SquashFS or RPM collection')
-    p.add_argument('--candidate', type=Path, help='Candidate rootfs, TAR, SquashFS or RPM collection')
+    p.add_argument('--baseline', type=Path, help='Baseline rootfs, supported image, prepared bundle or RPM collection')
+    p.add_argument('--candidate', type=Path, help='Candidate rootfs, supported image, prepared bundle or RPM collection')
     p.add_argument('--baseline-manifest', type=Path, help='Reuse collected baseline JSON')
     p.add_argument('--candidate-manifest', type=Path, help='Reuse collected candidate JSON')
     p.add_argument('--mode', choices=('quick', 'static', 'runtime', 'full'), default='static')
@@ -86,20 +88,44 @@ def main(argv: list[str] | None = None) -> int:
         if args.list_tools:
             print(json.dumps(tools.versions, indent=2))
             return 0
-        with tempfile.TemporaryDirectory(prefix='tizen-compat-') as temporary:
+        sdk_sources = {}
+        for side, path in config['cross_compilation']['sysroots'].items():
+            sdk = prepared_input(Path(path).resolve(), config, sdk=True)
+            if sdk:
+                config['cross_compilation']['sysroots'][side] = str(sdk[0])
+                sdk_sources[side] = json.loads(sdk[3].read_text())['source']['sha256']
+        with tempfile.TemporaryDirectory(prefix='tizen-compat-', dir=output) as temporary:
             workspace = Path(temporary)
             tools.aliases[str(workspace)] = '<workspace>'
             roots = None
             if args.baseline_manifest:
                 a, b = read_manifest(args.baseline_manifest), read_manifest(args.candidate_manifest)
-                for manifest_path in (args.baseline_manifest, args.candidate_manifest):
+                for label, manifest_path, manifest in zip(('baseline', 'candidate'),
+                                                           (args.baseline_manifest, args.candidate_manifest), (a, b)):
                     original = manifest_path.parent / 'evidence'
                     if original.is_dir():
                         for item in original.glob('*.txt'):
                             if item.is_file() and not item.is_symlink():
                                 shutil.copyfile(item, tools.raw / item.name)
+                    receipt = manifest['image'].get('extraction_manifest')
+                    if receipt in ('baseline-extraction-manifest.json', 'candidate-extraction-manifest.json'):
+                        original_receipt = manifest_path.parent / receipt
+                        if original_receipt.is_file() and not original_receipt.is_symlink():
+                            name = label + '-extraction-manifest.json'
+                            shutil.copyfile(original_receipt, output / name)
+                            manifest['image']['extraction_manifest'] = name
             else:
                 roots = (Image(args.baseline, workspace, tools, 'baseline'), Image(args.candidate, workspace, tools, 'candidate'))
+                for image, label in zip(roots, ('baseline', 'candidate')):
+                    if image.extraction_manifest and image.extraction_manifest.parent != output:
+                        shutil.copyfile(image.extraction_manifest, output / (label + '-extraction-manifest.json'))
+                    if label in sdk_sources and args.mode in ('full', 'runtime'):
+                        if image.extraction_manifest:
+                            runtime_source = json.loads(image.extraction_manifest.read_text())['source']['sha256']
+                        else:
+                            runtime_source = identity(image.source, config)['sha256']
+                        if runtime_source != sdk_sources[label]:
+                            raise InputError(f'ROOTSTRAP_SOURCE_MISMATCH: {label} Rootstrap belongs to a different source image')
                 a, b = (collect(image, config['comparison'][label + '_name'], label, args.mode, tools, workspace, args.cache)
                         for image, label in zip(roots, ('baseline', 'candidate')))
             findings = compare_static(a, b, config)
@@ -142,7 +168,7 @@ def main(argv: list[str] | None = None) -> int:
             fail |= config['ci']['strict'] and (any(f['status'] == 'UNKNOWN' for f in findings) or any(c['unknown'] for c in result['coverage'].values()))
             fail |= result['quality_gate']['status'] == 'FAIL'
             return 1 if fail else 0
-    except (InputError, ValueError) as exc:
+    except (InputError, ValueError, tarfile.TarError) as exc:
         print(f'Input error: {exc}', file=sys.stderr)
         return 2
     except (OSError, InfrastructureError) as exc:

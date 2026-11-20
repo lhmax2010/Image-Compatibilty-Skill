@@ -31,6 +31,8 @@ DEFAULTS: dict[str, Any] = {
                  'workers': 4, 'timeout_seconds': 60, 'max_text_bytes': 4194304,
                  'max_extract_bytes': 107374182400, 'max_extract_files': 2000000},
     'tools': {},
+    'preparation': {'platform_partition': 'pltf_t.img', 'xz_memory_mib': 256,
+                    'adapter_timeout_seconds': 1800, 'vdfs_adapter': {}},
     'loader': {'environments': {}},
     'debuginfo': {'roots': {}},
     'runtime': {'enabled': False, 'authorized': False, 'timeout_seconds': 60,
@@ -122,6 +124,20 @@ def validate_config(c: dict[str, Any]) -> None:
     require(all(k in DIMENSIONS and v in SEVERITIES for k, v in c['severity_overrides'].items()),
             'severity_overrides must map dimension to severity')
     require(all(isinstance(v, str) or v is False for v in c['tools'].values()), 'Tool must be path or false')
+    prep = c['preparation']
+    require(type(prep['xz_memory_mib']) is int and 1 <= prep['xz_memory_mib'] <= 1024, 'Invalid XZ memory cap')
+    require(type(prep['adapter_timeout_seconds']) is int and 1 <= prep['adapter_timeout_seconds'] <= 7200,
+            'Invalid VDFS adapter timeout')
+    adapter = prep['vdfs_adapter']
+    if adapter:
+        command = adapter.get('command')
+        version = adapter.get('version_args', ['--version'])
+        require(set(adapter) <= {'command', 'version_args'} and isinstance(command, list) and command
+                and all(isinstance(arg, str) and '\0' not in arg for arg in command)
+                and Path(command[0]).is_absolute() and all(command[1:].count(p) == 1 for p in ('{input}', '{output}', '{receipt}'))
+                and Path(command[0]).name not in ('sudo', 'doas', 'pkexec', 'mount', 'losetup', 'chroot')
+                and isinstance(version, list) and all(isinstance(v, str) and '\0' not in v for v in version),
+                'VDFS adapter needs an absolute host executable and separate {input}, {output}, {receipt} arguments')
     cc = c['cross_compilation']
     require(set(cc['sysroots']) <= {'baseline', 'candidate'}, 'Unknown sysroot image key')
     require(all(isinstance(v, str) for v in cc['sysroots'].values()), 'Sysroots must be paths')
@@ -225,19 +241,20 @@ class Tools:
             text = text.replace(path, label)
         return text
 
-    def run(self, argv: list[str], timeout: float | None = None, *, max_capture_bytes: int | None = None) -> dict[str, Any]:
+    def run(self, argv: list[str], timeout: float | None = None, *, max_capture_bytes: int | None = None,
+            cwd: Path | None = None) -> dict[str, Any]:
         timeout = timeout or self.config['analysis']['timeout_seconds']
         env = os.environ.copy()
         env.update({'LC_ALL': 'C', 'TZ': 'UTC'})
         for key in ('CPATH', 'C_INCLUDE_PATH', 'CPLUS_INCLUDE_PATH', 'LIBRARY_PATH', 'LD_PRELOAD', 'LD_LIBRARY_PATH'):
             env.pop(key, None)
         error = ''
-        with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+        with tempfile.TemporaryFile(dir=self.raw) as stdout, tempfile.TemporaryFile(dir=self.raw) as stderr:
             try:
                 if max_capture_bytes is not None:
-                    code, error = self.capture_bounded(argv, env, stdout, stderr, timeout, max_capture_bytes)
+                    code, error = self.capture_bounded(argv, env, stdout, stderr, timeout, max_capture_bytes, cwd)
                 else:
-                    proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr, env=env, start_new_session=True)
+                    proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr, env=env, cwd=cwd, start_new_session=True)
                     try:
                         code = proc.wait(timeout=timeout)
                     except subprocess.TimeoutExpired:
@@ -271,10 +288,10 @@ class Tools:
             return result
 
     @staticmethod
-    def capture_bounded(argv, env, stdout, stderr, timeout, limit):
+    def capture_bounded(argv, env, stdout, stderr, timeout, limit, cwd=None):
         deadline, remaining = time.monotonic() + timeout, limit
         with subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              env=env, start_new_session=True) as proc, selectors.DefaultSelector() as selector:
+                              env=env, cwd=cwd, start_new_session=True) as proc, selectors.DefaultSelector() as selector:
             selector.register(proc.stdout, selectors.EVENT_READ, stdout)
             selector.register(proc.stderr, selectors.EVENT_READ, stderr)
             error = ''

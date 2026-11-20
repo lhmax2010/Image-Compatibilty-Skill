@@ -137,6 +137,8 @@ Cline 应使用**实际加载的 `SKILL.md` 所在目录**定位脚本，不应�
 
 ## 输入格式与模式
 
+烧录归档先通过 `prepare_image.py --inspect` 核对封装。普通 Rootfs TAR/TAR.GZ 继续直接传入 `tizen_compat.py`。如果识别到 GPT、XZ 和 VDFS，准备层会记录分区边界和提取状态。VDFS 需要已配置的可信提取器，或使用有构建凭据的替代输入。 [镜像准备与适配器配置](.agents/skills/tizen-image-compatibility/references/image_preparation.md)
+
 | 输入 | 支持情况 |
 |---|---|
 | 已解包 rootfs 目录 | 支持，主要使用方式 |

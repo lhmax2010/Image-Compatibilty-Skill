@@ -237,7 +237,8 @@ def compare_static(a: dict[str, Any], b: dict[str, Any], config: dict[str, Any])
                 other = new.get(virtual_alias(path, index(b.get('filesystem', []))))
             if other is None:
                 # Incomplete collection must not manufacture removals.
-                missing = not any(x['component'] in (path, '*') and x['dimension'] == 'filesystem' for x in b['limitations'])
+                missing = b.get('collection_complete') is True and not any(
+                    x['component'] in (path, '*') and x['dimension'] == 'filesystem' for x in b['limitations'])
                 status = 'INCOMPATIBLE' if missing and dimension == 'commands' else 'UNKNOWN'
                 out.append(finding(dimension, path, key + ' availability', path, None, status, 'HIGH', evidence=value.get('evidence')))
                 continue

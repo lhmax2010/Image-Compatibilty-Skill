@@ -9,29 +9,45 @@ import tarfile
 from typing import Any, Iterator
 
 from .core import InputError, InfrastructureError, Tools
+from .flash import PROBE_BYTES, PreparationError, identify
+from .preparation import MANIFEST, _stamp, prepare, prepared_input, tar_payload
 
 
 class Image:
-    def __init__(self, source: Path, workspace: Path, tools: Tools, label: str):
+    def __init__(self, source: Path, workspace: Path, tools: Tools, label: str, *, prepare_input=True, sdk=False):
         self.source = source.resolve()
         self.root = self.source
         self.format = 'directory'
         self.metadata: dict[str, dict[str, Any]] = {}
         self.errors: list[OSError] = []
+        self.extraction_manifest: Path | None = None
         if not self.source.exists():
             raise InputError(f'Image not found: {source}')
         if self.source.is_dir():
             if (self.source / 'oci-layout').exists():
                 raise InputError('OCI layered layout is not a rootfs. Export/unpack it with an OCI-aware tool first (apply whiteouts), then pass the rootfs directory.')
+            prepared = prepared_input(self.source, tools.config, sdk=sdk) if prepare_input else None
+            if prepared:
+                self.root, self.metadata, self.format, self.extraction_manifest = prepared
+        elif not self.source.is_file():
+            raise InputError('Image input must be a directory or regular file')
         elif tarfile.is_tarfile(self.source):
             self.format = 'tar'
             self.root = workspace / label
             self.root.mkdir()
+            self.archive_stamp = _stamp(self.source)
             self._extract_tar(tools)
+            if prepare_input:
+                try:
+                    flash = tar_payload(self)
+                except PreparationError:
+                    flash = True  # Let preparation record the ambiguous payload and fail.
+                if flash:
+                    self._prepare(workspace, tools, label, staged=self)
         else:
             with self.source.open('rb') as stream:
-                magic = stream.read(4)
-            if magic == b'hsqs':
+                prefix = stream.read(PROBE_BYTES)
+            if prefix.startswith(b'hsqs'):
                 self.format = 'squashfs'
                 binary = tools.path('unsquashfs')
                 if not binary:
@@ -40,16 +56,32 @@ class Image:
                 result = tools.run([binary, '-no-progress', '-no-xattrs', '-d', str(self.root), str(self.source)])
                 if result['returncode']:
                     raise InfrastructureError(f'SquashFS extraction failed: {result["stderr"]}')
-            elif self.source.suffix == '.rpm':
+            elif prepare_input and identify(prefix) in ('gpt', 'xz', 'vdfs'):
+                self._prepare(workspace, tools, label)
+            elif prefix.startswith(b'\xed\xab\xee\xdb'):
                 self.format = 'rpm-collection'
                 self.root = workspace / label
                 self.root.mkdir()
-                shutil.copyfile(self.source, self.root / self.source.name)
+                name = self.source.name if self.source.suffix == '.rpm' else self.source.name + '.rpm'
+                shutil.copyfile(self.source, self.root / name)
             else:
                 raise InputError(f'Unsupported image format: {source}. For EXT4 use an isolated guest or read-only userspace extractor; for OCI export a merged rootfs. Supply the extracted directory or a rootfs TAR. No privileged mount is performed.')
         if self.root.is_dir() and any(self.root.glob('*.rpm')) and not (self.root / 'etc').exists():
             self.format = 'rpm-collection'
         tools.aliases[str(self.root)] = f'<{label}-rootfs>'
+
+    def _prepare(self, workspace, tools, label, *, staged=None):
+        bundle = workspace / (label + '-prepared')
+        bundle.mkdir()
+        report_marker = tools.output / (label + '-extraction-manifest.json')
+        try:
+            prepare(self.source, bundle, tools, staged=staged)
+            self.root, self.metadata, self.format, _ = prepared_input(bundle, tools.config)
+        finally:
+            marker = bundle / MANIFEST
+            if marker.is_file():
+                shutil.copyfile(marker, report_marker)
+                self.extraction_manifest = report_marker
 
     def _extract_tar(self, tools: Tools) -> None:
         total = count = 0
