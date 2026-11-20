@@ -75,6 +75,8 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
         'security_interfaces': [], 'kernel': [], 'hardware': [], 'network': [],
         'development': [], 'runtime_libraries': [], 'capabilities': [], 'test_results': [], 'limitations': [],
         'ipc_documents': {}}
+    if getattr(image, 'extraction_manifest', None):
+        m['image']['extraction_manifest'] = label + '-extraction-manifest.json'
     active = set(tools.config['analysis']['modes'])
     elf_jobs = []
     header_failures = []

@@ -35,6 +35,8 @@ python3 "$SKILL/scripts/tizen_compat.py" \
 
 输出目录必须位于源镜像和 SDK 之外。CLI 支持已提取的 Rootfs、TAR/TAR.GZ、SquashFS，以及用于包清单分析的 RPM 集合。EXT4 或分层 OCI 输入先离线准备 Rootfs。通过 `--baseline-manifest` 与 `--candidate-manifest` 可复用两份已采集的清单。
 
+对于含 `platform.img` 的烧录包，先用 `prepare_image.py --inspect` 核对内层封装。VDFS 需要可信宿主机提取器或同构建替代输入。准备完成后，可将状态为 `READY` 的运行时 Rootfs 准备目录传给分析 CLI。 [烧录包准备与适配器配置](.agents/skills/tizen-image-compatibility/references/image_preparation.md)
+
 先读 `summary.md`，再按需打开 `index.html`、`results.json` 和 `findings.csv`。`--fail-on HIGH` 控制不兼容阈值。`--strict` 纳入 UNKNOWN，`ci.minimum_coverage` 单独控制覆盖率。退出码 0 表示未触发配置的门槛。 [状态与 CI](.agents/skills/tizen-image-compatibility/references/severity_rules.md)
 
 ## 影响与历史报告

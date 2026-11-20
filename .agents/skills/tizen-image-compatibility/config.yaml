@@ -15,6 +15,11 @@ analysis:
   max_extract_bytes: 107374182400
   max_extract_files: 2000000
 tools: {} # Example: {readelf: /opt/bin/aarch64-linux-gnu-readelf, abidiff: false}
+preparation:
+  platform_partition: pltf_t.img
+  xz_memory_mib: 256
+  adapter_timeout_seconds: 1800
+  vdfs_adapter: {} # Optional trusted host adapter. See references/image_preparation.md.
 loader:
   environments: {} # Unknown by default; see references/correctness.md before asserting completeness.
 debuginfo:

@@ -20,7 +20,7 @@ def prepare_sdks(manifests, tools):
         path = cc['sysroots'].get(label)
         headers = []
         if path and Path(path).is_dir():
-            sdk = Image(Path(path), tools.output / 'build', tools, label + '-sdk'); sdks[label] = sdk
+            sdk = Image(Path(path), tools.output / 'build', tools, label + '-sdk', sdk=True); sdks[label] = sdk
             for directory in cc['include_dirs']:
                 resolved = sdk.resolve('/' + directory)
                 if resolved and resolved.is_dir():

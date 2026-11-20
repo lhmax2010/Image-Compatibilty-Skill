@@ -14,6 +14,8 @@ Compare baseline consumers on the candidate. Reverse inputs for the other direct
 3. Reuse compatible manifests for static comparisons. For impact or historical reporting, prefer an existing validated enhanced report and retain the original evidence directory.
 4. Review `summary.md`, `results.json`, `findings.csv` and `index.html`. Present confirmed incompatibilities, possible impacts and unknown coverage separately. Exit 0 means the configured CI threshold was not hit.
 
+For Tizen flash packages, run `prepare_image.py --inspect` before selecting an input. Analyze a prepared runtime rootfs only when its extraction manifest is `READY`. VDFS extraction requires a trusted host adapter or a verified same-build replacement. [Image preparation](references/image_preparation.md)
+
 Run from the repository root or assign `SKILL` to the installed Skill directory.
 
 ```bash
