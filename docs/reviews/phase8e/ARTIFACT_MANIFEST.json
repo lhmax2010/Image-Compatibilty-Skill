@@ -1,0 +1,3787 @@
+{
+  "artifact_source": "Phase 8D verified output bytes only",
+  "artifacts": [
+    {
+      "artifact_id": "vd-A-C",
+      "build": {
+        "compile_argv": [
+          "/usr/bin/armv7l-tizen-linux-gnueabi-gcc",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include",
+          "-v",
+          "-H",
+          "-c",
+          "/work/src/base.c",
+          "-o",
+          "/work/bin/A-C.o"
+        ],
+        "include_inputs_count": 31,
+        "include_inputs_sha256": "0f94576023f7cf178b4e39d8db0a99650566594431db6200078e9a3869a3541a",
+        "link_argv": [
+          "/usr/bin/armv7l-tizen-linux-gnueabi-gcc",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include",
+          "-L/work/startfiles",
+          "-L/sysroot/usr/lib",
+          "-L/sysroot/lib",
+          "-Wl,-rpath-link,/sysroot/usr/lib:/sysroot/lib",
+          "-v",
+          "-Wl,-t,-Map=/work/bin/A-C.map",
+          "/work/bin/A-C.o",
+          "-o",
+          "/work/bin/A-C.elf"
+        ],
+        "link_inputs": {
+          "/sysroot/lib/crt1.o": "23a2660af383431d247a7a4f5b217ee21524f1d37464283451ae6a07a5cf72da",
+          "/sysroot/lib/crti.o": "c4153aaf3e858b9737feb747c7e93101451d4a3b1c876d4e47195b85fc565161",
+          "/sysroot/lib/crtn.o": "0bddc306b33424c498730c92c662236fff9deef1d9de91cf37677d9f5594a201",
+          "/sysroot/lib/ld-linux.so.3": "0b1fe895ab844a3dfb04a2ab034a6fca9aeadb570abd49b36bf4be16a676f4df",
+          "/sysroot/lib/libc.so.6": "f5a377a3121928d31111fa3a556a5ffe16014dc75254620bf2257d5ab7c1e4d4",
+          "/sysroot/usr/lib/libc.so": "721499bcba4ba472b53d2b21114d92df6d6927a259ce076a3e6322e0e46ea992",
+          "/sysroot/usr/lib/libc_nonshared.a": "7af01f9870b11b06c1b257e4192cb042ec34b98843744aea86ae8a6c730db684",
+          "/work/bin/A-C.o": "421023d070c9755f808f68c5439bceac8993a403d9b60f2000f6a17cf759d752",
+          "/work/startfiles/crtbegin.o": "e5440145b737d83ae4173bb2cf22d91a1f6271d53303ee2f01d73599450fa55c",
+          "/work/startfiles/crtend.o": "28ba0573957a22b33638778ca402c4616877ee062acacf4207d83d7e427bb310",
+          "/work/startfiles/libgcc.a": "235ba631817e6239b3a0228871d1e948203b1eb0bda67564d46c661dd9a501a0",
+          "/work/startfiles/libgcc_s.so": "d05fc30b89f48f4154bb125978a9e55f68c0eed8aa4faf2084839d2c735eb9e0"
+        },
+        "source_and_object_inputs": {
+          "/work/bin/A-C.o": "421023d070c9755f808f68c5439bceac8993a403d9b60f2000f6a17cf759d752",
+          "/work/src/base.c": "5e9ae07d42581efdf87ebb1e1bee19aaece6f2cf46141628a68b7cad4a6c0714"
+        }
+      },
+      "bundle_path": "vd/A-C.elf",
+      "bytes": 13348,
+      "elf": {
+        "arm_attributes": {
+          "Tag_ABI_FP_denormal": "Needed",
+          "Tag_ABI_FP_exceptions": "Needed",
+          "Tag_ABI_FP_number_model": "IEEE 754",
+          "Tag_ABI_FP_rounding": "Needed",
+          "Tag_ABI_PCS_wchar_t": "4",
+          "Tag_ABI_align_needed": "8-byte",
+          "Tag_ABI_align_preserved": "8-byte, except leaf SP",
+          "Tag_ABI_enum_size": "int",
+          "Tag_ARM_ISA_use": "Yes",
+          "Tag_Advanced_SIMD_arch": "NEONv1",
+          "Tag_CPU_arch": "v7",
+          "Tag_CPU_arch_profile": "Application",
+          "Tag_CPU_name": "\"7-A\"",
+          "Tag_CPU_unaligned_access": "v6",
+          "Tag_FP_arch": "VFPv3",
+          "Tag_THUMB_ISA_use": "Thumb-2"
+        },
+        "class": "ELF32",
+        "eabi": 5,
+        "endianness": "2's complement, little endian",
+        "flags": "0x5000200, Version5 EABI, soft-float ABI",
+        "float_codegen": "softfp",
+        "interpreter": "/lib/ld-linux.so.3",
+        "machine": "ARM",
+        "needed": [
+          "libc.so.6"
+        ],
+        "pcs": "base",
+        "relocations": [
+          {
+            "info_hex": "00000115",
+            "offset_hex": "000116f4",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000216",
+            "offset_hex": "000116e0",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   raise@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000516",
+            "offset_hex": "000116e4",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __libc_start_main@GLIBC_2.34",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000316",
+            "offset_hex": "000116e8",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   printf@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000116",
+            "offset_hex": "000116ec",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000416",
+            "offset_hex": "000116f0",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   abort@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          }
+        ],
+        "role": "exec",
+        "soname": null,
+        "type": "EXEC (Executable file)",
+        "version_definitions": [],
+        "version_requirements": [
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 3,
+            "name": "GLIBC_2.34"
+          },
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 2,
+            "name": "GLIBC_2.4"
+          }
+        ],
+        "versioned_imports": [
+          {
+            "binding": "GLOBAL",
+            "name": "__libc_start_main@GLIBC_2.34",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "abort@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "printf@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "raise@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          }
+        ]
+      },
+      "evidence": {
+        "compile_include_trace_sha256": "d62afbda77669e64b721b2540cf5aed0abfc01487a4a4c7286fd82cc34559847",
+        "compile_receipt_sha256": "897c562cd818bed4c9b14bab8999dbbb3d6d5c8851ad6a940b36313476d963a9",
+        "link_map_sha256": "ee0796eeef0513b77b7ab248ed43ddd1f917032e3220ecde19425757a44d1316",
+        "link_receipt_sha256": "a7882a12dbf311694acc87124c10c1ad353d1781fedbecbbcad5e6180f00cb6c",
+        "link_trace_sha256": "b59a5611602402bd4d01cbbd84ddae4b33c31fd1b39f7d6358f0daef2f1899e0",
+        "readelf_sha256": "81bd1dcf2973d7ce76321a80054203512fb5cc6b7cb318890f6c716b92165938"
+      },
+      "native_reference": "vd",
+      "phase8d_same_bytes": {
+        "build_expected_id": "ET-6a364caf65f96a0d1b4cc16a",
+        "role": "Skill run_matrix artifact"
+      },
+      "purpose": "four_quadrant_base",
+      "run_authorized": false,
+      "runtime_expectation": {
+        "argv": [],
+        "basis": "Phase 8D source and integer arithmetic; target reference unobserved",
+        "exit_code": 0,
+        "purpose": "64-bit division, stdio",
+        "stderr": "",
+        "stdout": "536768647\n"
+      },
+      "runtime_status": "NOT_EXECUTED",
+      "sha256": "8b9a99ab11fff447022618f796ee397cccd21fbaf4d30a29d9561647c3f687fc"
+    },
+    {
+      "artifact_id": "vd-B-CPP",
+      "build": {
+        "compile_argv": [
+          "/usr/bin/armv7l-tizen-linux-gnueabi-g++",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include",
+          "-nostdinc++",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include/c++",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include/c++/armv7l-tizen-linux-gnueabi",
+          "-v",
+          "-H",
+          "-c",
+          "/work/src/base.cpp",
+          "-o",
+          "/work/bin/B-CPP.o"
+        ],
+        "include_inputs_count": 150,
+        "include_inputs_sha256": "06949f5811eaa04060a3184f2ae2f24aa0b07bd6faf3396f4e8d0dcfd603311a",
+        "link_argv": [
+          "/usr/bin/armv7l-tizen-linux-gnueabi-g++",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include",
+          "-nostdinc++",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include/c++",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include/c++/armv7l-tizen-linux-gnueabi",
+          "-L/work/startfiles",
+          "-L/sysroot/usr/lib",
+          "-L/sysroot/lib",
+          "-Wl,-rpath-link,/sysroot/usr/lib:/sysroot/lib",
+          "-v",
+          "-Wl,-t,-Map=/work/bin/B-CPP.map",
+          "/work/bin/B-CPP.o",
+          "-o",
+          "/work/bin/B-CPP.elf"
+        ],
+        "link_inputs": {
+          "/sysroot/lib/crt1.o": "23a2660af383431d247a7a4f5b217ee21524f1d37464283451ae6a07a5cf72da",
+          "/sysroot/lib/crti.o": "c4153aaf3e858b9737feb747c7e93101451d4a3b1c876d4e47195b85fc565161",
+          "/sysroot/lib/crtn.o": "0bddc306b33424c498730c92c662236fff9deef1d9de91cf37677d9f5594a201",
+          "/sysroot/lib/ld-linux.so.3": "0b1fe895ab844a3dfb04a2ab034a6fca9aeadb570abd49b36bf4be16a676f4df",
+          "/sysroot/lib/libc.so.6": "f5a377a3121928d31111fa3a556a5ffe16014dc75254620bf2257d5ab7c1e4d4",
+          "/sysroot/usr/lib/libc.so": "721499bcba4ba472b53d2b21114d92df6d6927a259ce076a3e6322e0e46ea992",
+          "/sysroot/usr/lib/libc_nonshared.a": "7af01f9870b11b06c1b257e4192cb042ec34b98843744aea86ae8a6c730db684",
+          "/sysroot/usr/lib/libm.so": "623397524e5267004c3fe1c7974214ca0272ed7e9052c41666b91d0de99acb7d",
+          "/sysroot/usr/lib/libstdc++.so": "52926e5bed922340320697b451689e51ed7ff45f0099d606c7f7c449a5e58520",
+          "/work/bin/B-CPP.o": "fcf455ba41cbe627050dabf07370d4f5ae2a253825a2ae0614384a1a79cc0538",
+          "/work/startfiles/crtbegin.o": "e5440145b737d83ae4173bb2cf22d91a1f6271d53303ee2f01d73599450fa55c",
+          "/work/startfiles/crtend.o": "28ba0573957a22b33638778ca402c4616877ee062acacf4207d83d7e427bb310",
+          "/work/startfiles/libgcc.a": "235ba631817e6239b3a0228871d1e948203b1eb0bda67564d46c661dd9a501a0",
+          "/work/startfiles/libgcc_s.so": "d05fc30b89f48f4154bb125978a9e55f68c0eed8aa4faf2084839d2c735eb9e0"
+        },
+        "source_and_object_inputs": {
+          "/work/bin/B-CPP.o": "fcf455ba41cbe627050dabf07370d4f5ae2a253825a2ae0614384a1a79cc0538",
+          "/work/src/base.cpp": "359d05f2acd21d2a8d225ce49d96fc88d8796b6e420db2f6de403e77a26f506e"
+        }
+      },
+      "bundle_path": "vd/B-CPP.elf",
+      "bytes": 30752,
+      "elf": {
+        "arm_attributes": {
+          "Tag_ABI_FP_denormal": "Needed",
+          "Tag_ABI_FP_exceptions": "Needed",
+          "Tag_ABI_FP_number_model": "IEEE 754",
+          "Tag_ABI_FP_rounding": "Needed",
+          "Tag_ABI_PCS_wchar_t": "4",
+          "Tag_ABI_align_needed": "8-byte",
+          "Tag_ABI_align_preserved": "8-byte, except leaf SP",
+          "Tag_ABI_enum_size": "int",
+          "Tag_ARM_ISA_use": "Yes",
+          "Tag_Advanced_SIMD_arch": "NEONv1",
+          "Tag_CPU_arch": "v7",
+          "Tag_CPU_arch_profile": "Application",
+          "Tag_CPU_name": "\"7-A\"",
+          "Tag_CPU_unaligned_access": "v6",
+          "Tag_FP_arch": "VFPv3",
+          "Tag_THUMB_ISA_use": "Thumb-2"
+        },
+        "class": "ELF32",
+        "eabi": 5,
+        "endianness": "2's complement, little endian",
+        "flags": "0x5000200, Version5 EABI, soft-float ABI",
+        "float_codegen": "softfp",
+        "interpreter": "/lib/ld-linux.so.3",
+        "machine": "ARM",
+        "needed": [
+          "libstdc++.so.6",
+          "libm.so.6",
+          "libgcc_s.so.1",
+          "libc.so.6"
+        ],
+        "pcs": "base",
+        "relocations": [
+          {
+            "info_hex": "00000a15",
+            "offset_hex": "0001350c",
+            "section": ".rel.dyn",
+            "symbol_field": "00013360   _ZTISt13runtime_error@GLIBCXX_3.4",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000315",
+            "offset_hex": "00013508",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00001314",
+            "offset_hex": "00013300",
+            "section": ".rel.dyn",
+            "symbol_field": "00013300   _ZTVN10__cxxabiv117__class_type_infoE@CXXABI_1.3",
+            "type": "R_ARM_COPY"
+          },
+          {
+            "info_hex": "00002414",
+            "offset_hex": "00013330",
+            "section": ".rel.dyn",
+            "symbol_field": "00013330   _ZTVN10__cxxabiv120__si_class_type_infoE@CXXABI_1.3",
+            "type": "R_ARM_COPY"
+          },
+          {
+            "info_hex": "00000a14",
+            "offset_hex": "00013360",
+            "section": ".rel.dyn",
+            "symbol_field": "00013360   _ZTISt13runtime_error@GLIBCXX_3.4",
+            "type": "R_ARM_COPY"
+          },
+          {
+            "info_hex": "00001e16",
+            "offset_hex": "00013480",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _Znwj@GLIBCXX_3.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001816",
+            "offset_hex": "00013484",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZSt17__throw_bad_allocv@GLIBCXX_3.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002016",
+            "offset_hex": "00013488",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_begin_catch@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002516",
+            "offset_hex": "0001348c",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_allocate_exception@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000c16",
+            "offset_hex": "00013490",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZSt20__throw_length_errorPKc@GLIBCXX_3.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002116",
+            "offset_hex": "00013494",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   puts@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002616",
+            "offset_hex": "00013498",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEC1EOS4_@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001f16",
+            "offset_hex": "0001349c",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002216",
+            "offset_hex": "000134a0",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZdlPvj@CXXABI_1.3.9",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001416",
+            "offset_hex": "000134a4",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZSt19__throw_logic_errorPKc@GLIBCXX_3.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000516",
+            "offset_hex": "000134a8",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_free_exception@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001516",
+            "offset_hex": "000134ac",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __libc_start_main@GLIBC_2.34",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000616",
+            "offset_hex": "000134b0",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE11_M_capacityEj@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000d16",
+            "offset_hex": "000134b4",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZSt28__throw_bad_array_new_lengthv@GLIBCXX_3.4.29",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000e16",
+            "offset_hex": "000134b8",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_local_dataEv@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000f16",
+            "offset_hex": "000134bc",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   abort@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001b16",
+            "offset_hex": "000134c0",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE7_M_dataEPc@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001c16",
+            "offset_hex": "000134c4",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_set_lengthEj@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001916",
+            "offset_hex": "000134c8",
+            "section": ".rel.plt",
+            "symbol_field": "0001101c   _ZNSt13runtime_errorD1Ev@GLIBCXX_3.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002716",
+            "offset_hex": "000134cc",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE12_Alloc_hiderC1EPcRKS3_@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002816",
+            "offset_hex": "000134d0",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNKSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE7_M_dataEv@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002316",
+            "offset_hex": "000134d4",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_S_copy_charsEPcPKcS7_@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001616",
+            "offset_hex": "000134d8",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_end_cleanup@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001a16",
+            "offset_hex": "000134dc",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __dynamic_cast@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000716",
+            "offset_hex": "000134e0",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE10_M_disposeEv@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000816",
+            "offset_hex": "000134e4",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZSt24__throw_out_of_range_fmtPKcz@GLIBCXX_3.4.20",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001d16",
+            "offset_hex": "000134e8",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   strlen@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001216",
+            "offset_hex": "000134ec",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt13runtime_errorC1ERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000916",
+            "offset_hex": "000134f0",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_end_catch@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001716",
+            "offset_hex": "000134f4",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __gxx_personality_v0@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001016",
+            "offset_hex": "000134f8",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_throw@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001116",
+            "offset_hex": "000134fc",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9_M_createERjj@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000316",
+            "offset_hex": "00013500",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_JUMP_SLOT"
+          }
+        ],
+        "role": "exec",
+        "soname": null,
+        "type": "EXEC (Executable file)",
+        "version_definitions": [],
+        "version_requirements": [
+          {
+            "file": "libgcc_s.so.1",
+            "flags": "none",
+            "index": 10,
+            "name": "GCC_3.5"
+          },
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 7,
+            "name": "GLIBC_2.34"
+          },
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 4,
+            "name": "GLIBC_2.4"
+          },
+          {
+            "file": "libstdc++.so.6",
+            "flags": "none",
+            "index": 9,
+            "name": "GLIBCXX_3.4.20"
+          },
+          {
+            "file": "libstdc++.so.6",
+            "flags": "none",
+            "index": 8,
+            "name": "GLIBCXX_3.4.29"
+          },
+          {
+            "file": "libstdc++.so.6",
+            "flags": "none",
+            "index": 6,
+            "name": "CXXABI_1.3.9"
+          },
+          {
+            "file": "libstdc++.so.6",
+            "flags": "none",
+            "index": 5,
+            "name": "GLIBCXX_3.4.21"
+          },
+          {
+            "file": "libstdc++.so.6",
+            "flags": "none",
+            "index": 3,
+            "name": "CXXABI_1.3"
+          },
+          {
+            "file": "libstdc++.so.6",
+            "flags": "none",
+            "index": 2,
+            "name": "GLIBCXX_3.4"
+          }
+        ],
+        "versioned_imports": [
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNKSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE7_M_dataEv@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt13runtime_errorC1ERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt13runtime_errorD1Ev@GLIBCXX_3.4",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE10_M_disposeEv@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE11_M_capacityEj@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE12_Alloc_hiderC1EPcRKS3_@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_local_dataEv@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_set_lengthEj@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_S_copy_charsEPcPKcS7_@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE7_M_dataEPc@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9_M_createERjj@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEC1EOS4_@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZSt17__throw_bad_allocv@GLIBCXX_3.4",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZSt19__throw_logic_errorPKc@GLIBCXX_3.4",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZSt20__throw_length_errorPKc@GLIBCXX_3.4",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZSt24__throw_out_of_range_fmtPKcz@GLIBCXX_3.4.20",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 9,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZSt28__throw_bad_array_new_lengthv@GLIBCXX_3.4.29",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 8,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZdlPvj@CXXABI_1.3.9",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 6,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_Znwj@GLIBCXX_3.4",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__aeabi_unwind_cpp_pr1@GCC_3.5",
+            "type": "FUNC",
+            "version_file": "libgcc_s.so.1",
+            "version_index": 10,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__cxa_allocate_exception@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__cxa_begin_catch@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__cxa_end_catch@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__cxa_end_cleanup@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__cxa_free_exception@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__cxa_throw@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__dynamic_cast@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__gxx_personality_v0@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__libc_start_main@GLIBC_2.34",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 7,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "abort@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 4,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "puts@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 4,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "strlen@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 4,
+            "visibility": "DEFAULT"
+          }
+        ]
+      },
+      "evidence": {
+        "compile_include_trace_sha256": "a81be4c96d71b83bbca9aec9b622c368a3805b3d30ce3aeb78a67a17aff6731c",
+        "compile_receipt_sha256": "ef579a323282fef80a615296d343d7aa6637b58ddd209f8a30d7464fd89eceb0",
+        "link_map_sha256": "9a8d730a9cda33e0cc48f07c8b3b4996f948e6be15e402cae018589a150e6993",
+        "link_receipt_sha256": "97f09b4177583898cf2ec0aa13c87eb2c48a805e293c39b702fa93f81f388a67",
+        "link_trace_sha256": "18e0b27836c03f544e72fc6f70c366461162a7381af61eb8cd8e4a4999026a51",
+        "readelf_sha256": "f89739c82487eb4a20d1c8213bd31b3e781f51ca4da2aa5174d9ab4b659d69d4"
+      },
+      "native_reference": "vd",
+      "phase8d_same_bytes": {
+        "build_expected_id": "ET-5cdc6d54304c1467ab4df421",
+        "role": "Skill run_matrix artifact"
+      },
+      "purpose": "four_quadrant_base",
+      "run_authorized": false,
+      "runtime_expectation": {
+        "argv": [],
+        "basis": "Static RTTI bytes and the pinned libstdc++ type_info::name rule; target reference unobserved",
+        "exit_code": 0,
+        "purpose": "dynamic_cast, typeid, std::string and std::runtime_error caught by main",
+        "stderr": "",
+        "stdout": "N12_GLOBAL__N_16WidgetE\n"
+      },
+      "runtime_status": "NOT_EXECUTED",
+      "sha256": "e667142e73f25ed285f81f0b6c4f8e681fb375cc3e6c054e5d20950b50c07d73"
+    },
+    {
+      "artifact_id": "vd-C-version-present",
+      "build": {
+        "compile_argv": [
+          "/usr/bin/armv7l-tizen-linux-gnueabi-gcc",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include",
+          "-v",
+          "-H",
+          "-c",
+          "/work/src/version.c",
+          "-o",
+          "/work/bin/C-version-present.o"
+        ],
+        "include_inputs_count": 19,
+        "include_inputs_sha256": "4f342db070e74f8a43e16caa8990b7c8222ff9ed40ec94ed4da91e20bf279d89",
+        "link_argv": [
+          "/usr/bin/armv7l-tizen-linux-gnueabi-gcc",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include",
+          "-L/work/startfiles",
+          "-L/sysroot/usr/lib",
+          "-L/sysroot/lib",
+          "-Wl,-rpath-link,/sysroot/usr/lib:/sysroot/lib",
+          "-v",
+          "-Wl,-t,-Map=/work/bin/C-version-present.map",
+          "/work/bin/C-version-present.o",
+          "-o",
+          "/work/bin/C-version-present.elf"
+        ],
+        "link_inputs": {
+          "/sysroot/lib/crt1.o": "23a2660af383431d247a7a4f5b217ee21524f1d37464283451ae6a07a5cf72da",
+          "/sysroot/lib/crti.o": "c4153aaf3e858b9737feb747c7e93101451d4a3b1c876d4e47195b85fc565161",
+          "/sysroot/lib/crtn.o": "0bddc306b33424c498730c92c662236fff9deef1d9de91cf37677d9f5594a201",
+          "/sysroot/lib/ld-linux.so.3": "0b1fe895ab844a3dfb04a2ab034a6fca9aeadb570abd49b36bf4be16a676f4df",
+          "/sysroot/lib/libc.so.6": "f5a377a3121928d31111fa3a556a5ffe16014dc75254620bf2257d5ab7c1e4d4",
+          "/sysroot/usr/lib/libc.so": "721499bcba4ba472b53d2b21114d92df6d6927a259ce076a3e6322e0e46ea992",
+          "/sysroot/usr/lib/libc_nonshared.a": "7af01f9870b11b06c1b257e4192cb042ec34b98843744aea86ae8a6c730db684",
+          "/work/bin/C-version-present.o": "a885a51018abe6bf5664133da6c04eb662ad1eb4b278d0edf5d12bd0b70a6b6e",
+          "/work/startfiles/crtbegin.o": "e5440145b737d83ae4173bb2cf22d91a1f6271d53303ee2f01d73599450fa55c",
+          "/work/startfiles/crtend.o": "28ba0573957a22b33638778ca402c4616877ee062acacf4207d83d7e427bb310",
+          "/work/startfiles/libgcc.a": "235ba631817e6239b3a0228871d1e948203b1eb0bda67564d46c661dd9a501a0",
+          "/work/startfiles/libgcc_s.so": "d05fc30b89f48f4154bb125978a9e55f68c0eed8aa4faf2084839d2c735eb9e0"
+        },
+        "source_and_object_inputs": {
+          "/work/bin/C-version-present.o": "a885a51018abe6bf5664133da6c04eb662ad1eb4b278d0edf5d12bd0b70a6b6e",
+          "/work/src/version.c": "28af4ed48ea898bc22fa58adbab1d1b90b2445c52f8989c355be78b3c7128712"
+        }
+      },
+      "bundle_path": "vd/C-version-present.elf",
+      "bytes": 9256,
+      "elf": {
+        "arm_attributes": {
+          "Tag_ABI_FP_denormal": "Needed",
+          "Tag_ABI_FP_exceptions": "Needed",
+          "Tag_ABI_FP_number_model": "IEEE 754",
+          "Tag_ABI_FP_rounding": "Needed",
+          "Tag_ABI_PCS_wchar_t": "4",
+          "Tag_ABI_align_needed": "8-byte",
+          "Tag_ABI_align_preserved": "8-byte, except leaf SP",
+          "Tag_ABI_enum_size": "int",
+          "Tag_ARM_ISA_use": "Yes",
+          "Tag_Advanced_SIMD_arch": "NEONv1",
+          "Tag_CPU_arch": "v7",
+          "Tag_CPU_arch_profile": "Application",
+          "Tag_CPU_name": "\"7-A\"",
+          "Tag_CPU_unaligned_access": "v6",
+          "Tag_FP_arch": "VFPv3",
+          "Tag_THUMB_ISA_use": "Thumb-2"
+        },
+        "class": "ELF32",
+        "eabi": 5,
+        "endianness": "2's complement, little endian",
+        "flags": "0x5000200, Version5 EABI, soft-float ABI",
+        "float_codegen": "softfp",
+        "interpreter": "/lib/ld-linux.so.3",
+        "machine": "ARM",
+        "needed": [
+          "libc.so.6"
+        ],
+        "pcs": "base",
+        "relocations": [
+          {
+            "info_hex": "00000115",
+            "offset_hex": "00011554",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000316",
+            "offset_hex": "00011544",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __libc_start_main@GLIBC_2.34",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000416",
+            "offset_hex": "00011548",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   confstr@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000116",
+            "offset_hex": "0001154c",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000216",
+            "offset_hex": "00011550",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   abort@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          }
+        ],
+        "role": "exec",
+        "soname": null,
+        "type": "EXEC (Executable file)",
+        "version_definitions": [],
+        "version_requirements": [
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 3,
+            "name": "GLIBC_2.4"
+          },
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 2,
+            "name": "GLIBC_2.34"
+          }
+        ],
+        "versioned_imports": [
+          {
+            "binding": "GLOBAL",
+            "name": "__libc_start_main@GLIBC_2.34",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "abort@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "confstr@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          }
+        ]
+      },
+      "evidence": {
+        "compile_include_trace_sha256": "2d19b39f686f82d3f8689780743e9c584779c31b960b5b08c2ecd629864d21ac",
+        "compile_receipt_sha256": "7276ace98f3c62ad671cc917afc6b2bf7d7d65d7522e86c96ac57e953c650cf3",
+        "link_map_sha256": "d18529806e174d66b1de6389e79fb148825e814b246b31f07a0663d7ff3a27c1",
+        "link_receipt_sha256": "04b0b4b877d5287d094edf7de8c95b8179eca1db676f5e5005038d9e52a4d0d2",
+        "link_trace_sha256": "72fa7072fdf7ed9888aca81d6586fa1d8727f2c25310d6f730c5638530440099",
+        "readelf_sha256": "7b3b11b04f1c389ba8427ec5a8647571fff32063efa528c35a13a0a59f4b3814"
+      },
+      "native_reference": "vd",
+      "purpose": "auxiliary_not_scheduled",
+      "run_authorized": false,
+      "runtime_expectation": {
+        "argv": [],
+        "basis": "source expectation; unobserved",
+        "exit_code": 0,
+        "purpose": "Explicit confstr@GLIBC_2.4 lookup and _CS_PATH length",
+        "stderr": "",
+        "stdout": ""
+      },
+      "runtime_status": "NOT_EXECUTED",
+      "sha256": "bb99ce69059e76e0564e311906e83ff782381b161b5bc6380a621f4f1fd9c7bd"
+    },
+    {
+      "artifact_id": "vd-C-version-export",
+      "build": {
+        "compile_argv": [
+          "/usr/bin/armv7l-tizen-linux-gnueabi-gcc",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include",
+          "-v",
+          "-H",
+          "-fPIC",
+          "-c",
+          "/work/src/contract.c",
+          "-o",
+          "/work/bin/C-version-export.o"
+        ],
+        "include_inputs_count": 0,
+        "include_inputs_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "link_argv": [
+          "/usr/bin/armv7l-tizen-linux-gnueabi-gcc",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include",
+          "-L/work/startfiles",
+          "-L/sysroot/usr/lib",
+          "-L/sysroot/lib",
+          "-Wl,-rpath-link,/sysroot/usr/lib:/sysroot/lib",
+          "-v",
+          "-Wl,-t,-Map=/work/bin/C-version-export.map",
+          "/work/bin/C-version-export.o",
+          "-shared",
+          "-Wl,--version-script,/work/src/contract.map",
+          "-Wl,-soname,libphase8d_contract.so.1",
+          "-o",
+          "/work/bin/C-version-export.so"
+        ],
+        "link_inputs": {
+          "/sysroot/lib/crti.o": "c4153aaf3e858b9737feb747c7e93101451d4a3b1c876d4e47195b85fc565161",
+          "/sysroot/lib/crtn.o": "0bddc306b33424c498730c92c662236fff9deef1d9de91cf37677d9f5594a201",
+          "/sysroot/lib/ld-linux.so.3": "0b1fe895ab844a3dfb04a2ab034a6fca9aeadb570abd49b36bf4be16a676f4df",
+          "/sysroot/lib/libc.so.6": "f5a377a3121928d31111fa3a556a5ffe16014dc75254620bf2257d5ab7c1e4d4",
+          "/sysroot/usr/lib/libc.so": "721499bcba4ba472b53d2b21114d92df6d6927a259ce076a3e6322e0e46ea992",
+          "/sysroot/usr/lib/libc_nonshared.a": "7af01f9870b11b06c1b257e4192cb042ec34b98843744aea86ae8a6c730db684",
+          "/work/bin/C-version-export.o": "63f9d7602d696e08b9ce7ddcbdef25933dc019a6e12048ea10c99dbba8dca1c7",
+          "/work/startfiles/crtbeginS.o": "4489e988a47c43ea146b65923d84feebcc08f5d301c4002451e90190b4557e5f",
+          "/work/startfiles/crtendS.o": "f2b51d78872b908f15d3ec66b54a64f227d0a3b7748feba9f0da584af0e9373c",
+          "/work/startfiles/libgcc.a": "235ba631817e6239b3a0228871d1e948203b1eb0bda67564d46c661dd9a501a0",
+          "/work/startfiles/libgcc_s.so": "d05fc30b89f48f4154bb125978a9e55f68c0eed8aa4faf2084839d2c735eb9e0"
+        },
+        "source_and_object_inputs": {
+          "/work/bin/C-version-export.o": "63f9d7602d696e08b9ce7ddcbdef25933dc019a6e12048ea10c99dbba8dca1c7",
+          "/work/src/contract.c": "93aa8a90c4b28b07968e3d9aa3ce02355e1ffbf9ac6ca00b57a71d58f1dcc5f4",
+          "/work/src/contract.map": "9db4c42ed5d58870110d6ee23ad5795c35a68af8bbd8906ac4f5493f1d460a42"
+        }
+      },
+      "bundle_path": "vd/C-version-export.so",
+      "bytes": 5988,
+      "elf": {
+        "arm_attributes": {
+          "Tag_ABI_FP_denormal": "Needed",
+          "Tag_ABI_FP_exceptions": "Needed",
+          "Tag_ABI_FP_number_model": "IEEE 754",
+          "Tag_ABI_PCS_wchar_t": "4",
+          "Tag_ABI_align_needed": "8-byte",
+          "Tag_ABI_align_preserved": "8-byte, except leaf SP",
+          "Tag_ABI_enum_size": "int",
+          "Tag_ARM_ISA_use": "Yes",
+          "Tag_Advanced_SIMD_arch": "NEONv1",
+          "Tag_CPU_arch": "v7",
+          "Tag_CPU_arch_profile": "Application",
+          "Tag_CPU_name": "\"7-A\"",
+          "Tag_CPU_unaligned_access": "v6",
+          "Tag_FP_arch": "VFPv3",
+          "Tag_THUMB_ISA_use": "Thumb-2"
+        },
+        "class": "ELF32",
+        "eabi": 5,
+        "endianness": "2's complement, little endian",
+        "flags": "0x5000200, Version5 EABI, soft-float ABI",
+        "float_codegen": "softfp",
+        "interpreter": null,
+        "machine": "ARM",
+        "needed": [
+          "libc.so.6"
+        ],
+        "pcs": "base",
+        "relocations": [
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00001460",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00001464",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "0000158c",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000315",
+            "offset_hex": "0000157c",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __cxa_finalize@GLIBC_2.4",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000415",
+            "offset_hex": "00001580",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   _ITM_deregisterTMCloneTable",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000515",
+            "offset_hex": "00001584",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000615",
+            "offset_hex": "00001588",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   _ITM_registerTMCloneTable",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000316",
+            "offset_hex": "00001574",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_finalize@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000516",
+            "offset_hex": "00001578",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_JUMP_SLOT"
+          }
+        ],
+        "role": "shared_object",
+        "soname": "libphase8d_contract.so.1",
+        "type": "DYN (Shared object file)",
+        "version_definitions": [
+          {
+            "flags": "BASE",
+            "index": 1,
+            "name": "libphase8d_contract.so.1",
+            "parents": []
+          },
+          {
+            "flags": "none",
+            "index": 2,
+            "name": "PHASE8D_1.0",
+            "parents": []
+          }
+        ],
+        "version_requirements": [
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 3,
+            "name": "GLIBC_2.4"
+          }
+        ],
+        "versioned_imports": [
+          {
+            "binding": "WEAK",
+            "name": "__cxa_finalize@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          }
+        ]
+      },
+      "evidence": {
+        "compile_include_trace_sha256": "5c2a4296854fc894c72764b1a7f5e625004c813cbb2848d53de9e9ecf7f12a5c",
+        "compile_receipt_sha256": "1dc04e8c8bff11a8479876fc557d06c69103fa1c12aadb2ab7d825b89f670a78",
+        "link_map_sha256": "995cdba3c64455502d74f6067402c5c4d2c1130ac0d6e78ed52669c2512af44d",
+        "link_receipt_sha256": "3001ab1c638594e01ce0267954cebe43aaeef7b4916640844b9437d5bc3409b3",
+        "link_trace_sha256": "98e012a0e7e8ec9037a298d88a663e5b5884bf156400a40a960fb5d8f9f70900",
+        "readelf_sha256": "98dffc1375768766c628311ecd1f0f38e6aa9a1ba4cae9d6f9f4a1cf1d9d1593"
+      },
+      "native_reference": "vd",
+      "purpose": "auxiliary_not_scheduled",
+      "run_authorized": false,
+      "runtime_expectation": {
+        "argv": null,
+        "basis": "shared object, no process entry",
+        "exit_code": null,
+        "purpose": "Offline versioned DSO export fixture",
+        "stderr": null,
+        "stdout": null
+      },
+      "runtime_status": "NOT_EXECUTED",
+      "sha256": "3f516f393f52e6f108656b5ae549b164948de527dc576bd797e822fdc8f3b572"
+    },
+    {
+      "artifact_id": "vd-D-profile",
+      "build": {
+        "compile_argv": [
+          "/usr/bin/armv7l-tizen-linux-gnueabi-gcc",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include",
+          "-I/sysroot/usr/include/",
+          "-v",
+          "-H",
+          "-c",
+          "/work/src/profile.c",
+          "-o",
+          "/work/bin/D-profile.o"
+        ],
+        "include_inputs_count": 39,
+        "include_inputs_sha256": "4a4410f500a1c3ccb77cfc5faf1691b7e4ccf10f0be9f02d9e7226830d4055f5",
+        "link_argv": [
+          "/usr/bin/armv7l-tizen-linux-gnueabi-gcc",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include",
+          "-I/sysroot/usr/include/",
+          "-L/work/startfiles",
+          "-L/sysroot/usr/lib",
+          "-L/sysroot/lib",
+          "-Wl,-rpath-link,/sysroot/usr/lib:/sysroot/lib",
+          "-v",
+          "-Wl,-t,-Map=/work/bin/D-profile.map",
+          "/work/bin/D-profile.o",
+          "-ltzplatform-config-2.0",
+          "-o",
+          "/work/bin/D-profile.elf"
+        ],
+        "link_inputs": {
+          "/sysroot/lib/crt1.o": "23a2660af383431d247a7a4f5b217ee21524f1d37464283451ae6a07a5cf72da",
+          "/sysroot/lib/crti.o": "c4153aaf3e858b9737feb747c7e93101451d4a3b1c876d4e47195b85fc565161",
+          "/sysroot/lib/crtn.o": "0bddc306b33424c498730c92c662236fff9deef1d9de91cf37677d9f5594a201",
+          "/sysroot/lib/ld-linux.so.3": "0b1fe895ab844a3dfb04a2ab034a6fca9aeadb570abd49b36bf4be16a676f4df",
+          "/sysroot/lib/libc.so.6": "f5a377a3121928d31111fa3a556a5ffe16014dc75254620bf2257d5ab7c1e4d4",
+          "/sysroot/usr/lib/libc.so": "721499bcba4ba472b53d2b21114d92df6d6927a259ce076a3e6322e0e46ea992",
+          "/sysroot/usr/lib/libc_nonshared.a": "7af01f9870b11b06c1b257e4192cb042ec34b98843744aea86ae8a6c730db684",
+          "/sysroot/usr/lib/libtzplatform-config-2.0.so": "18b4a687e1983be93afc205c1d42d92836010e6db66e0e45af1a12e4c8589c6b",
+          "/work/bin/D-profile.o": "8ca7838273b1698461b3ea4be9daf1eff2ea0aaa4241ccc7634778c07cf04939",
+          "/work/startfiles/crtbegin.o": "e5440145b737d83ae4173bb2cf22d91a1f6271d53303ee2f01d73599450fa55c",
+          "/work/startfiles/crtend.o": "28ba0573957a22b33638778ca402c4616877ee062acacf4207d83d7e427bb310",
+          "/work/startfiles/libgcc.a": "235ba631817e6239b3a0228871d1e948203b1eb0bda67564d46c661dd9a501a0",
+          "/work/startfiles/libgcc_s.so": "d05fc30b89f48f4154bb125978a9e55f68c0eed8aa4faf2084839d2c735eb9e0"
+        },
+        "source_and_object_inputs": {
+          "/work/bin/D-profile.o": "8ca7838273b1698461b3ea4be9daf1eff2ea0aaa4241ccc7634778c07cf04939",
+          "/work/src/profile.c": "bc34554a89c23ad1818ed6cf08a535335b3fcbfc7940eeeb32a4a0b6bb40800c"
+        }
+      },
+      "bundle_path": "vd/D-profile.elf",
+      "bytes": 9520,
+      "elf": {
+        "arm_attributes": {
+          "Tag_ABI_FP_denormal": "Needed",
+          "Tag_ABI_FP_exceptions": "Needed",
+          "Tag_ABI_FP_number_model": "IEEE 754",
+          "Tag_ABI_FP_rounding": "Needed",
+          "Tag_ABI_PCS_wchar_t": "4",
+          "Tag_ABI_align_needed": "8-byte",
+          "Tag_ABI_align_preserved": "8-byte, except leaf SP",
+          "Tag_ABI_enum_size": "int",
+          "Tag_ARM_ISA_use": "Yes",
+          "Tag_Advanced_SIMD_arch": "NEONv1",
+          "Tag_CPU_arch": "v7",
+          "Tag_CPU_arch_profile": "Application",
+          "Tag_CPU_name": "\"7-A\"",
+          "Tag_CPU_unaligned_access": "v6",
+          "Tag_FP_arch": "VFPv3",
+          "Tag_THUMB_ISA_use": "Thumb-2"
+        },
+        "class": "ELF32",
+        "eabi": 5,
+        "endianness": "2's complement, little endian",
+        "flags": "0x5000200, Version5 EABI, soft-float ABI",
+        "float_codegen": "softfp",
+        "interpreter": "/lib/ld-linux.so.3",
+        "machine": "ARM",
+        "needed": [
+          "libtzplatform-config-2.0.so.2",
+          "libc.so.6"
+        ],
+        "pcs": "base",
+        "relocations": [
+          {
+            "info_hex": "00000215",
+            "offset_hex": "00011604",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000616",
+            "offset_hex": "000115f4",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __libc_start_main@GLIBC_2.34",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000216",
+            "offset_hex": "000115f8",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000416",
+            "offset_hex": "000115fc",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   tzplatform_getenv@TPC",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000516",
+            "offset_hex": "00011600",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   abort@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          }
+        ],
+        "role": "exec",
+        "soname": null,
+        "type": "EXEC (Executable file)",
+        "version_definitions": [],
+        "version_requirements": [
+          {
+            "file": "libtzplatform-config-2.0.so.2",
+            "flags": "none",
+            "index": 3,
+            "name": "TPC"
+          },
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 4,
+            "name": "GLIBC_2.4"
+          },
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 2,
+            "name": "GLIBC_2.34"
+          }
+        ],
+        "versioned_imports": [
+          {
+            "binding": "GLOBAL",
+            "name": "__libc_start_main@GLIBC_2.34",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "abort@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 4,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "tzplatform_getenv@TPC",
+            "type": "FUNC",
+            "version_file": "libtzplatform-config-2.0.so.2",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          }
+        ]
+      },
+      "evidence": {
+        "compile_include_trace_sha256": "d2d1f0585fbc43c70bded4fddd3b3fb0b8ea5d1ea011522846c3d8a8546e3424",
+        "compile_receipt_sha256": "7efa73c0f21e8f2e8275e1c065cde22d066a7679e18b1bcc1f94dbaacbdc3b6b",
+        "link_map_sha256": "72ff866b2a89408bdabc69183130c0bf4a71e72b81f8eab8fe4a5a1470909945",
+        "link_receipt_sha256": "442f87d01bfddcc862cb961190ed8e1778a660b00f0f4c865fd83d1f266a5cb0",
+        "link_trace_sha256": "4b2c898d6c005a14359acd6e0344e1c7518eee060a476eada2258bd3954f9cb4",
+        "readelf_sha256": "438e4ba231ba11e33252023d71fda680a6b01e723722341eefcbc60d76a5b084"
+      },
+      "native_reference": "vd",
+      "purpose": "auxiliary_not_scheduled",
+      "run_authorized": false,
+      "runtime_expectation": {
+        "argv": [],
+        "basis": "conditional on a correctly configured TZ_SYS_RO_SHARE; unobserved",
+        "exit_code": 0,
+        "purpose": "Read TZ_SYS_RO_SHARE through tzplatform_getenv",
+        "stderr": "",
+        "stdout": ""
+      },
+      "runtime_status": "NOT_EXECUTED",
+      "sha256": "ea226865ed524e25b3d3a8125ad1467168d7f86dace2d8244bb6856e7ddf5cd0"
+    },
+    {
+      "artifact_id": "llvm-A-C",
+      "build": {
+        "compile_argv": [
+          "/usr/bin/clang",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "--no-default-config",
+          "--target=armv7l-tizen-linux-gnueabi",
+          "-resource-dir=/sdk-resource",
+          "--gcc-install-dir=/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0",
+          "-fuse-ld=lld",
+          "--rtlib=compiler-rt",
+          "--unwindlib=libgcc",
+          "-v",
+          "-H",
+          "-c",
+          "/work/src/base.c",
+          "-o",
+          "/work/bin/A-C.o"
+        ],
+        "include_inputs_count": 35,
+        "include_inputs_sha256": "3ee35ff0d31014deb1d20d6a4afe5edf5678f7f694f747805f8c16988372ceb4",
+        "link_argv": [
+          "/usr/bin/clang",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "--no-default-config",
+          "--target=armv7l-tizen-linux-gnueabi",
+          "-resource-dir=/sdk-resource",
+          "--gcc-install-dir=/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0",
+          "-fuse-ld=lld",
+          "--rtlib=compiler-rt",
+          "--unwindlib=libgcc",
+          "-L/work/startfiles",
+          "-L/sysroot/usr/lib",
+          "-L/sysroot/lib",
+          "-Wl,-rpath-link,/sysroot/usr/lib:/sysroot/lib",
+          "-v",
+          "-Wl,-t,-Map=/work/bin/A-C.map",
+          "/work/bin/A-C.o",
+          "-o",
+          "/work/bin/A-C.elf"
+        ],
+        "link_inputs": {
+          "/sdk-resource/lib/linux/clang_rt.crtbegin-arm.o": "cedb5128c8afbe7c2caa0206e968e11f46051ae1cbfb765bf1763bb132b83209",
+          "/sdk-resource/lib/linux/clang_rt.crtend-arm.o": "3f48673c594c8be3cedcd52872381e4c6cbce06b6501bafb48a13ffdbe7084db",
+          "/sdk-resource/lib/linux/libclang_rt.builtins-arm.a": "ad828661712790a52ed34ce71b2244dcc303f2b2b00621b343b19c4724ff1b9a",
+          "/sysroot/lib/ld-linux.so.3": "b011ebe723dc6e8115f4eb44c964817f7d61878e44d6de3a9367e7359b5bf7da",
+          "/sysroot/lib/libc.so.6": "9f2ae4ee0d10374c7681a33b09b5a84dbfca82c3d1bc012edf81483f11202b96",
+          "/sysroot/usr/lib/Scrt1.o": "be32f9a7db99b9d7c5641dc5bb73add91b263811172d706c723120f1c16fc98b",
+          "/sysroot/usr/lib/crti.o": "c4153aaf3e858b9737feb747c7e93101451d4a3b1c876d4e47195b85fc565161",
+          "/sysroot/usr/lib/crtn.o": "0bddc306b33424c498730c92c662236fff9deef1d9de91cf37677d9f5594a201",
+          "/work/bin/A-C.o": "ae4a006e1cf7c62bb645f2f8f6b55744e3f64a75f2e10afb3e5b9868e1b1068a",
+          "/work/startfiles/libgcc_s.so": "904b67964d3e751b9d9213fdb0b7643bf18d5e15294a0fb50782c580610cdb25"
+        },
+        "source_and_object_inputs": {
+          "/work/bin/A-C.o": "ae4a006e1cf7c62bb645f2f8f6b55744e3f64a75f2e10afb3e5b9868e1b1068a",
+          "/work/src/base.c": "5e9ae07d42581efdf87ebb1e1bee19aaece6f2cf46141628a68b7cad4a6c0714"
+        }
+      },
+      "bundle_path": "llvm/A-C.elf",
+      "bytes": 22780,
+      "elf": {
+        "arm_attributes": {
+          "Tag_ABI_FP_denormal": "Needed",
+          "Tag_ABI_FP_exceptions": "Needed",
+          "Tag_ABI_FP_number_model": "IEEE 754",
+          "Tag_ABI_FP_rounding": "Needed",
+          "Tag_ABI_PCS_wchar_t": "4",
+          "Tag_ABI_align_needed": "8-byte",
+          "Tag_ABI_align_preserved": "8-byte, except leaf SP",
+          "Tag_ABI_enum_size": "int",
+          "Tag_ARM_ISA_use": "Yes",
+          "Tag_Advanced_SIMD_arch": "NEONv1",
+          "Tag_CPU_arch": "v7",
+          "Tag_CPU_arch_profile": "Application",
+          "Tag_CPU_name": "\"7-A\"",
+          "Tag_CPU_unaligned_access": "v6",
+          "Tag_FP_arch": "VFPv3",
+          "Tag_THUMB_ISA_use": "Thumb-2"
+        },
+        "class": "ELF32",
+        "eabi": 5,
+        "endianness": "2's complement, little endian",
+        "flags": "0x5000200, Version5 EABI, soft-float ABI",
+        "float_codegen": "softfp",
+        "interpreter": "/lib/ld-linux.so.3",
+        "machine": "ARM",
+        "needed": [
+          "libgcc_s.so.1",
+          "libc.so.6"
+        ],
+        "pcs": "base",
+        "relocations": [
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00020a60",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00020a64",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00020b40",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00030b5c",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000315",
+            "offset_hex": "00020b44",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000415",
+            "offset_hex": "00020b48",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __register_frame_info",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000615",
+            "offset_hex": "00020b4c",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __cxa_finalize@GLIBC_2.4",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000715",
+            "offset_hex": "00020b50",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __deregister_frame_info",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000116",
+            "offset_hex": "00030b7c",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   abort@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000216",
+            "offset_hex": "00030b80",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __libc_start_main@GLIBC_2.34",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000316",
+            "offset_hex": "00030b84",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000416",
+            "offset_hex": "00030b88",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __register_frame_info",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000616",
+            "offset_hex": "00030b8c",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_finalize@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000716",
+            "offset_hex": "00030b90",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __deregister_frame_info",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000816",
+            "offset_hex": "00030b94",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   printf@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          }
+        ],
+        "role": "pie",
+        "soname": null,
+        "type": "DYN (Position-Independent Executable file)",
+        "version_definitions": [],
+        "version_requirements": [
+          {
+            "file": "libgcc_s.so.1",
+            "flags": "none",
+            "index": 4,
+            "name": "GCC_3.5"
+          },
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 2,
+            "name": "GLIBC_2.4"
+          },
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 3,
+            "name": "GLIBC_2.34"
+          }
+        ],
+        "versioned_imports": [
+          {
+            "binding": "GLOBAL",
+            "name": "__aeabi_unwind_cpp_pr0@GCC_3.5",
+            "type": "FUNC",
+            "version_file": "libgcc_s.so.1",
+            "version_index": 4,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "WEAK",
+            "name": "__cxa_finalize@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__libc_start_main@GLIBC_2.34",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "abort@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "printf@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          }
+        ]
+      },
+      "evidence": {
+        "compile_include_trace_sha256": "636f659f12772391e266067e13bd5264ef31df70efa402b880b968d3cf0590e0",
+        "compile_receipt_sha256": "f85390ba67d682d28507e547d09cbf567672b45055d21082728689fee599610b",
+        "link_map_sha256": "f14443cc41c6cc786ccbad29ac63e9b0d86a0970a31752c1c3cfbd3dedb265f9",
+        "link_receipt_sha256": "ed6637951865bb193123a8db8a955e3c6e1ef985c475eab8d981d13f11b23a65",
+        "link_trace_sha256": "d99915592e8c92694f56e291f4e5782ac26c4ed10e8b0b61585c580164dbf39d",
+        "readelf_sha256": "eef722d211bab9d3418026724a032faba352ac9d4760d36271e038303b96201a"
+      },
+      "native_reference": "llvm",
+      "phase8d_same_bytes": {
+        "build_expected_id": "ET-a30c22232ec1fb84befa821d",
+        "role": "Skill run_matrix artifact"
+      },
+      "purpose": "four_quadrant_base",
+      "run_authorized": false,
+      "runtime_expectation": {
+        "argv": [],
+        "basis": "Phase 8D source and integer arithmetic; target reference unobserved",
+        "exit_code": 0,
+        "purpose": "64-bit division, stdio",
+        "stderr": "",
+        "stdout": "536768647\n"
+      },
+      "runtime_status": "NOT_EXECUTED",
+      "sha256": "e4987d1628770f2dfa5f6b13d95fc1ed3cdd235651d3ca26e3812aea41f01606"
+    },
+    {
+      "artifact_id": "llvm-B-CPP",
+      "build": {
+        "compile_argv": [
+          "/usr/bin/clang++",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "--no-default-config",
+          "--target=armv7l-tizen-linux-gnueabi",
+          "-resource-dir=/sdk-resource",
+          "--gcc-install-dir=/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0",
+          "-fuse-ld=lld",
+          "--rtlib=compiler-rt",
+          "--unwindlib=libgcc",
+          "-stdlib=libstdc++",
+          "-nostdinc++",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include/c++",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include/c++/armv7l-tizen-linux-gnueabi",
+          "-v",
+          "-H",
+          "-c",
+          "/work/src/base.cpp",
+          "-o",
+          "/work/bin/B-CPP.o"
+        ],
+        "include_inputs_count": 160,
+        "include_inputs_sha256": "cdad96b907b4f956687f04b2ccd1b0514d7dbbdd6403a8ce354b8d8b4734df43",
+        "link_argv": [
+          "/usr/bin/clang++",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "--no-default-config",
+          "--target=armv7l-tizen-linux-gnueabi",
+          "-resource-dir=/sdk-resource",
+          "--gcc-install-dir=/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0",
+          "-fuse-ld=lld",
+          "--rtlib=compiler-rt",
+          "--unwindlib=libgcc",
+          "-stdlib=libstdc++",
+          "-nostdinc++",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include/c++",
+          "-isystem",
+          "/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0/include/c++/armv7l-tizen-linux-gnueabi",
+          "-L/work/startfiles",
+          "-L/sysroot/usr/lib",
+          "-L/sysroot/lib",
+          "-Wl,-rpath-link,/sysroot/usr/lib:/sysroot/lib",
+          "-v",
+          "-Wl,-t,-Map=/work/bin/B-CPP.map",
+          "/work/bin/B-CPP.o",
+          "-o",
+          "/work/bin/B-CPP.elf"
+        ],
+        "link_inputs": {
+          "/sdk-resource/lib/linux/clang_rt.crtbegin-arm.o": "cedb5128c8afbe7c2caa0206e968e11f46051ae1cbfb765bf1763bb132b83209",
+          "/sdk-resource/lib/linux/clang_rt.crtend-arm.o": "3f48673c594c8be3cedcd52872381e4c6cbce06b6501bafb48a13ffdbe7084db",
+          "/sysroot/lib/ld-linux.so.3": "b011ebe723dc6e8115f4eb44c964817f7d61878e44d6de3a9367e7359b5bf7da",
+          "/sysroot/lib/libc.so.6": "9f2ae4ee0d10374c7681a33b09b5a84dbfca82c3d1bc012edf81483f11202b96",
+          "/sysroot/usr/lib/Scrt1.o": "be32f9a7db99b9d7c5641dc5bb73add91b263811172d706c723120f1c16fc98b",
+          "/sysroot/usr/lib/crti.o": "c4153aaf3e858b9737feb747c7e93101451d4a3b1c876d4e47195b85fc565161",
+          "/sysroot/usr/lib/crtn.o": "0bddc306b33424c498730c92c662236fff9deef1d9de91cf37677d9f5594a201",
+          "/sysroot/usr/lib/libm.so": "3ed8dbce48a46dd38779d7aba07acf90404ae9a6a8ba5e6104577f357136adf1",
+          "/sysroot/usr/lib/libstdc++.so": "871c24ae874b77d767cffff6933886566985326e20fd787bdd9892816284ae53",
+          "/work/bin/B-CPP.o": "ca0bf51e60b1db536568f6a100acb305951717f9ebb3528c8ab5bd848f65a26b",
+          "/work/startfiles/libgcc_s.so": "904b67964d3e751b9d9213fdb0b7643bf18d5e15294a0fb50782c580610cdb25"
+        },
+        "source_and_object_inputs": {
+          "/work/bin/B-CPP.o": "ca0bf51e60b1db536568f6a100acb305951717f9ebb3528c8ab5bd848f65a26b",
+          "/work/src/base.cpp": "359d05f2acd21d2a8d225ce49d96fc88d8796b6e420db2f6de403e77a26f506e"
+        }
+      },
+      "bundle_path": "llvm/B-CPP.elf",
+      "bytes": 30020,
+      "elf": {
+        "arm_attributes": {
+          "Tag_ABI_FP_denormal": "Needed",
+          "Tag_ABI_FP_exceptions": "Needed",
+          "Tag_ABI_FP_number_model": "IEEE 754",
+          "Tag_ABI_FP_rounding": "Needed",
+          "Tag_ABI_PCS_wchar_t": "4",
+          "Tag_ABI_align_needed": "8-byte",
+          "Tag_ABI_align_preserved": "8-byte, except leaf SP",
+          "Tag_ABI_enum_size": "int",
+          "Tag_ARM_ISA_use": "Yes",
+          "Tag_Advanced_SIMD_arch": "NEONv1",
+          "Tag_CPU_arch": "v7",
+          "Tag_CPU_arch_profile": "Application",
+          "Tag_CPU_name": "\"7-A\"",
+          "Tag_CPU_unaligned_access": "v6",
+          "Tag_FP_arch": "VFPv3",
+          "Tag_THUMB_ISA_use": "Thumb-2"
+        },
+        "class": "ELF32",
+        "eabi": 5,
+        "endianness": "2's complement, little endian",
+        "flags": "0x5000200, Version5 EABI, soft-float ABI",
+        "float_codegen": "softfp",
+        "interpreter": "/lib/ld-linux.so.3",
+        "machine": "ARM",
+        "needed": [
+          "libstdc++.so.6",
+          "libm.so.6",
+          "libgcc_s.so.1",
+          "libc.so.6"
+        ],
+        "pcs": "base",
+        "relocations": [
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00022070",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00022074",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "0002207c",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00022080",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00022084",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "0002208c",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00022090",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00022098",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "000220a0",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "000220a4",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "000220a8",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00022194",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "000321b4",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000315",
+            "offset_hex": "00022198",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000415",
+            "offset_hex": "0002219c",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __register_frame_info",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000615",
+            "offset_hex": "000221a0",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __cxa_finalize@GLIBC_2.4",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000715",
+            "offset_hex": "000221a4",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __deregister_frame_info",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000d15",
+            "offset_hex": "000221a8",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   _ZTISt13runtime_error@GLIBCXX_3.4",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00001315",
+            "offset_hex": "000221ac",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   _ZNSt13runtime_errorD1Ev@GLIBCXX_3.4",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00002802",
+            "offset_hex": "00022088",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   _ZTVN10__cxxabiv120__si_class_type_infoE@CXXABI_1.3",
+            "type": "R_ARM_ABS32"
+          },
+          {
+            "info_hex": "00002902",
+            "offset_hex": "00022094",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   _ZTVN10__cxxabiv117__class_type_infoE@CXXABI_1.3",
+            "type": "R_ARM_ABS32"
+          },
+          {
+            "info_hex": "00000116",
+            "offset_hex": "000321c4",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   abort@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000216",
+            "offset_hex": "000321c8",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __libc_start_main@GLIBC_2.34",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000316",
+            "offset_hex": "000321cc",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000416",
+            "offset_hex": "000321d0",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __register_frame_info",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000616",
+            "offset_hex": "000321d4",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_finalize@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000716",
+            "offset_hex": "000321d8",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __deregister_frame_info",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000816",
+            "offset_hex": "000321dc",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_begin_catch@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000916",
+            "offset_hex": "000321e0",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   puts@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000a16",
+            "offset_hex": "000321e4",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_end_catch@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000b16",
+            "offset_hex": "000321e8",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_end_cleanup@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000c16",
+            "offset_hex": "000321ec",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __gxx_personality_v0@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000e16",
+            "offset_hex": "000321f0",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __dynamic_cast@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000f16",
+            "offset_hex": "000321f4",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_allocate_exception@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001016",
+            "offset_hex": "000321f8",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt13runtime_errorC1ERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001116",
+            "offset_hex": "000321fc",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_throw@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001216",
+            "offset_hex": "00032200",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_free_exception@CXXABI_1.3",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001416",
+            "offset_hex": "00032204",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZSt9terminatev@GLIBCXX_3.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001516",
+            "offset_hex": "00032208",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZdlPvj@CXXABI_1.3.9",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001616",
+            "offset_hex": "0003220c",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_local_dataEv@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001716",
+            "offset_hex": "00032210",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE12_Alloc_hiderC1EPcRKS3_@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001816",
+            "offset_hex": "00032214",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZSt19__throw_logic_errorPKc@GLIBCXX_3.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001916",
+            "offset_hex": "00032218",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   strlen@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001a16",
+            "offset_hex": "0003221c",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9_M_createERjj@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001b16",
+            "offset_hex": "00032220",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE7_M_dataEPc@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001c16",
+            "offset_hex": "00032224",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE11_M_capacityEj@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001d16",
+            "offset_hex": "00032228",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNKSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE7_M_dataEv@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001e16",
+            "offset_hex": "0003222c",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_S_copy_charsEPcPKcS7_@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00001f16",
+            "offset_hex": "00032230",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_set_lengthEj@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002016",
+            "offset_hex": "00032234",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE10_M_disposeEv@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002116",
+            "offset_hex": "00032238",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZSt20__throw_length_errorPKc@GLIBCXX_3.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002216",
+            "offset_hex": "0003223c",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZSt28__throw_bad_array_new_lengthv@GLIBCXX_3.4.29",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002316",
+            "offset_hex": "00032240",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZSt17__throw_bad_allocv@GLIBCXX_3.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002416",
+            "offset_hex": "00032244",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _Znwj@GLIBCXX_3.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002516",
+            "offset_hex": "00032248",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEC1EOS4_@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002616",
+            "offset_hex": "0003224c",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev@GLIBCXX_3.4.21",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00002716",
+            "offset_hex": "00032250",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   _ZSt24__throw_out_of_range_fmtPKcz@GLIBCXX_3.4.20",
+            "type": "R_ARM_JUMP_SLOT"
+          }
+        ],
+        "role": "pie",
+        "soname": null,
+        "type": "DYN (Position-Independent Executable file)",
+        "version_definitions": [],
+        "version_requirements": [
+          {
+            "file": "libstdc++.so.6",
+            "flags": "none",
+            "index": 6,
+            "name": "GLIBCXX_3.4"
+          },
+          {
+            "file": "libstdc++.so.6",
+            "flags": "none",
+            "index": 10,
+            "name": "GLIBCXX_3.4.20"
+          },
+          {
+            "file": "libstdc++.so.6",
+            "flags": "none",
+            "index": 7,
+            "name": "GLIBCXX_3.4.21"
+          },
+          {
+            "file": "libstdc++.so.6",
+            "flags": "none",
+            "index": 9,
+            "name": "GLIBCXX_3.4.29"
+          },
+          {
+            "file": "libstdc++.so.6",
+            "flags": "none",
+            "index": 5,
+            "name": "CXXABI_1.3"
+          },
+          {
+            "file": "libstdc++.so.6",
+            "flags": "none",
+            "index": 8,
+            "name": "CXXABI_1.3.9"
+          },
+          {
+            "file": "libgcc_s.so.1",
+            "flags": "none",
+            "index": 4,
+            "name": "GCC_3.5"
+          },
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 2,
+            "name": "GLIBC_2.4"
+          },
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 3,
+            "name": "GLIBC_2.34"
+          }
+        ],
+        "versioned_imports": [
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNKSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE7_M_dataEv@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 7,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt13runtime_errorC1ERKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 7,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt13runtime_errorD1Ev@GLIBCXX_3.4",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 6,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE10_M_disposeEv@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 7,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE11_M_capacityEj@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 7,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE12_Alloc_hiderC1EPcRKS3_@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 7,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_local_dataEv@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 7,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_M_set_lengthEj@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 7,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE13_S_copy_charsEPcPKcS7_@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 7,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE7_M_dataEPc@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 7,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9_M_createERjj@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 7,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEC1EOS4_@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 7,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev@GLIBCXX_3.4.21",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 7,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZSt17__throw_bad_allocv@GLIBCXX_3.4",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 6,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZSt19__throw_logic_errorPKc@GLIBCXX_3.4",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 6,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZSt20__throw_length_errorPKc@GLIBCXX_3.4",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 6,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZSt24__throw_out_of_range_fmtPKcz@GLIBCXX_3.4.20",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 10,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZSt28__throw_bad_array_new_lengthv@GLIBCXX_3.4.29",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 9,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZSt9terminatev@GLIBCXX_3.4",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 6,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZTISt13runtime_error@GLIBCXX_3.4",
+            "type": "OBJECT",
+            "version_file": "libstdc++.so.6",
+            "version_index": 6,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZTVN10__cxxabiv117__class_type_infoE@CXXABI_1.3",
+            "type": "OBJECT",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZTVN10__cxxabiv120__si_class_type_infoE@CXXABI_1.3",
+            "type": "OBJECT",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_ZdlPvj@CXXABI_1.3.9",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 8,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "_Znwj@GLIBCXX_3.4",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 6,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__aeabi_unwind_cpp_pr0@GCC_3.5",
+            "type": "FUNC",
+            "version_file": "libgcc_s.so.1",
+            "version_index": 4,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__cxa_allocate_exception@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__cxa_begin_catch@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__cxa_end_catch@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__cxa_end_cleanup@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "WEAK",
+            "name": "__cxa_finalize@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__cxa_free_exception@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__cxa_throw@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__dynamic_cast@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__gxx_personality_v0@CXXABI_1.3",
+            "type": "FUNC",
+            "version_file": "libstdc++.so.6",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__libc_start_main@GLIBC_2.34",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "abort@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "puts@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "strlen@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          }
+        ]
+      },
+      "evidence": {
+        "compile_include_trace_sha256": "f14f8c2de4bdcf301103723d3fc0a2053304cd1403580eeac762e816ba22cfbd",
+        "compile_receipt_sha256": "1124c5bd7179241cdcf9a07a2c46a724b3ec0878e8de156bc0f1481fc67e0665",
+        "link_map_sha256": "8699e819d0e74625c004f342169438e24361f9c8915333e5236c1a21b299e18b",
+        "link_receipt_sha256": "ba604673d84ceb0f2b0085bb3f024c034339d369abb5e62c12636f01638c9fb0",
+        "link_trace_sha256": "a22bfd1fece94698e1b7fc680d28245b2824b1aab03531ee19740988dba16f0a",
+        "readelf_sha256": "0c41ddb28e078ce950f33b82f32520aa264c65ea7857c1db227de66cf8796963"
+      },
+      "native_reference": "llvm",
+      "phase8d_same_bytes": {
+        "build_expected_id": "ET-fa83a4af8aa6b3cec9868adb",
+        "role": "Skill run_matrix artifact"
+      },
+      "purpose": "four_quadrant_base",
+      "run_authorized": false,
+      "runtime_expectation": {
+        "argv": [],
+        "basis": "Static RTTI bytes and the pinned libstdc++ type_info::name rule; target reference unobserved",
+        "exit_code": 0,
+        "purpose": "dynamic_cast, typeid, std::string and std::runtime_error caught by main",
+        "stderr": "",
+        "stdout": "N12_GLOBAL__N_16WidgetE\n"
+      },
+      "runtime_status": "NOT_EXECUTED",
+      "sha256": "5c1cc3d271e9062291e02c39704f932ed8fe4ad41174816bb929cea27446517c"
+    },
+    {
+      "artifact_id": "llvm-C-version-present",
+      "build": {
+        "compile_argv": [
+          "/usr/bin/clang",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "--no-default-config",
+          "--target=armv7l-tizen-linux-gnueabi",
+          "-resource-dir=/sdk-resource",
+          "--gcc-install-dir=/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0",
+          "-fuse-ld=lld",
+          "--rtlib=compiler-rt",
+          "--unwindlib=libgcc",
+          "-v",
+          "-H",
+          "-c",
+          "/work/src/version.c",
+          "-o",
+          "/work/bin/C-version-present.o"
+        ],
+        "include_inputs_count": 27,
+        "include_inputs_sha256": "fec46ceb122c34802bde2ff22baf4b9dd80c21444b1244b92a25f90faec5c163",
+        "link_argv": [
+          "/usr/bin/clang",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "--no-default-config",
+          "--target=armv7l-tizen-linux-gnueabi",
+          "-resource-dir=/sdk-resource",
+          "--gcc-install-dir=/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0",
+          "-fuse-ld=lld",
+          "--rtlib=compiler-rt",
+          "--unwindlib=libgcc",
+          "-L/work/startfiles",
+          "-L/sysroot/usr/lib",
+          "-L/sysroot/lib",
+          "-Wl,-rpath-link,/sysroot/usr/lib:/sysroot/lib",
+          "-v",
+          "-Wl,-t,-Map=/work/bin/C-version-present.map",
+          "/work/bin/C-version-present.o",
+          "-o",
+          "/work/bin/C-version-present.elf"
+        ],
+        "link_inputs": {
+          "/sdk-resource/lib/linux/clang_rt.crtbegin-arm.o": "cedb5128c8afbe7c2caa0206e968e11f46051ae1cbfb765bf1763bb132b83209",
+          "/sdk-resource/lib/linux/clang_rt.crtend-arm.o": "3f48673c594c8be3cedcd52872381e4c6cbce06b6501bafb48a13ffdbe7084db",
+          "/sysroot/lib/ld-linux.so.3": "b011ebe723dc6e8115f4eb44c964817f7d61878e44d6de3a9367e7359b5bf7da",
+          "/sysroot/lib/libc.so.6": "9f2ae4ee0d10374c7681a33b09b5a84dbfca82c3d1bc012edf81483f11202b96",
+          "/sysroot/usr/lib/Scrt1.o": "be32f9a7db99b9d7c5641dc5bb73add91b263811172d706c723120f1c16fc98b",
+          "/sysroot/usr/lib/crti.o": "c4153aaf3e858b9737feb747c7e93101451d4a3b1c876d4e47195b85fc565161",
+          "/sysroot/usr/lib/crtn.o": "0bddc306b33424c498730c92c662236fff9deef1d9de91cf37677d9f5594a201",
+          "/work/bin/C-version-present.o": "e914139b54e104cdb7c59bb3a8944fa5eb3e9316ec2fcd35fcf6cf56cab02667",
+          "/work/startfiles/libgcc_s.so": "904b67964d3e751b9d9213fdb0b7643bf18d5e15294a0fb50782c580610cdb25"
+        },
+        "source_and_object_inputs": {
+          "/work/bin/C-version-present.o": "e914139b54e104cdb7c59bb3a8944fa5eb3e9316ec2fcd35fcf6cf56cab02667",
+          "/work/src/version.c": "28af4ed48ea898bc22fa58adbab1d1b90b2445c52f8989c355be78b3c7128712"
+        }
+      },
+      "bundle_path": "llvm/C-version-present.elf",
+      "bytes": 12404,
+      "elf": {
+        "arm_attributes": {
+          "Tag_ABI_FP_denormal": "Needed",
+          "Tag_ABI_FP_exceptions": "Needed",
+          "Tag_ABI_FP_number_model": "IEEE 754",
+          "Tag_ABI_FP_rounding": "Needed",
+          "Tag_ABI_PCS_wchar_t": "4",
+          "Tag_ABI_align_needed": "8-byte",
+          "Tag_ABI_align_preserved": "8-byte, except leaf SP",
+          "Tag_ABI_enum_size": "int",
+          "Tag_ARM_ISA_use": "Yes",
+          "Tag_Advanced_SIMD_arch": "NEONv1",
+          "Tag_CPU_arch": "v7",
+          "Tag_CPU_arch_profile": "Application",
+          "Tag_CPU_name": "\"7-A\"",
+          "Tag_CPU_unaligned_access": "v6",
+          "Tag_FP_arch": "VFPv3",
+          "Tag_THUMB_ISA_use": "Thumb-2"
+        },
+        "class": "ELF32",
+        "eabi": 5,
+        "endianness": "2's complement, little endian",
+        "flags": "0x5000200, Version5 EABI, soft-float ABI",
+        "float_codegen": "softfp",
+        "interpreter": "/lib/ld-linux.so.3",
+        "machine": "ARM",
+        "needed": [
+          "libgcc_s.so.1",
+          "libc.so.6"
+        ],
+        "pcs": "base",
+        "relocations": [
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00020610",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00020614",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "000206f0",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00030708",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000315",
+            "offset_hex": "000206f4",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000415",
+            "offset_hex": "000206f8",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __register_frame_info",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000615",
+            "offset_hex": "000206fc",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __cxa_finalize@GLIBC_2.4",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000715",
+            "offset_hex": "00020700",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __deregister_frame_info",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000116",
+            "offset_hex": "00030718",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   abort@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000216",
+            "offset_hex": "0003071c",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __libc_start_main@GLIBC_2.34",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000316",
+            "offset_hex": "00030720",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000416",
+            "offset_hex": "00030724",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __register_frame_info",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000616",
+            "offset_hex": "00030728",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_finalize@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000716",
+            "offset_hex": "0003072c",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __deregister_frame_info",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000816",
+            "offset_hex": "00030730",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   confstr@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          }
+        ],
+        "role": "pie",
+        "soname": null,
+        "type": "DYN (Position-Independent Executable file)",
+        "version_definitions": [],
+        "version_requirements": [
+          {
+            "file": "libgcc_s.so.1",
+            "flags": "none",
+            "index": 4,
+            "name": "GCC_3.5"
+          },
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 2,
+            "name": "GLIBC_2.4"
+          },
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 3,
+            "name": "GLIBC_2.34"
+          }
+        ],
+        "versioned_imports": [
+          {
+            "binding": "GLOBAL",
+            "name": "__aeabi_unwind_cpp_pr0@GCC_3.5",
+            "type": "FUNC",
+            "version_file": "libgcc_s.so.1",
+            "version_index": 4,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "WEAK",
+            "name": "__cxa_finalize@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__libc_start_main@GLIBC_2.34",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "abort@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "confstr@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          }
+        ]
+      },
+      "evidence": {
+        "compile_include_trace_sha256": "a6130c3c794e703f83c86c22a69748b0c11c86c941e31efbaf452920b2180910",
+        "compile_receipt_sha256": "b07ad51ceb4bc40f018c0d2a09aed6b2e6ec9a0b60653322e5760efb1e186afe",
+        "link_map_sha256": "cb5d71f2a35978326e088d7db40dfb2243e6f8591dc715cc991a8d6a960f7f93",
+        "link_receipt_sha256": "f8e8496d73e62ed3b14c4aa0f0dd7125829af6a72c33c5ab943a350054201b42",
+        "link_trace_sha256": "b28f52f8bf11911fadc7cba6162471d05e16b69fe707ee26e10e5a8f8476610f",
+        "readelf_sha256": "a3f65c58ea0556f8e6e882f044674c2fa89c63780534802c26f9edf5576a8583"
+      },
+      "native_reference": "llvm",
+      "purpose": "auxiliary_not_scheduled",
+      "run_authorized": false,
+      "runtime_expectation": {
+        "argv": [],
+        "basis": "source expectation; unobserved",
+        "exit_code": 0,
+        "purpose": "Explicit confstr@GLIBC_2.4 lookup and _CS_PATH length",
+        "stderr": "",
+        "stdout": ""
+      },
+      "runtime_status": "NOT_EXECUTED",
+      "sha256": "71ca0316aef7e662e8a36e6267137846cf35a1e8f49ea72b4d9ecb05a30f9b9b"
+    },
+    {
+      "artifact_id": "llvm-C-version-export",
+      "build": {
+        "compile_argv": [
+          "/usr/bin/clang",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "--no-default-config",
+          "--target=armv7l-tizen-linux-gnueabi",
+          "-resource-dir=/sdk-resource",
+          "--gcc-install-dir=/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0",
+          "-fuse-ld=lld",
+          "--rtlib=compiler-rt",
+          "--unwindlib=libgcc",
+          "-v",
+          "-H",
+          "-fPIC",
+          "-c",
+          "/work/src/contract.c",
+          "-o",
+          "/work/bin/C-version-export.o"
+        ],
+        "include_inputs_count": 0,
+        "include_inputs_sha256": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+        "link_argv": [
+          "/usr/bin/clang",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "--no-default-config",
+          "--target=armv7l-tizen-linux-gnueabi",
+          "-resource-dir=/sdk-resource",
+          "--gcc-install-dir=/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0",
+          "-fuse-ld=lld",
+          "--rtlib=compiler-rt",
+          "--unwindlib=libgcc",
+          "-L/work/startfiles",
+          "-L/sysroot/usr/lib",
+          "-L/sysroot/lib",
+          "-Wl,-rpath-link,/sysroot/usr/lib:/sysroot/lib",
+          "-v",
+          "-Wl,-t,-Map=/work/bin/C-version-export.map",
+          "/work/bin/C-version-export.o",
+          "-shared",
+          "-Wl,--version-script,/work/src/contract.map",
+          "-Wl,-soname,libphase8d_contract.so.1",
+          "-o",
+          "/work/bin/C-version-export.so"
+        ],
+        "link_inputs": {
+          "/sdk-resource/lib/linux/clang_rt.crtbegin-arm.o": "cedb5128c8afbe7c2caa0206e968e11f46051ae1cbfb765bf1763bb132b83209",
+          "/sdk-resource/lib/linux/clang_rt.crtend-arm.o": "3f48673c594c8be3cedcd52872381e4c6cbce06b6501bafb48a13ffdbe7084db",
+          "/sysroot/lib/ld-linux.so.3": "b011ebe723dc6e8115f4eb44c964817f7d61878e44d6de3a9367e7359b5bf7da",
+          "/sysroot/lib/libc.so.6": "9f2ae4ee0d10374c7681a33b09b5a84dbfca82c3d1bc012edf81483f11202b96",
+          "/sysroot/usr/lib/crti.o": "c4153aaf3e858b9737feb747c7e93101451d4a3b1c876d4e47195b85fc565161",
+          "/sysroot/usr/lib/crtn.o": "0bddc306b33424c498730c92c662236fff9deef1d9de91cf37677d9f5594a201",
+          "/work/bin/C-version-export.o": "ebe808b4130bca25d99a5f974920ed8289a8276821f57995cf36132b603cf049",
+          "/work/startfiles/libgcc_s.so": "904b67964d3e751b9d9213fdb0b7643bf18d5e15294a0fb50782c580610cdb25"
+        },
+        "source_and_object_inputs": {
+          "/work/bin/C-version-export.o": "ebe808b4130bca25d99a5f974920ed8289a8276821f57995cf36132b603cf049",
+          "/work/src/contract.c": "93aa8a90c4b28b07968e3d9aa3ce02355e1ffbf9ac6ca00b57a71d58f1dcc5f4",
+          "/work/src/contract.map": "9db4c42ed5d58870110d6ee23ad5795c35a68af8bbd8906ac4f5493f1d460a42"
+        }
+      },
+      "bundle_path": "llvm/C-version-export.so",
+      "bytes": 9376,
+      "elf": {
+        "arm_attributes": {
+          "Tag_ABI_align_needed": "8-byte",
+          "Tag_ABI_align_preserved": "8-byte, except leaf SP",
+          "Tag_ARM_ISA_use": "Yes",
+          "Tag_CPU_arch": "v7",
+          "Tag_CPU_arch_profile": "Application",
+          "Tag_CPU_name": "\"7-A\"",
+          "Tag_THUMB_ISA_use": "Thumb-2"
+        },
+        "class": "ELF32",
+        "eabi": 5,
+        "endianness": "2's complement, little endian",
+        "flags": "0x5000200, Version5 EABI, soft-float ABI",
+        "float_codegen": "softfp",
+        "interpreter": null,
+        "machine": "ARM",
+        "needed": [
+          "libgcc_s.so.1",
+          "libc.so.6"
+        ],
+        "pcs": "base",
+        "relocations": [
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00020510",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00020514",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00030608",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000115",
+            "offset_hex": "000205f8",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000215",
+            "offset_hex": "000205fc",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __register_frame_info",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000415",
+            "offset_hex": "00020600",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __cxa_finalize@GLIBC_2.4",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000515",
+            "offset_hex": "00020604",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __deregister_frame_info",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000116",
+            "offset_hex": "00030618",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000216",
+            "offset_hex": "0003061c",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __register_frame_info",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000416",
+            "offset_hex": "00030620",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_finalize@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000516",
+            "offset_hex": "00030624",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __deregister_frame_info",
+            "type": "R_ARM_JUMP_SLOT"
+          }
+        ],
+        "role": "shared_object",
+        "soname": "libphase8d_contract.so.1",
+        "type": "DYN (Shared object file)",
+        "version_definitions": [
+          {
+            "flags": "BASE",
+            "index": 1,
+            "name": "libphase8d_contract.so.1",
+            "parents": []
+          },
+          {
+            "flags": "none",
+            "index": 2,
+            "name": "PHASE8D_1.0",
+            "parents": []
+          }
+        ],
+        "version_requirements": [
+          {
+            "file": "libgcc_s.so.1",
+            "flags": "none",
+            "index": 3,
+            "name": "GCC_3.5"
+          },
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 4,
+            "name": "GLIBC_2.4"
+          }
+        ],
+        "versioned_imports": [
+          {
+            "binding": "GLOBAL",
+            "name": "__aeabi_unwind_cpp_pr0@GCC_3.5",
+            "type": "FUNC",
+            "version_file": "libgcc_s.so.1",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "WEAK",
+            "name": "__cxa_finalize@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 4,
+            "visibility": "DEFAULT"
+          }
+        ]
+      },
+      "evidence": {
+        "compile_include_trace_sha256": "92b780f0361add67c6d090f44c48d9655974cfebaf0fd70b0ce02d2739f9d0c8",
+        "compile_receipt_sha256": "b2b63dad012035b213750069fa7b19857d6891f31fee40ac94e2c576612f8411",
+        "link_map_sha256": "4c17b417121c772bc48415675ee8380a92894fb9242f6623d62f586e863f9993",
+        "link_receipt_sha256": "824bf12f7f5429e67e5ce8174f306c4b1c1ed1375b8d227867794c6734bd93f4",
+        "link_trace_sha256": "ea0d03c3768bf6e3528ddcc043fe95c88ede9897e4f067607ba1d42ab37c9310",
+        "readelf_sha256": "c7cae1365200b675fbbb8e3204148edb2eaa99328545f34dabdff27afcf53df6"
+      },
+      "native_reference": "llvm",
+      "purpose": "auxiliary_not_scheduled",
+      "run_authorized": false,
+      "runtime_expectation": {
+        "argv": null,
+        "basis": "shared object, no process entry",
+        "exit_code": null,
+        "purpose": "Offline versioned DSO export fixture",
+        "stderr": null,
+        "stdout": null
+      },
+      "runtime_status": "NOT_EXECUTED",
+      "sha256": "8ed9567aec3b93c856b43470e0fa9fd14c06a36563798dbf7b7d28d67f3b706f"
+    },
+    {
+      "artifact_id": "llvm-D-profile",
+      "build": {
+        "compile_argv": [
+          "/usr/bin/clang",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "--no-default-config",
+          "--target=armv7l-tizen-linux-gnueabi",
+          "-resource-dir=/sdk-resource",
+          "--gcc-install-dir=/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0",
+          "-fuse-ld=lld",
+          "--rtlib=compiler-rt",
+          "--unwindlib=libgcc",
+          "-I/sysroot/usr/include/",
+          "-v",
+          "-H",
+          "-c",
+          "/work/src/profile.c",
+          "-o",
+          "/work/bin/D-profile.o"
+        ],
+        "include_inputs_count": 41,
+        "include_inputs_sha256": "7583a02dae4ff9c29d0594d35b8de6db80eae276db8ac26a2981f12f721dbe67",
+        "link_argv": [
+          "/usr/bin/clang",
+          "--sysroot=/sysroot",
+          "-march=armv7-a",
+          "-mfloat-abi=softfp",
+          "-mfpu=neon",
+          "-mthumb",
+          "-O0",
+          "-B/work/startfiles/",
+          "--no-default-config",
+          "--target=armv7l-tizen-linux-gnueabi",
+          "-resource-dir=/sdk-resource",
+          "--gcc-install-dir=/sysroot/usr/lib/gcc/armv7l-tizen-linux-gnueabi/14.2.0",
+          "-fuse-ld=lld",
+          "--rtlib=compiler-rt",
+          "--unwindlib=libgcc",
+          "-I/sysroot/usr/include/",
+          "-L/work/startfiles",
+          "-L/sysroot/usr/lib",
+          "-L/sysroot/lib",
+          "-Wl,-rpath-link,/sysroot/usr/lib:/sysroot/lib",
+          "-v",
+          "-Wl,-t,-Map=/work/bin/D-profile.map",
+          "/work/bin/D-profile.o",
+          "-ltzplatform-config-2.0",
+          "-o",
+          "/work/bin/D-profile.elf"
+        ],
+        "link_inputs": {
+          "/sdk-resource/lib/linux/clang_rt.crtbegin-arm.o": "cedb5128c8afbe7c2caa0206e968e11f46051ae1cbfb765bf1763bb132b83209",
+          "/sdk-resource/lib/linux/clang_rt.crtend-arm.o": "3f48673c594c8be3cedcd52872381e4c6cbce06b6501bafb48a13ffdbe7084db",
+          "/sysroot/lib/ld-linux.so.3": "b011ebe723dc6e8115f4eb44c964817f7d61878e44d6de3a9367e7359b5bf7da",
+          "/sysroot/lib/libc.so.6": "9f2ae4ee0d10374c7681a33b09b5a84dbfca82c3d1bc012edf81483f11202b96",
+          "/sysroot/usr/lib/Scrt1.o": "be32f9a7db99b9d7c5641dc5bb73add91b263811172d706c723120f1c16fc98b",
+          "/sysroot/usr/lib/crti.o": "c4153aaf3e858b9737feb747c7e93101451d4a3b1c876d4e47195b85fc565161",
+          "/sysroot/usr/lib/crtn.o": "0bddc306b33424c498730c92c662236fff9deef1d9de91cf37677d9f5594a201",
+          "/sysroot/usr/lib/libtzplatform-config-2.0.so": "6426c4fcc654686de55923b6086ff5f6d3f8eb130dd63f2fae56637d24968193",
+          "/work/bin/D-profile.o": "e3f289cb4826b5733ae7e5068e1b09b9211b516e39d0e20bdcc509ec0b5334a3",
+          "/work/startfiles/libgcc_s.so": "904b67964d3e751b9d9213fdb0b7643bf18d5e15294a0fb50782c580610cdb25"
+        },
+        "source_and_object_inputs": {
+          "/work/bin/D-profile.o": "e3f289cb4826b5733ae7e5068e1b09b9211b516e39d0e20bdcc509ec0b5334a3",
+          "/work/src/profile.c": "bc34554a89c23ad1818ed6cf08a535335b3fcbfc7940eeeb32a4a0b6bb40800c"
+        }
+      },
+      "bundle_path": "llvm/D-profile.elf",
+      "bytes": 12488,
+      "elf": {
+        "arm_attributes": {
+          "Tag_ABI_FP_denormal": "Needed",
+          "Tag_ABI_FP_exceptions": "Needed",
+          "Tag_ABI_FP_number_model": "IEEE 754",
+          "Tag_ABI_FP_rounding": "Needed",
+          "Tag_ABI_PCS_wchar_t": "4",
+          "Tag_ABI_align_needed": "8-byte",
+          "Tag_ABI_align_preserved": "8-byte, except leaf SP",
+          "Tag_ABI_enum_size": "int",
+          "Tag_ARM_ISA_use": "Yes",
+          "Tag_Advanced_SIMD_arch": "NEONv1",
+          "Tag_CPU_arch": "v7",
+          "Tag_CPU_arch_profile": "Application",
+          "Tag_CPU_name": "\"7-A\"",
+          "Tag_CPU_unaligned_access": "v6",
+          "Tag_FP_arch": "VFPv3",
+          "Tag_THUMB_ISA_use": "Thumb-2"
+        },
+        "class": "ELF32",
+        "eabi": 5,
+        "endianness": "2's complement, little endian",
+        "flags": "0x5000200, Version5 EABI, soft-float ABI",
+        "float_codegen": "softfp",
+        "interpreter": "/lib/ld-linux.so.3",
+        "machine": "ARM",
+        "needed": [
+          "libtzplatform-config-2.0.so.2",
+          "libgcc_s.so.1",
+          "libc.so.6"
+        ],
+        "pcs": "base",
+        "relocations": [
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00020650",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00020654",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00020738",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000017",
+            "offset_hex": "00030750",
+            "section": ".rel.dyn",
+            "symbol_field": "",
+            "type": "R_ARM_RELATIVE"
+          },
+          {
+            "info_hex": "00000315",
+            "offset_hex": "0002073c",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000415",
+            "offset_hex": "00020740",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __register_frame_info",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000615",
+            "offset_hex": "00020744",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __cxa_finalize@GLIBC_2.4",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000715",
+            "offset_hex": "00020748",
+            "section": ".rel.dyn",
+            "symbol_field": "00000000   __deregister_frame_info",
+            "type": "R_ARM_GLOB_DAT"
+          },
+          {
+            "info_hex": "00000116",
+            "offset_hex": "00030760",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   abort@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000216",
+            "offset_hex": "00030764",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __libc_start_main@GLIBC_2.34",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000316",
+            "offset_hex": "00030768",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __gmon_start__",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000416",
+            "offset_hex": "0003076c",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __register_frame_info",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000616",
+            "offset_hex": "00030770",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __cxa_finalize@GLIBC_2.4",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000716",
+            "offset_hex": "00030774",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   __deregister_frame_info",
+            "type": "R_ARM_JUMP_SLOT"
+          },
+          {
+            "info_hex": "00000816",
+            "offset_hex": "00030778",
+            "section": ".rel.plt",
+            "symbol_field": "00000000   tzplatform_getenv@TPC",
+            "type": "R_ARM_JUMP_SLOT"
+          }
+        ],
+        "role": "pie",
+        "soname": null,
+        "type": "DYN (Position-Independent Executable file)",
+        "version_definitions": [],
+        "version_requirements": [
+          {
+            "file": "libtzplatform-config-2.0.so.2",
+            "flags": "none",
+            "index": 5,
+            "name": "TPC"
+          },
+          {
+            "file": "libgcc_s.so.1",
+            "flags": "none",
+            "index": 4,
+            "name": "GCC_3.5"
+          },
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 2,
+            "name": "GLIBC_2.4"
+          },
+          {
+            "file": "libc.so.6",
+            "flags": "none",
+            "index": 3,
+            "name": "GLIBC_2.34"
+          }
+        ],
+        "versioned_imports": [
+          {
+            "binding": "GLOBAL",
+            "name": "__aeabi_unwind_cpp_pr0@GCC_3.5",
+            "type": "FUNC",
+            "version_file": "libgcc_s.so.1",
+            "version_index": 4,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "WEAK",
+            "name": "__cxa_finalize@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "__libc_start_main@GLIBC_2.34",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 3,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "abort@GLIBC_2.4",
+            "type": "FUNC",
+            "version_file": "libc.so.6",
+            "version_index": 2,
+            "visibility": "DEFAULT"
+          },
+          {
+            "binding": "GLOBAL",
+            "name": "tzplatform_getenv@TPC",
+            "type": "FUNC",
+            "version_file": "libtzplatform-config-2.0.so.2",
+            "version_index": 5,
+            "visibility": "DEFAULT"
+          }
+        ]
+      },
+      "evidence": {
+        "compile_include_trace_sha256": "e4865917e01e48ae0b8b05e535162c0168ecde011b908ae22969196ab9a4fef3",
+        "compile_receipt_sha256": "789e588a0907a6d898a87561322e9321479e5e503a3ec82f5614ac271918c8a3",
+        "link_map_sha256": "95f38618f9e2b4e205e8dc3296364b5fa4d29d5cb1845323ddd5be1cf36133ee",
+        "link_receipt_sha256": "91458cdf755d16a6554c5c3b07164a4869c79823603f4430fd4c241109cb5408",
+        "link_trace_sha256": "a2487308944185c0709965e320f0e2e92823732ca0b3c03c0282f0961953f7c3",
+        "readelf_sha256": "2d6ce9b35b9dcf0c1672dedbc5053c06e69abd72c399972bb3cf9a9feb8228da"
+      },
+      "native_reference": "llvm",
+      "purpose": "auxiliary_not_scheduled",
+      "run_authorized": false,
+      "runtime_expectation": {
+        "argv": [],
+        "basis": "conditional on a correctly configured TZ_SYS_RO_SHARE; unobserved",
+        "exit_code": 0,
+        "purpose": "Read TZ_SYS_RO_SHARE through tzplatform_getenv",
+        "stderr": "",
+        "stdout": ""
+      },
+      "runtime_status": "NOT_EXECUTED",
+      "sha256": "df91b1ef2c6405f6776eb68c5f809b54c71ffdeefd8de7e70d7d2a27bc4e4821"
+    }
+  ],
+  "default_run_requirements": {
+    "argv": [],
+    "authorized": false,
+    "capabilities": "none",
+    "file_writes": "dedicated scratch only",
+    "locale": "C",
+    "network": "isolated",
+    "stdin": "closed",
+    "uid": "non-root"
+  },
+  "phase8d_commit": "3f7f32364fef47223cbae07e28cfbac8c4ff7e70",
+  "phase8d_matrix_evidence_sha256": "28f74b79468c349ea36598ebe504da4e18c19417c57728e41955644a42d4aaba",
+  "profile": "tizen-headless-armv7l",
+  "reference_images": {
+    "llvm": {
+      "compiler_version": "Clang 22.1.8",
+      "host_binary_sha256": {
+        "/usr/bin/clang": "0dcc0f03b64ab388393d4382e0ff8bca2e7147408b1ecf3740e854e9514d3ba1",
+        "/usr/bin/clang++": "0dcc0f03b64ab388393d4382e0ff8bca2e7147408b1ecf3740e854e9514d3ba1",
+        "/usr/bin/ld.lld": "e0b02fac429d2365b7034095f305a92b00eb1b4a915dbfa87d48501774ecceae",
+        "/usr/bin/pkg-config": "0b2071de8c6a8c983c416344272bcfe0c0b4b09af1d5387ada5302300ec84cbd"
+      },
+      "image": {
+        "build": "tizen-unified-toolchain_20261120.082536",
+        "extraction_input_sha256": "8ed19e697d14ecef98cdfb6a4688571d9674eda815e955225a66cf4979ec1d35",
+        "published_bytes": 295132527,
+        "published_sha256": "a1e6e12cae12f890a02b699c3909b5c8bd871013da1d9a34f84b53b65ae99878",
+        "url": "https://download.tizen.org/RBS/TIZEN/Tizen/Tizen-Unified-Toolchain/tizen-unified-toolchain_20261120.082536/images/standard/tizen-headless-armv7l/tizen-unified-toolchain_20261120.082536_tizen-headless-armv7l.tar.gz"
+      },
+      "linker_version": "LLD 22.1.8",
+      "reference_label": "candidate",
+      "sdk_base_snapshot": "tizen-base-toolchain_20261119.042539",
+      "sdk_package_lock_sha256": "4ec4c1c00d0cdc450e5aef87f4b17c9c361693e3b23d1f24141201095cc2eecc",
+      "tag_cpu_arch_expected": "ARMv7-A",
+      "target_triple": "armv7l-tizen-linux-gnueabi",
+      "tool_family": "clang"
+    },
+    "vd": {
+      "compiler_version": "Tizen GCC 14.2.0 20240801 1.1",
+      "host_binary_sha256": {
+        "/usr/bin/armv7l-tizen-linux-gnueabi-g++": "c08da30b2189c81f76c08f4058e3a3fda929649de28f8a6e1a201d07d2804e7b",
+        "/usr/bin/armv7l-tizen-linux-gnueabi-gcc": "bfb61b8c23154c69ac5ed71f3d1954dc06f3b8ff7797dd2791d3125a9e7cef9c",
+        "/usr/bin/armv7l-tizen-linux-gnueabi-ld": "e43158e2d6ef1e8577d40ba41b73dfa02c71b01be6d8543d9548b14137cdd50a",
+        "/usr/bin/pkg-config": "885d437690090e701a3809a54e72591600daa2892c787414a1fce68c2d5500d9"
+      },
+      "image": {
+        "build": "tizen-unified-dev_20261119.012448",
+        "extraction_input_sha256": "cb34620e5d21b3bba1e5276f987c5b0026ed064bdf6e16e0d60df0b272bb921d",
+        "published_bytes": 307905023,
+        "published_sha256": "ec4b0e371151711b881c2def2a11fd8c941b36ed030e61691650573a12546237",
+        "url": "https://download.tizen.org/RBS/TIZEN/Tizen/Tizen-Unified-Dev/tizen-unified-dev_20261119.012448/images/standard/tizen-headless-armv7l/tizen-unified-dev_20261119.012448_tizen-headless-armv7l.tar.gz"
+      },
+      "linker_version": "GNU ld 2.43",
+      "reference_label": "baseline",
+      "sdk_base_snapshot": "tizen-base-dev_20261117.165532",
+      "sdk_package_lock_sha256": "4cb4e22ac86b6bc2dc4251bf7669bf4b9f759ffe5dc0891fba087d2cc17d5da9",
+      "tag_cpu_arch_expected": "ARMv7-A",
+      "target_triple": "armv7l-tizen-linux-gnueabi",
+      "tool_family": "gcc"
+    }
+  },
+  "runtime_plan": [
+    {
+      "artifact_id": "vd-A-C",
+      "artifact_sha256": "8b9a99ab11fff447022618f796ee397cccd21fbaf4d30a29d9561647c3f687fc",
+      "authorized_environment_id": null,
+      "destination_image": "vd",
+      "phase8d_expected_id": "ET-661c9547b3d25d9433c403f3",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "artifact_id": "vd-A-C",
+      "artifact_sha256": "8b9a99ab11fff447022618f796ee397cccd21fbaf4d30a29d9561647c3f687fc",
+      "authorized_environment_id": null,
+      "destination_image": "llvm",
+      "phase8d_expected_id": "ET-2d9d0b7dcf9afab31ddb5520",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "artifact_id": "vd-B-CPP",
+      "artifact_sha256": "e667142e73f25ed285f81f0b6c4f8e681fb375cc3e6c054e5d20950b50c07d73",
+      "authorized_environment_id": null,
+      "destination_image": "vd",
+      "phase8d_expected_id": "ET-621f1a87748fb0b0a1bc7149",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "artifact_id": "vd-B-CPP",
+      "artifact_sha256": "e667142e73f25ed285f81f0b6c4f8e681fb375cc3e6c054e5d20950b50c07d73",
+      "authorized_environment_id": null,
+      "destination_image": "llvm",
+      "phase8d_expected_id": "ET-8cb3fae8d132c378c1ed1539",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "artifact_id": "llvm-A-C",
+      "artifact_sha256": "e4987d1628770f2dfa5f6b13d95fc1ed3cdd235651d3ca26e3812aea41f01606",
+      "authorized_environment_id": null,
+      "destination_image": "vd",
+      "phase8d_expected_id": "ET-5df19312e28f731154224fa1",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "artifact_id": "llvm-A-C",
+      "artifact_sha256": "e4987d1628770f2dfa5f6b13d95fc1ed3cdd235651d3ca26e3812aea41f01606",
+      "authorized_environment_id": null,
+      "destination_image": "llvm",
+      "phase8d_expected_id": "ET-8c71607512d6c68e63d9e99f",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "artifact_id": "llvm-B-CPP",
+      "artifact_sha256": "5c1cc3d271e9062291e02c39704f932ed8fe4ad41174816bb929cea27446517c",
+      "authorized_environment_id": null,
+      "destination_image": "vd",
+      "phase8d_expected_id": "ET-ddd2df0ba0f155674ea66c54",
+      "status": "NOT_EXECUTED"
+    },
+    {
+      "artifact_id": "llvm-B-CPP",
+      "artifact_sha256": "5c1cc3d271e9062291e02c39704f932ed8fe4ad41174816bb929cea27446517c",
+      "authorized_environment_id": null,
+      "destination_image": "llvm",
+      "phase8d_expected_id": "ET-ddd82a5817b01aaa88d83c3c",
+      "status": "NOT_EXECUTED"
+    }
+  ],
+  "schema": "tizen-compat-frozen-artifacts/v1"
+}
