@@ -1,15 +1,36 @@
 """Host-only tests: the controller fabricates receipts and never runs fixture bytes."""
 import hashlib
 import json
+import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tempfile
 import textwrap
 import unittest
+from unittest.mock import patch
 
 
 ENTRY = Path(__file__).resolve().parents[1] / 'scripts' / 'frozen_runtime.py'
+sys.path.insert(0, str(ENTRY.parent))
+from compat.core import DEFAULTS, Tools
+
+
+def process_is_live(pid):
+    try:
+        state = Path(f'/proc/{pid}/stat').read_text().rsplit(') ', 1)[1].split()[0]
+    except FileNotFoundError:
+        return False
+    return state not in ('Z', 'X', 'x')
+
+
+def stop_fixture(pid):
+    if process_is_live(pid):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
 
 
 class FrozenRuntimeTests(unittest.TestCase):
@@ -41,6 +62,12 @@ class FrozenRuntimeTests(unittest.TestCase):
                 receipt.update(schema='tizen-compat-runner-cleanup/v1', cleanup='ok')
                 if mode == 'bad-cleanup':
                     receipt['run_id'] = 'other'
+                if mode == 'cleanup-interrupt':
+                    proc = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])
+                    (root / 'child.pid').write_text(str(proc.pid))
+                    print('cleanup had partial output', flush=True)
+                    os.kill(os.getppid(), signal.SIGINT)
+                    time.sleep(30)
                 print(json.dumps(receipt))
                 sys.exit(0)
             payload = Path(args['--artifact']).read_bytes()
@@ -51,6 +78,11 @@ class FrozenRuntimeTests(unittest.TestCase):
                            binary_sha256=hashlib.sha256(payload).hexdigest(), returncode=0,
                            stdout=name + '\\n', stderr='')
             if name == 'vd-A-C' and native:
+                if mode in ('lingering-child', 'escaped-fixture'):
+                    proc = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'],
+                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                            start_new_session=mode == 'escaped-fixture')
+                    (root / 'child.pid').write_text(str(proc.pid))
                 if mode == 'wrong-environment':
                     receipt['environment_id'] = 'unrelated'
                 if mode == 'wrong-hash':
@@ -232,12 +264,109 @@ class FrozenRuntimeTests(unittest.TestCase):
                 self.assertEqual(result.returncode, code, result.stderr)
                 self.assertEqual(plan[0]['adapter_error'], reason)
                 self.assertEqual(plan[0]['cleanup_status'], 'SUCCESS')
+                self.assertEqual(plan[0]['run_local_process_group_status'], 'VERIFIED')
                 self.assertTrue(any('partial output' in (out / path).read_text()
                                     for path in plan[0]['runtime_evidence']))
                 pid = int((self.root / 'child.pid').read_text())
-                stat = Path(f'/proc/{pid}/stat')
-                if stat.exists():
-                    try:
-                        self.assertEqual(stat.read_text().split(') ')[1].split()[0], 'Z')
-                    except FileNotFoundError:
-                        pass
+                self.addCleanup(stop_fixture, pid)
+                self.assertFalse(process_is_live(pid))
+
+    def test_cleanup_receipt_and_local_or_target_exit_are_distinct(self):
+        for mode, alive in (('lingering-child', False), ('escaped-fixture', True)):
+            with self.subTest(mode=mode):
+                self.mode.write_text(mode)
+                result, plan, _ = self.launch(execute=True)
+                pid = int((self.root / 'child.pid').read_text())
+                self.addCleanup(stop_fixture, pid)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(plan[0]['run_local_process_group_status'], 'VERIFIED')
+                self.assertEqual(plan[0]['cleanup_receipt_status'], 'ACCEPTED')
+                self.assertEqual(plan[0]['target_process_cleanup_status'], 'NOT_VERIFIED')
+                self.assertEqual(process_is_live(pid), alive)
+
+    def test_cleanup_interrupt_stops_matrix_and_keeps_evidence(self):
+        self.mode.write_text('cleanup-interrupt')
+        result, plan, out = self.launch(execute=True)
+        pid = int((self.root / 'child.pid').read_text())
+        self.addCleanup(stop_fixture, pid)
+        self.assertFalse(process_is_live(pid))
+        self.assertEqual(result.returncode, 130, result.stderr)
+        self.assertEqual(plan[0]['cleanup_error'], 'interrupted')
+        self.assertEqual(plan[0]['cleanup_receipt_status'], 'UNCONFIRMED')
+        self.assertEqual(plan[0]['cleanup_local_process_group_status'], 'VERIFIED')
+        self.assertEqual(sum('attempt_id' in row for row in plan), 1)
+        self.assertTrue(any('cleanup had partial output' in (out / path).read_text()
+                            for path in plan[0]['cleanup_evidence']))
+
+
+class BoundedProcessTests(unittest.TestCase):
+    def setUp(self):
+        workspace = tempfile.TemporaryDirectory()
+        self.addCleanup(workspace.cleanup)
+        self.root = Path(workspace.name)
+        self.marker = self.root / 'pid'
+        self.tools = Tools(self.root, DEFAULTS)
+
+    def start_child_then(self, tail):
+        return [sys.executable, '-c', textwrap.dedent('''
+            import os, subprocess, sys, time
+            from pathlib import Path
+            child = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'],
+                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            Path(sys.argv[1]).write_text(str(child.pid))
+        ''') + tail, str(self.marker)]
+
+    def assert_reaped(self, pid):
+        self.addCleanup(stop_fixture, pid)
+        self.assertFalse(process_is_live(pid))
+
+    def test_child_reaped_on_success_or_abnormal_controller_exit(self):
+        for tail, code in (('raise SystemExit(0)', 0), ('os.kill(os.getpid(), 15)', -15)):
+            with self.subTest(code=code):
+                result = self.tools.run(self.start_child_then(tail), max_capture_bytes=4096, timeout=4)
+                self.assert_reaped(int(self.marker.read_text()))
+                self.assertEqual(result['returncode'], code)
+                self.assertEqual(result['local_process_group_status'], 'VERIFIED')
+
+    def test_combined_evidence_limit_reaps_group(self):
+        for stream in (1, 2):
+            with self.subTest(fd=stream):
+                cmd = self.start_child_then(f'os.write({stream}, b"x" * 100000); time.sleep(30)')
+                result = self.tools.run(cmd, max_capture_bytes=4096, timeout=4)
+                self.assert_reaped(int(self.marker.read_text()))
+                self.assertEqual(result['error'], 'adapter output limit exceeded')
+                self.assertEqual(result['local_process_group_status'], 'VERIFIED')
+                size = sum((self.root / result[f'{name}_evidence']).stat().st_size for name in ('stdout', 'stderr'))
+                self.assertEqual(size, 4096)
+
+    def test_interrupt_before_popen_returns_still_reaps_new_process(self):
+        popen = subprocess.Popen
+        processes = []
+
+        def interrupt_after_fork(*args, **kwargs):
+            proc = popen(*args, **kwargs)
+            processes.append(proc)
+            os.kill(os.getpid(), signal.SIGINT)
+            return proc
+
+        with patch('compat.core.subprocess.Popen', side_effect=interrupt_after_fork):
+            result = self.tools.run([sys.executable, '-c', 'import time; time.sleep(30)'],
+                                    max_capture_bytes=4096, timeout=4, keep_interrupt=True)
+        self.assert_reaped(processes[0].pid)
+        self.assertEqual(result['error'], 'interrupted')
+        self.assertEqual(result['local_process_group_status'], 'VERIFIED')
+
+    def test_interrupt_during_local_reaping_does_not_skip_verification(self):
+        stop = Tools.stop_bounded_group
+
+        def interrupt_while_reaping(proc):
+            os.kill(os.getpid(), signal.SIGINT)
+            return stop(proc)
+
+        with patch.object(Tools, 'stop_bounded_group', side_effect=interrupt_while_reaping):
+            result = self.tools.run(self.start_child_then('print("reap")'), max_capture_bytes=4096,
+                                    timeout=4, keep_interrupt=True)
+        self.assert_reaped(int(self.marker.read_text()))
+        self.assertEqual(result['error'], 'interrupted')
+        self.assertEqual(result['stdout'], 'reap\n')
+        self.assertEqual(result['local_process_group_status'], 'VERIFIED')

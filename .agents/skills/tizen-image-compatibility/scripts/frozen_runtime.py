@@ -159,6 +159,7 @@ def run_case(case, target, controller, binary, tools, timeout):
         case.update({key: observed[key] for key in ('stages', 'runtime_reason', 'runtime_evidence')})
         case['adapter_error'] = observed.get('adapter_error', '')
         case['adapter_returncode'] = observed.get('adapter_returncode')
+        case['run_local_process_group_status'] = observed.get('local_process_group_status', 'NOT_VERIFIED')
         if case['stages']['execution_status'] == 'SUCCESS':
             case['observation'] = {'exit_code': observed['returncode'], 'stdout': observed['stdout'],
                                    'stderr': observed['stderr']}
@@ -167,6 +168,7 @@ def run_case(case, target, controller, binary, tools, timeout):
                             max_capture_bytes=1024 * 1024, keep_interrupt=True)
         case['cleanup_evidence'] = [cleanup[k] for k in ('stdout_evidence', 'stderr_evidence')]
         case['cleanup_error'] = cleanup['error']
+        case['cleanup_local_process_group_status'] = cleanup['local_process_group_status']
         try:
             receipt = json.loads(cleanup['stdout'])
         except ValueError:
@@ -175,7 +177,11 @@ def run_case(case, target, controller, binary, tools, timeout):
                  and isinstance(receipt, dict) and receipt.get('schema') == 'tizen-compat-runner-cleanup/v1'
                  and receipt.get('environment_id') == target['id'] and receipt.get('cleanup') == 'ok'
                  and all(receipt.get(key) == value for key, value in binding.items()))
-        case['cleanup_status'] = 'SUCCESS' if clean else 'UNKNOWN'
+        case['cleanup_receipt_status'] = 'ACCEPTED' if clean else 'UNCONFIRMED'
+        case['target_process_cleanup_status'] = 'NOT_VERIFIED'
+        local = (case.get('run_local_process_group_status'), case['cleanup_local_process_group_status'])
+        # Preserve the legacy gate while reporting its evidence separately from target exit.
+        case['cleanup_status'] = 'SUCCESS' if clean and local == ('VERIFIED', 'VERIFIED') else 'UNKNOWN'
 
 
 def frozen_runtime(manifest, manifest_sha, bundle, output, *, enrollment=None, execute=False):
@@ -237,7 +243,7 @@ def frozen_runtime(manifest, manifest_sha, bundle, output, *, enrollment=None, e
             if 'interrupted' in (case['adapter_error'], case['cleanup_error']):
                 stop_reason = 'Execution interrupted'
             elif case['cleanup_status'] != 'SUCCESS':
-                stop_reason = 'Target cleanup could not be verified'
+                stop_reason = 'Cleanup receipt or local process group could not be verified'
             if stop_reason:
                 case['runtime_reason'] = stop_reason
             elif (observed := case.get('observation')) and observed['exit_code'] not in RESERVED_EXIT_CODES:

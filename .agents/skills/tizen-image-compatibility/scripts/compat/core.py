@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -226,6 +227,39 @@ def validate_config(c: dict[str, Any]) -> None:
                                                                    for tag in probe.get('requires', [])), 'Invalid runtime probe capability requirements')
 
 
+@contextmanager
+def defer_console_interrupt():
+    """Keep SIGINT from losing a newly launched Popen or interrupting local reaping."""
+    interrupted = False
+
+    def remember(signum, frame):
+        nonlocal interrupted
+        interrupted = True
+
+    main = (threading.current_thread() is threading.main_thread()
+            and signal.getsignal(signal.SIGINT) is signal.default_int_handler)
+    if main:
+        signal.signal(signal.SIGINT, remember)
+    try:
+        yield lambda: interrupted
+    finally:
+        if main:
+            signal.signal(signal.SIGINT, signal.default_int_handler)
+
+
+def live_group_members(group):
+    for path in Path('/proc').iterdir():
+        if not path.name.isdigit():
+            continue
+        try:
+            state, _, pgid, *_ = (path / 'stat').read_bytes().rsplit(b') ', 1)[1].split()
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        if int(pgid) == group and state not in (b'Z', b'X', b'x'):
+            return True
+    return False
+
+
 class Tools:
     """Never uses a shell. Tool output is persisted even on error or timeout."""
     def __init__(self, output: Path, config: dict[str, Any]):
@@ -255,10 +289,13 @@ class Tools:
         for key in ('CPATH', 'C_INCLUDE_PATH', 'CPLUS_INCLUDE_PATH', 'LIBRARY_PATH', 'LD_PRELOAD', 'LD_LIBRARY_PATH'):
             env.pop(key, None)
         error = ''
+        local_group = 'NOT_VERIFIED'
         with tempfile.TemporaryFile(dir=self.raw) as stdout, tempfile.TemporaryFile(dir=self.raw) as stderr:
             try:
                 if max_capture_bytes is not None:
-                    code, error = self.capture_bounded(argv, env, stdout, stderr, timeout, max_capture_bytes, cwd)
+                    code, error, local_group = self.capture_bounded(argv, env, stdout, stderr, timeout, max_capture_bytes, cwd)
+                    if error == 'interrupted' and not keep_interrupt:
+                        raise KeyboardInterrupt
                 else:
                     proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr, env=env, cwd=cwd, start_new_session=True)
                     try:
@@ -274,6 +311,8 @@ class Tools:
             except OSError as exc:
                 code, error = -1, str(exc)
             result: dict[str, Any] = {'argv': [self.normalize(a) for a in argv], 'returncode': code, 'error': error}
+            if max_capture_bytes is not None:
+                result['local_process_group_status'] = local_group
             # Keep raw output in full on disk; parsing is bounded and marked incomplete.
             hashes = []
             for name, stream in (('stdout', stdout), ('stderr', stderr)):
@@ -299,33 +338,61 @@ class Tools:
 
     @staticmethod
     def capture_bounded(argv, env, stdout, stderr, timeout, limit, cwd=None):
-        deadline, remaining = time.monotonic() + timeout, limit
-        with subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                              env=env, cwd=cwd, start_new_session=True) as proc, selectors.DefaultSelector() as selector:
-            completed = False
-            try:
-                code, error = Tools.drain_bounded(proc, selector, stdout, stderr, deadline, remaining)
-                completed = not error
-                return code, error
-            finally:
-                # Also reap the local adapter group on interruption and pipe errors.
-                if not completed:
-                    try:
-                        os.killpg(proc.pid, signal.SIGKILL)
-                    except ProcessLookupError:
-                        pass
-                    # Retain bytes already written to the pipes, including on SIGINT.
-                    # A detached process must not keep this drain blocked.
+        deadline = time.monotonic() + timeout
+        proc, clean = None, False
+        try:
+            with defer_console_interrupt() as launching:
+                proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                        env=env, cwd=cwd, start_new_session=True)
+            if launching():
+                raise KeyboardInterrupt
+            with selectors.DefaultSelector() as selector:
+                error = Tools.drain_bounded(proc, selector, stdout, stderr, deadline, limit)
+        except KeyboardInterrupt:
+            error = 'interrupted'
+        finally:
+            if proc is not None:
+                with defer_console_interrupt() as reaping:
+                    # Keep the leader unreaped while checking the group to pin its numeric ID.
+                    clean = Tools.stop_bounded_group(proc)
                     for pipe, stream in ((proc.stdout, stdout), (proc.stderr, stderr)):
-                        try:
+                        with pipe:
                             os.set_blocking(pipe.fileno(), False)
-                            while available := limit - stdout.tell() - stderr.tell():
-                                block = os.read(pipe.fileno(), min(65536, available))
-                                if not block:
-                                    break
-                                stream.write(block)
-                        except BlockingIOError:
-                            continue
+                            try:
+                                while available := limit - stdout.tell() - stderr.tell():
+                                    block = os.read(pipe.fileno(), min(65536, available))
+                                    if not block:
+                                        break
+                                    stream.write(block)
+                            except BlockingIOError:
+                                pass
+                if reaping():
+                    error = 'interrupted'
+        if not clean:
+            error = error or 'local process group cleanup not verified'
+        return (-1 if error else proc.returncode), error, ('VERIFIED' if clean else 'NOT_VERIFIED')
+
+    @staticmethod
+    def stop_bounded_group(proc):
+        deadline = time.monotonic() + 1
+        clean = False
+        try:
+            while True:
+                try:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                clean = not live_group_members(proc.pid)
+                if clean or time.monotonic() >= deadline:
+                    break
+                time.sleep(0.01)
+        except (OSError, ValueError, IndexError):
+            pass
+        try:
+            proc.wait(timeout=max(0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            return False
+        return clean
 
     @staticmethod
     def drain_bounded(proc, selector, stdout, stderr, deadline, remaining):
@@ -350,11 +417,12 @@ class Tools:
             if error:
                 break
         if not error:
-            try:
-                return proc.wait(timeout=max(0, deadline - time.monotonic())), ''
-            except subprocess.TimeoutExpired:
-                error = 'timeout'
-        return -1, error
+            while not os.waitid(os.P_PID, proc.pid, os.WEXITED | os.WNOWAIT | os.WNOHANG):
+                wait = deadline - time.monotonic()
+                if wait <= 0:
+                    return 'timeout'
+                time.sleep(min(0.01, wait))
+        return error
 
     def discover(self) -> dict[str, Any]:
         for name in ('readelf', 'nm', 'objdump', 'abidiff', 'abi-dumper', 'abi-compliance-checker',
