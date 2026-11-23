@@ -16,6 +16,8 @@ python3 "$SKILL/scripts/prepare_image.py" "$IMAGE" \
 
 `extraction-manifest.json` 记录源 SHA256、识别的各层、分区偏移和长度、XZ 校验类型和大小、适配器版本、覆盖范围及输出身份。`READY` 的 `runtime-rootfs` 可将整个准备目录传入 `--baseline` 或 `--candidate`。比较时重新校验输出目录和元数据身份。`PARTIAL`、`FAILED` 和中断留下的 `PREPARING` 发布标记均会拦截分析。普通 Rootfs 若直接输入，仍按原有 Rootfs 输入语义处理。已知不完整的目录应通过带 `complete: false` 的准备凭据保留其范围。
 
+准备回执的 `coverage.evidence_scope` 和分析清单的 `image.input_evidence_scope` 分别记录路径、内容、UID/GID/mode、xattr、ACL、Smack、file capabilities、硬链接、ramdisk 和特殊文件证据。TAR 中保存的 UID/GID/mode 与设备节点声明属于归档元数据。普通 TAR 提取不证明安全属性或硬链接仍完整。对外部提取的输入，用 `analysis.input_scope.baseline` 和 `analysis.input_scope.candidate` 声明已知缺口，例如 `{ramdisk: false, xattrs: false, file_capabilities: false, hardlinks: false}`。除 ramdisk 是否纳入外，配置只接受明确缺口，不提升提取器的证据等级。文件路径盘点与 ELF/符号/安全证据独立核对。
+
 ## VDFS 适配器
 
 配置由操作方审核的宿主机工具，或包装厂商只读提取器的程序。工具需要在不提权、不挂载、不执行镜像程序的条件下读取输入文件并输出 TAR 与 JSON。应在隔离的低权限环境中运行可信工具并核对具体 VDFS 布局。公开的 Samsung 衍生工具可作为候选，版本匹配、完整文件提取与错误处理需由操作方验证。配置中的命令通过 argv 直接启动。没有配置或宿主工具不可用时，准备返回 `VDFS_EXTRACTOR_UNAVAILABLE`。 [Samsung 衍生 VDFS 工具](https://github.com/HinTak/vdfs-tools)

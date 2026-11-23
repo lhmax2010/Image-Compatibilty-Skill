@@ -78,6 +78,8 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
     if getattr(image, 'extraction_manifest', None):
         m['image']['extraction_manifest'] = label + '-extraction-manifest.json'
     active = set(tools.config['analysis']['modes'])
+    input_scope = image.evidence_scope(tools.config['analysis'].get('input_scope', {}).get(label))
+    m['image']['input_evidence_scope'] = input_scope
     elf_jobs = []
     header_failures = []
     max_bytes = tools.config['analysis']['max_text_bytes']
@@ -146,7 +148,8 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
                     for attr in sorted(os.listxattr(path, follow_symlinks=False)):
                         if attr.startswith(('security.', 'system.posix_acl')):
                             xattrs[attr] = os.getxattr(path, attr, follow_symlinks=False).hex()
-                    metadata['security_metadata_complete'] = image.format not in ('tar', 'squashfs')
+                    metadata['security_metadata_complete'] = all(input_scope[k] == 'OBSERVABLE' for k in
+                        ('uid_gid_mode', 'xattrs', 'acl', 'smack', 'file_capabilities'))
                     metadata['has_file_capabilities'] = 'security.capability' in xattrs
                 except OSError as exc:
                     m['limitations'].append(limitation('security', f'xattr unreadable: {exc.strerror}', virtual))
@@ -249,7 +252,30 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
         m['limitations'].append(limitation('hardware', 'Driver/codec inventory does not establish device behavior or hardware acceleration.'))
     m['loader_environment'] = tools.config['loader']['environments'].get(label, {})
     m['loader_configuration'] = [x for x in m['configurations'] if x['path'] == '/etc/ld.so.conf' or x['path'].startswith('/etc/ld.so.conf.d/')]
-    m['collection_complete'] = image.format != 'rpm-collection' and not image.errors and not any(x['dimension'] == 'filesystem' for x in m['limitations'])
+    scope_complete = all(input_scope[key] != 'NOT_RESTORED' for key in ('paths', 'file_contents'))
+    m['filesystem_path_inventory_complete'] = (image.format != 'rpm-collection' and not image.errors
+                                               and input_scope['paths'] != 'NOT_RESTORED')
+    m['collection_complete'] = (m['filesystem_path_inventory_complete'] and scope_complete
+                                and not any(x['dimension'] == 'filesystem' for x in m['limitations']))
+    m['collector_execution'] = {}
+    if elf_jobs and m['elf_objects']:
+        failures = [o for o in m['elf_objects'] if not o['complete']]
+        done = len(m['elf_objects']) - len(failures)
+        m['collector_execution']['readelf'] = {
+            'status': 'COMPLETE' if not failures else 'PARTIAL' if done else 'FAILED',
+            'successful': done, 'attempted': len(m['elf_objects']),
+            'errors': [{'path': obj['path'], 'reason': obj['error'], 'evidence': obj.get('evidence', [])}
+                       for obj in failures]}
+    if 'packages' in active:
+        inventory = m['package_inventory']
+        archive_failed = inventory['archive_status'] == 'PARTIAL'
+        status = inventory.get('execution', 'NOT_EXECUTED')
+        if archive_failed and status != 'FAILED':
+            status = 'PARTIAL' if inventory['archive_count'] or status == 'COMPLETE' else 'FAILED'
+        m['collector_execution']['rpm'] = {
+            'status': status if status != 'NOT_EXECUTED' or not inventory['archive_count'] else 'COMPLETE',
+            'reason': inventory['reason'] or ('RPM archive collection incomplete' if archive_failed else ''),
+            'evidence': inventory.get('evidence', [])}
     m['header_inventory_complete'] = m['collection_complete'] and not header_failures
     m['header_inventory_scope'] = 'Readable installed .h/.hpp/.hh/.hxx paths under include directories; not SDK or semantic completeness'
     # Compiler include search roots are not inferred from filenames; quoted includes

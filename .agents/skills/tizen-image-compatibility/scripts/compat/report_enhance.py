@@ -218,12 +218,17 @@ def build(source, output, guard_factory=ResourceGuard):
     source, output = Path(source).resolve(), Path(output).resolve()
     if source == output or source in output.parents or output in source.parents:
         raise ValueError('Output must be separate from the immutable source report')
-    for name in ('baseline-manifest.json', 'candidate-manifest.json', 'results.json', 'findings.csv', 'packages.csv'):
+    required = ('baseline-manifest.json', 'candidate-manifest.json', 'results.json', 'findings.csv', 'packages.csv')
+    for name in required:
         if not (source / name).is_file():
             raise ValueError('Required source report missing: ' + name)
     output.mkdir(parents=True, exist_ok=False)
     started = time.monotonic()
-    guard = guard_factory(output)
+    # A prior real report allocated 6.58 GiB for a report of this general scale.
+    # Budget twice the indexed input bytes plus 1 GiB for indexes/journals, and
+    # enforce an additional 1 GiB free-space reserve throughout the build.
+    budget = 2 * sum((source / name).stat().st_size for name in required) + 1024**3
+    guard = ResourceGuard(output, disk_budget=budget) if guard_factory is ResourceGuard else guard_factory(output)
     store = None
     stage = 'preflight'
     previous_tmp = os.environ.get('SQLITE_TMPDIR')

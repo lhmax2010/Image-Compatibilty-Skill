@@ -65,8 +65,9 @@ class ResourceLimit(RuntimeError):
 
 class ResourceGuard:
     """Linux experiment limits; frequent checkpoints include SQLite VM operations."""
-    def __init__(self, output):
+    def __init__(self, output, disk_budget=None):
         self.output = Path(output)
+        self.disk_budget = disk_budget
         self.started = time.monotonic()
         self.last = -100.0
         self.low_since = None
@@ -120,8 +121,15 @@ class ResourceGuard:
             raise ResourceLimit('Task process-tree RSS or process high-water RSS exceeds 3 GiB')
         if allocated > 15 * 1024**3:
             raise ResourceLimit('New report allocation exceeds 15 GiB')
-        if sample['disk_free_bytes'] < 100 * 1024**3:
-            raise ResourceLimit('Available disk below 100 GiB')
+        if self.disk_budget is None:
+            if sample['disk_free_bytes'] < 100 * 1024**3:
+                raise ResourceLimit('Available disk below 100 GiB')
+        else:
+            remaining = max(0, self.disk_budget - allocated)
+            required = remaining + 1024**3
+            sample.update(disk_estimated_work_bytes=self.disk_budget, disk_required_free_bytes=required)
+            if sample['disk_free_bytes'] < required:
+                raise ResourceLimit(f'Available disk below estimated remaining report allocation plus 1 GiB reserve ({required} bytes)')
 
 
 class _HashReader(io.RawIOBase):

@@ -14,6 +14,7 @@ analysis:
   max_text_bytes: 4194304
   max_extract_bytes: 107374182400
   max_extract_files: 2000000
+  input_scope: {} # Example: {baseline: {ramdisk: false, xattrs: false, hardlinks: false}}
 tools: {} # Example: {readelf: /opt/bin/aarch64-linux-gnu-readelf, abidiff: false}
 preparation:
   platform_partition: pltf_t.img
@@ -55,5 +56,6 @@ report:
 ci:
   fail_on: HIGH
   strict: false
+  fail_on_collector_failure: true
   minimum_coverage: {} # e.g. {abi: 90, linking: 95, runtime: 100}; percentages of applicable contracts
 severity_overrides: {} # Example: {performance: MEDIUM}

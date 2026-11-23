@@ -1,7 +1,7 @@
 """Independent compatibility outcome and explicit required-check completeness (1.2)."""
 from collections import defaultdict
 from .core import DIMENSIONS, SEVERITIES
-from .elf import symbol_identity
+from .elf import dynamic_exports, symbol_identity
 
 SECTIONS = {'elf': 'elf_objects', 'abi': 'elf_objects', 'linking': 'elf_objects', 'api': 'public_headers',
             'headers': 'public_headers', 'compiler_runtime': 'runtime_libraries', 'kernel': 'kernel',
@@ -97,9 +97,10 @@ def coverage_report(a, b, findings, tests, matrix, config):
                 by_symbol = defaultdict(list)
                 for f in surface: by_symbol[f['interface'].split(':', 1)[0]].append(f)
                 versions = defaultdict(list)
-                for s in (peer or {}).get('exports', []):
+                for s in dynamic_exports(peer or {}):
                     identity = symbol_identity(s['name']); versions[(identity['base_name'], identity['version'])].append(s)
-                for s in obj.get('exports', []):
+                baseline_exports = list(dynamic_exports(obj))
+                for s in baseline_exports:
                     identity = symbol_identity(s['name']); matches = versions[(identity['base_name'], identity['version'])]
                     relevant = by_symbol[s['name']] + (by_symbol[identity['base_name']] if identity['base_name'] != s['name'] else [])
                     if relevant:
@@ -109,7 +110,7 @@ def coverage_report(a, b, findings, tests, matrix, config):
                         same = complete and any(all(s.get(k) == x.get(k) for k in keys) for x in matches)
                         c = check('export:' + s['name'], 'COMPATIBLE' if same else 'UNKNOWN')
                     checks.append(c)
-                if not obj.get('exports'):
+                if not baseline_exports:
                     checks.append(check('export inventory', 'COMPATIBLE' if complete else 'UNKNOWN'))
                 units.append(obligation(path + ':exports', checks, surface))
                 units.append(obligation(path + ':type-layout', [finding_check('DWARF type/layout ABI', layout)], layout))

@@ -162,7 +162,9 @@ def main(argv: list[str] | None = None) -> int:
             a['cross_matrix'] = b['cross_matrix'] = matrix
             result = build_results(a, b, findings, tests, matrix, config)
             generate(output, a, b, result, config)
-            print(f"{result['status']}: {len(findings)} findings; quality gate {result['quality_gate']['status']} (compatibility={result['quality_gate']['compatibility_status']}, coverage={result['quality_gate']['coverage_status']}); report {output / 'index.html'}")
+            print(f"{result['status']}: {len(findings)} findings; execution {result['execution']['status']}; quality gate {result['quality_gate']['status']} (compatibility={result['quality_gate']['compatibility_status']}, coverage={result['quality_gate']['coverage_status']}, execution={result['quality_gate']['execution_status']}); report {output / 'index.html'}")
+            if result['quality_gate']['execution_status'] == 'FAIL':
+                return 3
             threshold = SEVERITIES.index(config['ci']['fail_on'])
             fail = any(f['status'] == 'INCOMPATIBLE' and SEVERITIES.index(f['severity']) <= threshold for f in findings)
             fail |= config['ci']['strict'] and (any(f['status'] == 'UNKNOWN' for f in findings) or any(c['unknown'] for c in result['coverage'].values()))

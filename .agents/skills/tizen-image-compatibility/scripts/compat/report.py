@@ -22,6 +22,21 @@ def build_results(a: dict[str, Any], b: dict[str, Any], findings: list[dict[str,
     expected = a.get('expected_tests', []) + b.get('expected_tests', [])
     status = 'INCOMPATIBLE' if counts['INCOMPATIBLE'] else 'UNKNOWN' if counts['UNKNOWN'] else 'COMPATIBLE' if findings else 'UNKNOWN'
     coverage, gate = coverage_report(a, b, findings, tests, matrix, config)
+    execution = {label: manifest.get('collector_execution', {})
+                 for label, manifest in (('baseline', a), ('candidate', b))}
+    enabled = set(config['analysis']['modes'])
+    relevant = {'rpm'} if 'packages' in enabled else set()
+    if enabled & {'elf', 'abi', 'linking', 'compiler_runtime', 'performance'}:
+        relevant.add('readelf')
+    states = [entry['status'] for records in execution.values()
+              for tool, entry in records.items() if tool in relevant]
+    execution_status = ('FAILED' if 'FAILED' in states else 'PARTIAL' if 'PARTIAL' in states else
+                        'UNKNOWN' if any('collector_execution' not in m for m in (a, b)) else
+                        'COMPLETE' if 'COMPLETE' in states else 'NOT_EXECUTED')
+    execution_gate = 'FAIL' if execution_status == 'FAILED' and config['ci'].get('fail_on_collector_failure', True) else 'PASS'
+    gate['execution_status'] = execution_gate
+    if execution_gate == 'FAIL':
+        gate['status'] = 'FAIL'
     if status == 'COMPATIBLE' and any(x['unknown'] for x in coverage.values()):
         status = 'UNKNOWN'
     package_inventory, package_results = analyze_packages(a, b, findings, coverage)
@@ -29,6 +44,8 @@ def build_results(a: dict[str, Any], b: dict[str, Any], findings: list[dict[str,
             or any(p['overall'] == 'INCOMPATIBLE' for p in package_results)):
         status = 'INCOMPATIBLE'
     return {'package_inventory': package_inventory, 'package_results': package_results,
+        'execution': {'status': execution_status, 'collectors': execution,
+                      'fail_on_collector_failure': config['ci'].get('fail_on_collector_failure', True)},
         'finding_integrity': {'unique_findings': len(findings), 'source_occurrences': sum(f.get('occurrences', 1) for f in findings),
                               'deduplicated': [{'id': f['id'], 'occurrences': f['occurrences']} for f in findings if f.get('occurrences', 1) > 1]},
         'expected_tests': a.get('expected_tests', []) + b.get('expected_tests', []),
@@ -100,10 +117,16 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
             f"Tests: {summary['total_tests']}; passed: {summary['passed_tests']}; failed: {summary['failed_tests']}; unknown: {summary['unknown_tests']}.",
             f"Findings: {summary['findings']}; incompatible: {summary['by_status']['INCOMPATIBLE']}; unknown: {summary['by_status']['UNKNOWN']}.", '',
             'Static findings are not executable test counts. No runtime execution means no runtime pass.', '', '## Risks', '']
-        lines += ['## Coverage', '', '| Dimension | Applicable | Complete | Partial | Unexecuted | Compatible | Incompatible | Unknown | Complete coverage % | Compatible / applicable % |', '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
+        lines += ['## Collector execution', '', '**' + results['execution']['status'] + '**', '']
+        for side, collectors in results['execution']['collectors'].items():
+            for tool, entry in collectors.items():
+                reasons = [e['path'] + ' (' + e['reason'] + ')' for e in entry.get('errors', [])]
+                lines.append('- ' + esc(side + ' ' + tool + ' ' + entry['status'] + ' ' +
+                                        (entry.get('reason') or ', '.join(reasons[:10]))))
+        lines += ['', '## Coverage', '', '| Dimension | Applicable | Complete | Partial | Unexecuted | Compatible | Incompatible | Unknown | Complete coverage % | Compatible / applicable % |', '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
         for dim, cov in results['coverage'].items():
             lines.append('| ' + ' | '.join(str(x) for x in [dim, *[cov[k] for k in ('applicable', 'verified', 'partially_verified', 'unexecuted', 'compatible', 'incompatible', 'unknown', 'coverage_percent', 'compatibility_percent')]]) + ' |')
-        lines += ['', 'Quality gate: ' + results['quality_gate']['status'] + '; compatibility=' + results['quality_gate']['compatibility_status'] + '; coverage=' + results['quality_gate']['coverage_status'] + '; strict=' + results['quality_gate']['strict_status'], '', '## Incompatible interfaces (first 200; full list in JSON/CSV)', '']
+        lines += ['', 'Quality gate: ' + results['quality_gate']['status'] + '; compatibility=' + results['quality_gate']['compatibility_status'] + '; coverage=' + results['quality_gate']['coverage_status'] + '; strict=' + results['quality_gate']['strict_status'] + '; execution=' + results['quality_gate']['execution_status'], '', '## Incompatible interfaces (first 200; full list in JSON/CSV)', '']
         for item in [f for f in results['findings'] if f['status'] == 'INCOMPATIBLE'][:200]:
             if item['status'] == 'INCOMPATIBLE':
                 lines.append(f"- {item['severity']} `{esc(item['component'])}` / `{esc(item['interface'])}`: {esc(item['potential_impact'])} ({item['id']})")
@@ -126,6 +149,10 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
         content += '<p class="status">' + esc(results['status']) + '</p>'
         content += table([[a['image'], b['image'], summary]], ['Baseline image', 'Candidate image', 'Tests and findings'])
         content += '<p>Direction: baseline consumers on candidate. UNKNOWN is not a pass. Static findings and executable tests are counted separately.</p>'
+        content += '<h2>Collector execution</h2><p>' + esc(results['execution']['status']) + '</p>' + table(
+            [[side, tool, {**entry, 'errors': entry.get('errors', [])[:10]}]
+             for side, collectors in results['execution']['collectors'].items() for tool, entry in collectors.items()],
+            ['Image', 'Collector', 'Recorded execution (first 10 errors)'])
         content += '<h2>Coverage and gate</h2>' + table([[d, {k: v for k, v in c.items() if k != 'units'}] for d, c in results['coverage'].items()], ['Dimension', 'Coverage'])
         content += '<p>Quality gate: ' + esc(results['quality_gate']) + '</p>'
         content += '<h2>Compatibility overview</h2>' + table([[k, v] for k, v in results['dimensions'].items()], ['Dimension', 'Statuses'])

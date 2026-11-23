@@ -5,7 +5,7 @@ from pathlib import Path
 from collections import defaultdict
 from typing import Any
 from .core import DIMENSIONS, SEVERITIES, Tools, canonical, digest, finding
-from .elf import symbol_identity, target_abi_matches, arm_abi
+from .elf import dynamic_exports, symbol_identity, target_abi_matches, arm_abi, version_nodes
 from .linker import dependency_checks
 from .debuginfo import advanced_abi
 from .source import declaration_reachability, header_inventory_complete
@@ -34,7 +34,7 @@ def virtual_alias(path: str, files: dict[str, dict[str, Any]]) -> str:
 
 
 def exports(obj: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return {symbol['name']: symbol for symbol in obj.get('exports', [])}
+    return {symbol['name']: symbol for symbol in dynamic_exports(obj)}
 
 
 def runtime_requirements(obj):
@@ -93,6 +93,13 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
                 obj.get('export_inventory_complete'), other.get('export_inventory_complete'), 'UNKNOWN', 'HIGH',
                 'ELF dynamic export inventory completeness', ev,
                 'Observed symbols remain usable evidence; an incomplete inventory cannot prove absence.'))
+        if old_exports_complete:
+            old_nodes, new_nodes = version_nodes(obj), version_nodes(other)
+            for name in sorted(old_nodes.keys() - new_nodes.keys()):
+                findings.append(finding('abi', path, 'version definition:' + name, old_nodes[name], None,
+                    'INCOMPATIBLE' if new_exports_complete else 'UNKNOWN', 'HIGH',
+                    'GNU version definition comparison', ev,
+                    'A previously provided GNU version definition was not observed on the candidate.'))
         versions = {}
         defaults = {}
         for exported in right.values():
@@ -140,7 +147,8 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
                 'UNKNOWN', 'MEDIUM', 'ELF runtime requirement inventory', ev,
                 'Runtime names, imports and unwind metadata describe observed requirements.',
                 'Run cross-DSO exception, RTTI, object lifecycle, TLS and cancellation probes on the selected target.'))
-        if old_exports_complete and new_exports_complete and all(obj.get(k) == other.get(k) for k in ('exports', 'needed', 'soname', 'machine', 'class')):
+        if (old_exports_complete and new_exports_complete and left == right and version_nodes(obj).keys() == version_nodes(other).keys()
+                and all(obj.get(k) == other.get(k) for k in ('needed', 'soname', 'machine', 'class'))):
             findings.append(finding('abi', path, 'dynamic interface surface', 'collected ELF surface', 'same collected ELF surface',
                 'IDENTICAL', 'INFO', evidence=ev, impact='Symbol-level surface matches; type/layout and behavioral coverage remain separate.'))
     return findings

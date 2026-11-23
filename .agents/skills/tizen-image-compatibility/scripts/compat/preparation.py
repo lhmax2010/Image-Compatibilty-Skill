@@ -303,6 +303,7 @@ def prepare(source, output, tools, *, inspect_only=False, staged=None, replaceme
                         legacy.metadata = {name: meta for name, _, meta in legacy.walk()}
                         legacy.format = 'tar'  # A copied tree cannot independently re-establish original security metadata.
                 write_json(output / METADATA, legacy.metadata)
+                record['coverage']['evidence_scope'] = legacy.evidence_scope()
                 record['output'] = {'root': ROOTS[scope], 'identity': identity(root, tools.config),
                                     'metadata_sha256': hash_file(output / METADATA), 'image_format': legacy.format}
                 if replacement and identity(replacement[0], tools.config) != record['replacement']['identity']:

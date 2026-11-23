@@ -5,7 +5,7 @@ Unknown environment/cache, unsupported tokens and shared-library caller scopes s
 from collections import deque
 import posixpath
 from .core import finding, canonical, digest
-from .elf import symbol_identity, target_abi_matches
+from .elf import dynamic_exports, symbol_identity, target_abi_matches, version_nodes
 
 
 def alias(path, files):
@@ -39,7 +39,10 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
     env = manifest.get('loader_environment', {})
     known = (env.get('model') == 'glibc' and env.get('environment_complete') is True
              and env.get('cache_complete') is True)
-    inventory = manifest.get('collection_complete') is True and all(o.get('complete') for o in objects.values())
+    inventory = manifest.get('filesystem_path_inventory_complete')
+    if inventory is None:
+        inventory = manifest.get('collection_complete') is True and all(o.get('complete') for o in objects.values())
+    inventory = inventory is True
     global_names = {posixpath.basename(p) for p in objects} | {o.get('soname') for o in objects.values()}
     out = []
     def emit(obj, interface, before, after, state, status=None, severity='HIGH'):
@@ -149,6 +152,9 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
                         ambiguous = True
                         continue
                     actual = alias(path, files)
+                    if actual is None:
+                        ambiguous = True
+                        continue
                     hit = objects.get(actual)
                     if hit:
                         if not hit.get('complete') or (hit.get('type') and not hit['type'].startswith('DYN')) or not target_abi_matches(obj, hit):
@@ -186,7 +192,7 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
             scope_known &= not loader_obj.get('needed')
         export_scope = {}
         for provider in closure:
-            for exported in provider.get('exports', []):
+            for exported in dynamic_exports(provider):
                 if checkpoint:
                     checkpoint()
                 exp = symbol_identity(exported['name'])
@@ -199,7 +205,7 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
                 if checkpoint:
                     checkpoint()
                 provider = edges.get((obj['path'], req['file'])) or loaded.get(req['file'])
-                names = {v['name'] for v in (provider or {}).get('version_definitions', [])}
+                names = version_nodes(provider or {})
                 present = req['name'] in names
                 if not present:
                     failed_requirements.add((req['file'], req['name']))

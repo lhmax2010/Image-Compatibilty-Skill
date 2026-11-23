@@ -16,7 +16,7 @@ import threading
 import time
 from typing import Any
 
-VERSION = '1.3.1-phase7a'
+VERSION = '1.3.1-phase8a'
 SCHEMA = '1.2'
 DIMENSIONS = ('elf', 'abi', 'api', 'headers', 'linking', 'compiler_runtime', 'kernel',
               'ipc', 'commands', 'filesystem', 'packages', 'services', 'security',
@@ -29,7 +29,7 @@ DEFAULTS: dict[str, Any] = {
     'analysis': {'modes': list(DIMENSIONS), 'ignore_build_ids': True,
                  'ignore_timestamps': True, 'normalize_build_paths': True,
                  'workers': 4, 'timeout_seconds': 60, 'max_text_bytes': 4194304,
-                 'max_extract_bytes': 107374182400, 'max_extract_files': 2000000},
+                 'max_extract_bytes': 107374182400, 'max_extract_files': 2000000, 'input_scope': {}},
     'tools': {},
     'preparation': {'platform_partition': 'pltf_t.img', 'xz_memory_mib': 256,
                     'adapter_timeout_seconds': 1800, 'vdfs_adapter': {}},
@@ -43,7 +43,7 @@ DEFAULTS: dict[str, Any] = {
                           'include_dirs': ['usr/include'], 'probes': [], 'builds': {}, 'semantic_headers': False, 'target_abis': {}, 'runtime_objects': {}, 'sdk_package_manifests': {}},
     'performance': {'enabled': False, 'tolerance_percent': 10},
     'report': {'html': True, 'json': True, 'markdown': True, 'csv': True},
-    'ci': {'fail_on': 'HIGH', 'strict': False, 'minimum_coverage': {}},
+    'ci': {'fail_on': 'HIGH', 'strict': False, 'minimum_coverage': {}, 'fail_on_collector_failure': True},
     'severity_overrides': {},
 }
 
@@ -118,6 +118,12 @@ def validate_config(c: dict[str, Any]) -> None:
                 require(value >= (0 if key in ('header_limit', 'tolerance_percent') else 1),
                         f'Invalid range: {section}.{key}')
     require(all(x in DIMENSIONS for x in c['analysis']['modes']), 'Unknown analysis dimension')
+    scope_fields = {'paths', 'file_contents', 'uid_gid_mode', 'xattrs', 'acl', 'smack', 'file_capabilities',
+                    'hardlinks', 'ramdisk', 'special_files'}
+    for image, scope in c['analysis']['input_scope'].items():
+        require(image in ('baseline', 'candidate') and isinstance(scope, dict) and set(scope) <= scope_fields
+                and all(v is False for k, v in scope.items() if k != 'ramdisk')
+                and all(type(v) is bool for v in scope.values()), 'Invalid analysis.input_scope declaration')
     require(type(c['analysis']['workers']) is int and type(c['cross_compilation']['header_limit']) is int,
             'workers and header_limit must be integers')
     require(c['ci']['fail_on'] in SEVERITIES, 'Invalid fail_on severity')
@@ -431,8 +437,19 @@ def read_manifest(path: Path) -> dict[str, Any]:
         if 'loader_environment' in data:
             extra['loader']['environments']['baseline'] = data['loader_environment']
         validate_config(extra)
-        if 'collection_complete' in data and type(data['collection_complete']) is not bool:
-            raise ValueError('invalid collection completeness')
+        for field in ('collection_complete', 'filesystem_path_inventory_complete'):
+            if field in data and type(data[field]) is not bool:
+                raise ValueError('invalid collection completeness')
+        if 'collector_execution' in data:
+            recorded = data['collector_execution']
+            if not isinstance(recorded, dict) or not all(
+                    name in ('readelf', 'rpm') and isinstance(entry, dict)
+                    and entry.get('status') in ('COMPLETE', 'PARTIAL', 'FAILED', 'NOT_EXECUTED')
+                    and isinstance(entry.get('reason', ''), str) and isinstance(entry.get('errors', []), list)
+                    and all(isinstance(error, dict) and isinstance(error.get('path'), str)
+                            and isinstance(error.get('reason'), str) for error in entry.get('errors', []))
+                    for name, entry in recorded.items()):
+                raise ValueError('invalid collector execution records')
         if 'header_inventory_complete' in data and type(data['header_inventory_complete']) is not bool:
             raise ValueError('invalid header inventory completeness')
         if 'header_include_roots' in data and (not isinstance(data['header_include_roots'], list) or any(not isinstance(r, str) or not r.startswith('/') for r in data['header_include_roots'])):

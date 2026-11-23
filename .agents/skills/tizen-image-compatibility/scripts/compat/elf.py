@@ -125,9 +125,10 @@ def parse_readelf(text: str) -> dict[str, Any]:
                   for name, prefix in [('mangled', '_Z'), ('rtti', '_ZTI'), ('vtables', '_ZTV')]}
     obj['unwind_sections'] = [s for s in obj['sections'] if s in ('.eh_frame', '.eh_frame_hdr', '.gcc_except_table', '.ARM.exidx', '.ARM.extab')]
     obj['debug_info'] = any(x in obj['sections'] for x in ('.debug_info', '.zdebug_info'))
-    requirements = {r['index']: r for r in obj['version_requirements']}
+    requirements = {(r['index'], r['name']): r for r in obj['version_requirements']}
     for symbol in obj['imports']:
-        symbol['version_file'] = requirements.get(symbol.get('version_index'), {}).get('file')
+        identity = symbol.get('version_index'), symbol['version']
+        symbol['version_file'] = requirements.get(identity, {}).get('file')
     obj['arm_abi'] = arm_abi(obj)
     return obj
 
@@ -166,7 +167,9 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str) -> dict[str, 
         definitions = {v['name'] for v in obj['version_definitions']}
         requirements = {v['name'] for v in obj['version_requirements']}
         version_valid &= all(not s['version'] or s['version'] in definitions for s in obj['exports'])
-        version_valid &= all(not s['version'] or s['version'] in requirements for s in obj['imports'])
+        version_valid &= all(not s['version'] or (s['version'] in requirements and
+                             (s['version_index'] is None or s['version_file']))
+                             for s in obj['imports'])
         obj['export_inventory_complete'] = bool(obj['complete'] and not result.get('error') and not result.get('stderr_truncated')
             and not result['stderr'].strip() and rows_valid and version_valid
             and all(obj.get(k) for k in ('class', 'endianness', 'type')))
@@ -176,6 +179,11 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str) -> dict[str, 
             'No dynamic symbol table on ET_REL.' if obj['export_inventory_status'] == 'NOT_APPLICABLE' else
             'Tool failure/warning, truncated output, missing or unsupported dynsym/version records; absence unproven.')
         obj['export_inventory_evidence'] = obj['evidence']
+        if obj['export_inventory_complete']:
+            visible = list(dynamic_exports(obj))
+            visible_rows = {id(symbol) for symbol in visible}
+            obj['version_node_markers'] = [s for s in obj['exports'] if id(s) not in visible_rows]
+            obj['exports'] = visible
         obj['resolution_metadata_complete'] = bool(obj['export_inventory_complete']
             and all(obj.get(k) for k in ('class', 'endianness', 'type'))
             and 'Dynamic section at offset' in result['stdout'])
@@ -200,6 +208,24 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str) -> dict[str, 
             obj['evidence'] = [result['stdout_evidence'], result['stderr_evidence']]
             obj['nm_symbols_raw'] = result['stdout']
     return obj
+
+
+def version_nodes(obj):
+    """The BASE record identifies the ELF itself, not a provided symbol version."""
+    return {v['name']: v for v in obj.get('version_definitions', [])
+            if v.get('index') != 1 and 'BASE' not in (v.get('flags') or '').upper().split()}
+
+
+def dynamic_exports(obj):
+    """Exclude demonstrated GNU ld node markers, including on legacy manifest replay."""
+    nodes = version_nodes(obj) if obj.get('export_inventory_complete') is True and 'version_node_markers' not in obj else {}
+    for sym in obj.get('exports', []):
+        if (sym['name'] in nodes and type(nodes[sym['name']].get('index')) is int and nodes[sym['name']]['index'] > 1
+                and sym.get('section') == 'ABS' and sym.get('type') == 'OBJECT'
+                and sym.get('size') == sym.get('value') == 0 and sym.get('binding') == 'GLOBAL'
+                and sym.get('visibility') == 'DEFAULT' and not sym.get('version')):
+            continue
+        yield sym
 
 
 def symbol_identity(name: str) -> dict[str, Any]:

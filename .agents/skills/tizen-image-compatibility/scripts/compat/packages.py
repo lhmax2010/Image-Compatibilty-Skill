@@ -62,9 +62,11 @@ def collect_package_inventory(image: Image, tools: Tools, workspace: Path):
                  'reason': 'RPM database unavailable', 'evidence': [], 'archive_status': 'NOT_APPLICABLE', 'archive_count': 0}
     records = []; available = []; limits = []
     commands = []
+    database_present = db and any((db / name).is_file() and not (db / name).is_symlink()
+                                  for name in ('rpmdb.sqlite', 'Packages', 'Packages.db', 'data.mdb'))
     if rpm:
         commands += [('rpm_archive', str(p), [rpm, '-qp', '--xml', str(p)]) for p in archives]
-        if db and any((db / name).is_file() and not (db / name).is_symlink() for name in ('rpmdb.sqlite', 'Packages', 'Packages.db', 'data.mdb')):
+        if database_present:
             copy = workspace / ('rpmdb-' + digest(str(db).encode())[:16])
             copy.mkdir(exist_ok=True)
             try:
@@ -72,18 +74,21 @@ def collect_package_inventory(image: Image, tools: Tools, workspace: Path):
                     if entry.is_file() and not entry.is_symlink(): shutil.copyfile(entry, copy / entry.name)
                 commands.append(('installed_rpmdb', str(db), [rpm, '--dbpath', str(copy), '-qa', '--xml']))
             except OSError as exc:
-                inventory['reason'] = 'RPM database snapshot failed: ' + str(exc)
+                inventory.update(reason='RPM database snapshot failed: ' + str(exc), execution='FAILED')
         elif db:
             inventory['reason'] = 'RPM database directory has no recognized database; not an empty installed inventory'
     else:
         inventory['reason'] = 'rpm tool unavailable'
+        if database_present:
+            inventory['execution'] = 'FAILED'
     archive_failures = 0
     for kind, source, command in commands:
         result = tools.run(command)
         ev = [result['stdout_evidence'], result['stderr_evidence']]
         try:
             if result['returncode']:
-                raise ValueError('query failed: ' + result['stderr'])
+                raise ValueError('query failed: ' + (result.get('error') or result['stderr'] or
+                                                     f"exit {result['returncode']}"))
             raw = tools.output / result['stdout_evidence']
             if raw.is_file():
                 parsed = parse_rpm_evidence(raw)
@@ -96,10 +101,12 @@ def collect_package_inventory(image: Image, tools: Tools, workspace: Path):
                               provenance={'kind': kind, 'source': source, 'query': result['argv']})
             if kind == 'installed_rpmdb':
                 records.extend(parsed)
-                inventory.update(status='COMPLETE', installed_count=len(parsed), reason='', evidence=ev)
+                inventory.update(status='COMPLETE', installed_count=len(parsed), reason='', evidence=ev,
+                                 execution='COMPLETE')
             else: available.extend(parsed)
         except (ET.ParseError, ValueError, IndexError, KeyError, OSError) as exc:
-            if kind == 'installed_rpmdb': inventory.update(reason='RPM installed inventory failed: ' + str(exc), evidence=ev)
+            if kind == 'installed_rpmdb':
+                inventory.update(reason='RPM installed inventory failed: ' + str(exc), evidence=ev, execution='FAILED')
             else: archive_failures += 1
             limits.append(limitation('packages', f'{kind} query/parse failed: {exc}', source))
     if inventory['status'] != 'COMPLETE': limits.append(limitation('packages', inventory['reason']))

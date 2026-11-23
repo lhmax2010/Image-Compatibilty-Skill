@@ -41,6 +41,8 @@ Every finding contains:
 
 `index.html` is self-contained, with summary, dimension overview, four-way matrix, filterable escaped details limited to first 1000 findings (full JSON/CSV retained), missing interfaces, compatible/normalized differences and limitations. `summary.md` is CI-readable and limits incompatible detail rows to 200; it includes the full coverage table. `baseline-manifest.json`, `candidate-manifest.json` and `collection.log` are always emitted; report format flags control HTML/results JSON/Markdown/CSV. `evidence/` preserves collection outputs; `build/` holds generated compile sources/artifacts if applicable. No timestamps are added to findings just for display. `expected-tests.json` is the pre-execution plan; `expected-tests-results.json` is its reconciled outcome. Manifest reuse does not re-run or regenerate those original artifacts; reconciled expected tests remain in results/manifests.
 
+Phase 8A adds `execution` and `quality_gate.execution_status`. `execution.collectors` carries per-side outcomes, failure reasons and evidence. For legacy manifests without execution records, execution remains UNKNOWN. New manifests retain GNU ld version-node markers under `elf_objects[].version_node_markers`. `exports` continues to describe lookup-visible interfaces, and version definitions and requirements remain separate. Original tool output is retained in Evidence.
+
 A static finding is not counted as an executable test. Missing environments leave all runtime cells unknown. Empty evidence or an absent collection section is never evidence of success.
 
 ## Coverage and quality gates
@@ -94,6 +96,8 @@ Compile target diagnostics separate `abi_status`, `isa_assessment` (probe/refere
 ## Additive report projection v1.3
 
 `enhance_report.py build` accepts schema 1.2 and leaves its detector schema unchanged. `overview.json` identifies `report_version: 1.3`, the source schema/path, per-image unique/attributed observed export totals, original coverage and status histograms. `validation.json`, `run.json`, `stages.json`, `source-before.json`, `source-after.json` and `resource-samples.jsonl` record reconciliation, time, memory, disk and immutable input hashes.
+
+The enhancement preflight estimates new allocation as twice the on-disk bytes of the two input manifests, results JSON, findings CSV and package CSV, plus 1 GiB for SQLite work. It requires the remaining allocation plus a 1 GiB free-space reserve throughout the build. Resource records include the estimate and current required space. The 15 GiB allocation cap and memory limits still apply.
 
 `report-index.sqlite` is a derived read-only browser index after build. `findings.payload` is zlib-compressed canonical JSON retaining every original field, with SHA256 in `payload_hash`; `id` is the original ID. `unassigned` preserves the original unassigned IDs. `packages.assessment` preserves original ABI/API/Linking/Overall/Verification/Coverage/Confidence/Limitations fields, not a recalculated verdict. `elf`, `aliases`, `ownership`, `symbols`, `pairs` and `differences` expose report-only identities and observations. `groups` plus `findings.group_id` retain one membership for each original Linking finding; roles/ELF/package references retain separate attribution paths.
 

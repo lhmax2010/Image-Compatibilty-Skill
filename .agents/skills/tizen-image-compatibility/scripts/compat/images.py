@@ -70,6 +70,23 @@ class Image:
             self.format = 'rpm-collection'
         tools.aliases[str(self.root)] = f'<{label}-rootfs>'
 
+    def evidence_scope(self, declared=None):
+        """Describe which source facts the current representation can retain."""
+        fields = dict(paths='OBSERVABLE', file_contents='OBSERVABLE', uid_gid_mode='OBSERVABLE',
+                      xattrs='OBSERVABLE', acl='OBSERVABLE', smack='OBSERVABLE',
+                      file_capabilities='OBSERVABLE', hardlinks='OBSERVABLE',
+                      ramdisk='UNKNOWN', special_files='OBSERVABLE')
+        if self.format in ('tar', 'squashfs'):
+            for key in ('xattrs', 'acl', 'smack', 'file_capabilities', 'hardlinks'):
+                fields[key] = 'UNKNOWN'
+            fields['uid_gid_mode'] = 'ARCHIVE_METADATA' if self.format == 'tar' else 'UNKNOWN'
+            fields['special_files'] = 'ARCHIVE_METADATA' if self.format == 'tar' else 'UNKNOWN'
+        if self.format == 'rpm-collection':
+            fields = dict.fromkeys(fields, 'NOT_APPLICABLE')
+        for key, value in (declared or {}).items():
+            fields[key] = 'INCLUDED_DECLARED' if value else 'NOT_RESTORED'
+        return fields
+
     def _prepare(self, workspace, tools, label, *, staged=None):
         bundle = workspace / (label + '-prepared')
         bundle.mkdir()

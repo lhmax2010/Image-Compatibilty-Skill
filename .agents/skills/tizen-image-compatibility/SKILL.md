@@ -47,6 +47,8 @@ python3 "$SKILL/scripts/tizen_compat.py" --list-tools --output ./reports/tools
 
 Use `--exclude abi,runtime,performance` to omit dimensions from classification, `--strict` to fail on any unknown, and `--fail-on CRITICAL|HIGH|MEDIUM|LOW|INFO`. Exit codes: **0** threshold not hit; **1** compatibility/strict failure; **2** invalid input/configuration; **3** infrastructure failure. Optional collector failures remain visible unknown findings so other analyses can complete.
 
+Review the Collector execution section alongside compatibility and coverage. A failed critical collector normally returns exit 3 after writing reports. Partial collection retains per-object gaps. Set `ci.fail_on_collector_failure: false` to reproduce the previous gate behavior. [CI and severity](references/severity_rules.md)
+
 ## Validation and synthetic example
 
 ```bash
