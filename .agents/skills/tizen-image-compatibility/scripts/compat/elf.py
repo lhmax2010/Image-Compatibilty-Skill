@@ -9,7 +9,56 @@ from .core import Tools
 
 HEADER_KEYS = {'Class': 'class', 'Data': 'endianness', 'OS/ABI': 'osabi',
                'ABI Version': 'abi_version', 'Type': 'type', 'Machine': 'machine', 'Flags': 'flags'}
-ELF_INVENTORY_REVISION = 2
+ELF_INVENTORY_REVISION = 3
+
+
+def elf_runtime_role(text: str, size: int, stderr: str = '') -> str:
+    """Use file-backed sections and load segments, never the filename."""
+    section_count = re.search(r'^\s*Number of section headers:\s*(\d+)\s*$', text, re.M)
+    program_count = re.search(r'^\s*Number of program headers:\s*(\d+)\s*$', text, re.M)
+    if not (section_count and program_count and re.search(r'^\s*Type:\s+(?:DYN|EXEC)\b', text, re.M)):
+        return 'UNKNOWN'
+    section_rows = re.findall(
+        r'^ *\[ *(\d+)\] +(?:(\S+) +)?(\S+) +([0-9a-f]+) +([0-9a-f]+) +([0-9a-f]+) +'
+        r'[0-9a-f]+ +(?:([A-Za-z]+) +)?\d+ +\d+ +\d+ *$', text, re.M)
+    program_rows = re.findall(
+        r'^ +(\S+) +(0x[0-9a-f]+) +(0x[0-9a-f]+) +0x[0-9a-f]+ +(0x[0-9a-f]+) +'
+        r'0x[0-9a-f]+ +([RWE ]*) +(?:0x[0-9a-f]+|0) *$', text, re.M)
+    if (len(section_rows) != int(section_count[1]) or len(program_rows) != int(program_count[1])
+            or any(int(row[0]) != index for index, row in enumerate(section_rows))):
+        return 'UNKNOWN'
+    sections = [(name, kind, int(addr, 16), int(offset, 16), int(length, 16), flags)
+                for _, name, kind, addr, offset, length, flags in section_rows]
+    loads = [(int(offset, 16), int(addr, 16), int(length, 16), flags)
+             for kind, offset, addr, length, flags in program_rows if kind == 'LOAD']
+    if not loads:
+        return 'UNKNOWN'
+    dwarf = any(name in ('.debug_info', '.zdebug_info') and kind == 'PROGBITS' and 'A' not in flags and length
+                and offset + length <= size for name, kind, _, offset, length, flags in sections)
+    alloc = [(kind, addr, offset, length, flags) for _, kind, addr, offset, length, flags in sections
+             if 'A' in flags and length]
+    missing_debug_interp = (stderr.strip() == 'readelf: Error: Unable to find program interpreter name'
+                            and any(name == '.interp' and kind == 'NOBITS' for name, kind, *_ in sections))
+    if ((not stderr.strip() or missing_debug_interp) and dwarf and any('E' in flags for _, _, _, flags in loads)
+            and any(kind == 'NOBITS' and 'X' in flags for kind, _, _, _, flags in alloc)
+            and all(kind in ('NOBITS', 'NOTE') for kind, *_ in alloc)):
+        return 'DEBUG_ONLY'
+    if stderr.strip():
+        return 'UNKNOWN'
+    for kind, addr, offset, length, flags in alloc:
+        if kind not in ('PROGBITS', 'DYNAMIC') or ('X' not in flags and kind != 'DYNAMIC'):
+            continue
+        if offset + length <= size and any(
+                base <= offset and offset + length <= base + extent and addr - va == offset - base
+                and ('X' not in flags or 'E' in permissions) for base, va, extent, permissions in loads):
+            return 'RUNTIME_WITH_DEBUG' if dwarf else 'RUNTIME'
+    return 'UNKNOWN'
+
+
+def runtime_metadata_complete(obj):
+    """Legacy manifests retain the existing evidence gate."""
+    return (obj.get('resolution_metadata_complete') is True
+            and obj.get('elf_runtime_role', 'RUNTIME') in ('RUNTIME', 'RUNTIME_WITH_DEBUG'))
 
 
 def arm_inventory(obj, text, complete, relocations_requested):
@@ -135,7 +184,7 @@ def parse_readelf(text: str) -> dict[str, Any]:
 
 def collect_elf(path: Path, virtual: str, tools: Tools, mode: str) -> dict[str, Any]:
     obj: dict[str, Any] = {'path': virtual, 'size': path.stat().st_size, 'complete': False, 'resolution_metadata_complete': False,
-                           'export_inventory_complete': False, 'export_inventory_status': 'UNKNOWN'}
+                           'export_inventory_complete': False, 'export_inventory_status': 'UNKNOWN', 'elf_runtime_role': 'UNKNOWN'}
     tool = tools.path('readelf')
     if tool:
         flags = ['-W', '-h', '-l', '-d', '--dyn-syms', '-V', '-S', '-A', '-n']
@@ -145,6 +194,8 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str) -> dict[str, 
         obj.update(parse_readelf(result['stdout']))
         obj['evidence'] = [result['stdout_evidence'], result['stderr_evidence']]
         obj['complete'] = result['returncode'] == 0 and not result['stdout_truncated'] and 'machine' in obj
+        if obj['complete'] and not result.get('error') and not result.get('stderr_truncated'):
+            obj['elf_runtime_role'] = elf_runtime_role(result['stdout'], obj['size'], result['stderr'])
         # ELF-header success is independent of complete negative export evidence.
         symbols = re.search(r"Symbol table '\.dynsym' contains (\d+) entries:\n(.*?)(?:\n\n|\Z)", result['stdout'], re.S)
         rows = re.findall(r'^\s*(\d+):\s+[0-9a-fA-F]+\s+\d+\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)(?:[ \t]+(\S+))?[^\n]*$', symbols[2], re.M) if symbols else []

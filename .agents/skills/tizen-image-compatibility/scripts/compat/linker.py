@@ -5,7 +5,7 @@ Unknown environment/cache, unsupported tokens and shared-library caller scopes s
 from collections import deque
 import posixpath
 from .core import finding, canonical, digest
-from .elf import dynamic_exports, symbol_identity, target_abi_matches, version_nodes
+from .elf import dynamic_exports, runtime_metadata_complete, symbol_identity, target_abi_matches, version_nodes
 
 
 def alias(path, files):
@@ -32,7 +32,8 @@ def expand(value, origin):
 
 
 def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, checkpoint=None):
-    objects = {o['path']: o for o in manifest['elf_objects']}
+    debug_paths = {o['path'] for o in manifest['elf_objects'] if o.get('elf_runtime_role') == 'DEBUG_ONLY'}
+    objects = {o['path']: o for o in manifest['elf_objects'] if o['path'] not in debug_paths}
     files = {f['path']: f for f in manifest.get('filesystem', [])}
     source_files = ({f['path']: f for f in consumer_manifest.get('filesystem', [])}
                     if consumer_manifest is not None else files if consumers is None else {})
@@ -61,6 +62,8 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
         item['id'] = 'TC-' + digest(canonical({k: v for k, v in item.items() if k != 'id'}).encode())[:16]
         out.append(item)
     for root in consumers if consumers is not None else objects.values():
+        if root.get('elf_runtime_role') == 'DEBUG_ONLY':
+            continue
         if checkpoint:
             checkpoint()
         if not root.get('complete'):
@@ -68,9 +71,10 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
             continue
         root_scope = bool(root.get('interpreter')) or root.get('type', '').startswith('EXEC')
         loader = root.get('interpreter')
-        loader_obj = objects.get(alias(loader, files)) if loader else None
+        loader_path = alias(loader, files) if loader else None
+        loader_obj = objects.get(loader_path)
         local_known = (known and root_scope and env.get('namespace', 'base') == 'base'
-                       and root.get('resolution_metadata_complete') is True and root.get('export_inventory_complete') is True)
+                       and runtime_metadata_complete(root) and root.get('export_inventory_complete') is True)
         preload = next((x.get('normalized', '') for x in manifest.get('configurations', []) if x['path'] == '/etc/ld.so.preload'), '')
         # Root execution context belongs to the consumer image, providers/search
         # paths belong to the candidate. Never use candidate same-path mode for a
@@ -89,13 +93,14 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
                 'metadata_image': 'baseline' if consumers is not None else 'candidate', 'metadata': context,
                 'boundary': 'Mode/capability evidence cannot determine credentials, mount policy or AT_SECURE at runtime.'}, 'unknown_search_environment')
         scope_known = local_known and inventory
-        symbol_scope_known = root.get('resolution_metadata_complete') is True and root_scope and env.get('symbol_scope') == 'startup' and env.get('namespace', 'base') == 'base'
+        symbol_scope_known = runtime_metadata_complete(root) and root_scope and env.get('symbol_scope') == 'startup' and env.get('namespace', 'base') == 'base'
         if loader:
-            valid = bool(loader_obj and loader_obj.get('complete') and loader_obj.get('resolution_metadata_complete') is True
+            valid = bool(loader_obj and loader_obj.get('complete') and runtime_metadata_complete(loader_obj)
                          and loader_obj.get('export_inventory_complete') is True and target_abi_matches(root, loader_obj))
+            missing = not loader_obj and loader_path not in debug_paths
             emit(root, 'dynamic loader', loader, loader_obj.get('path') if loader_obj else None,
-                 'verified' if valid and local_known else 'missing_provider' if not loader_obj else 'unknown_loader_abi',
-                 'INCOMPATIBLE' if not loader_obj and inventory and local_known else None, 'CRITICAL')
+                 'verified' if valid and local_known else 'missing_provider' if missing else 'unknown_loader_abi',
+                 'INCOMPATIBLE' if missing and inventory and local_known else None, 'CRITICAL')
             scope_known &= valid
         queue = deque([(root, [])])
         seen = set()
@@ -110,7 +115,7 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
                 names = [initial['path'], initial.get('soname')]
                 for initial_name in filter(None, names):
                     loaded.setdefault(initial_name, initial)
-                    loaded_proven.setdefault(initial_name, bool(local_known and inventory and initial.get('resolution_metadata_complete') is True and initial.get('export_inventory_complete') is True))
+                    loaded_proven.setdefault(initial_name, bool(local_known and inventory and runtime_metadata_complete(initial) and initial.get('export_inventory_complete') is True))
         while queue:
             if checkpoint:
                 checkpoint()
@@ -118,7 +123,7 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
             if obj['path'] in seen:
                 continue
             seen.add(obj['path']); closure.append(obj)
-            object_known = local_known and obj.get('resolution_metadata_complete') is True and obj.get('export_inventory_complete') is True
+            object_known = local_known and runtime_metadata_complete(obj) and obj.get('export_inventory_complete') is True
             scope_known &= object_known
             origin = posixpath.dirname(obj['path'])
             rpaths = [expand(v, origin) for v in obj.get('rpath', [])] if not obj.get('runpath') else []
@@ -152,7 +157,7 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
                         ambiguous = True
                         continue
                     actual = alias(path, files)
-                    if actual is None:
+                    if actual is None or actual in debug_paths:
                         ambiguous = True
                         continue
                     hit = objects.get(actual)
@@ -165,7 +170,7 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
                     if actual in files and files[actual].get('type') == 'file':
                         ambiguous = True  # present but unparsed/not a usable ELF
                 verified = (object_known and inventory and not ambiguous and provider is not None
-                            and provider.get('resolution_metadata_complete') is True and provider.get('export_inventory_complete') is True)
+                            and runtime_metadata_complete(provider) and provider.get('export_inventory_complete') is True)
                 if provider:
                     state = 'verified' if verified else 'unknown_search_environment'
                     loaded.setdefault(needed, provider)

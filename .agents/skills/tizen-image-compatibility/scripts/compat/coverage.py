@@ -115,6 +115,10 @@ def coverage_report(a, b, findings, tests, matrix, config):
                 units.append(obligation(path + ':exports', checks, surface))
                 units.append(obligation(path + ':type-layout', [finding_check('DWARF type/layout ABI', layout)], layout))
             elif dim == 'linking':
+                if obj.get('elf_runtime_role') == 'DEBUG_ONLY':
+                    units.append(obligation(path, [check('runtime ELF role', 'NOT_APPLICABLE',
+                        obj.get('evidence', []), 'File-backed runtime contents are absent in this split debug ELF')]))
+                    continue
                 applicable = [f for f in fs if f.get('root_consumer', path) == path and ('baseline consumers on candidate' in f['interface'])]
                 slots = defaultdict(list)
                 for f in applicable: slots[f.get('check_id', f['interface'])].append(f)

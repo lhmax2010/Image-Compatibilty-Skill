@@ -387,6 +387,8 @@ def read_manifest(path: Path) -> dict[str, Any]:
             if key in data and (not isinstance(data[key], list) or any(not isinstance(v, dict) for v in data[key])):
                 raise ValueError(f'invalid {key} records')
         for obj in data['elf_objects']:
+            if 'elf_runtime_role' in obj and obj['elf_runtime_role'] not in ('DEBUG_ONLY', 'RUNTIME_WITH_DEBUG', 'RUNTIME', 'UNKNOWN'):
+                raise ValueError('Invalid ELF runtime role')
             if 'export_inventory_complete' in obj and type(obj['export_inventory_complete']) is not bool:
                 raise ValueError('Invalid export inventory completeness marker')
             if 'resolution_metadata_complete' in obj and type(obj['resolution_metadata_complete']) is not bool:

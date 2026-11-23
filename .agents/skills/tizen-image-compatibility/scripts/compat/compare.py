@@ -51,8 +51,11 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
     old, new = index(a['elf_objects']), index(b['elf_objects'])
     for path, obj in old.items():
         other = new.get(path)
-        if not other and obj.get('soname'):
-            matches = [x for x in new.values() if x.get('soname') == obj['soname']]
+        debug_only = obj.get('elf_runtime_role') == 'DEBUG_ONLY'
+        if not debug_only and other and other.get('elf_runtime_role') == 'DEBUG_ONLY':
+            other = None
+        if not other and not debug_only and obj.get('soname'):
+            matches = [x for x in new.values() if x.get('soname') == obj['soname'] and x.get('elf_runtime_role') != 'DEBUG_ONLY']
             if len(matches) == 1:
                 other = matches[0]
         if other is None:
@@ -64,6 +67,8 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
             findings.append(finding('abi', path, 'collection coverage', obj.get('complete'), other.get('complete'), evidence=ev))
             continue
         for key in ('class', 'endianness', 'machine', 'osabi', 'abi_version', 'type', 'soname', 'interpreter', 'rpath', 'runpath'):
+            if debug_only and key == 'soname':
+                continue
             if obj.get(key) != other.get(key):
                 incompatible = key in ('class', 'endianness', 'machine')
                 findings.append(finding('elf' if key != 'soname' else 'linking', path, key, obj.get(key), other.get(key),
@@ -138,7 +143,7 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
         for name in sorted(set(right) - set(left)):
             findings.append(finding('abi', path, name, None, right[name], 'COMPATIBLE' if old_exports_complete else 'UNKNOWN', 'INFO', evidence=ev,
                                     impact='Additional exported interface; existing exports are compared separately.'))
-        if obj.get('needed') != other.get('needed'):
+        if not debug_only and obj.get('needed') != other.get('needed'):
             findings.append(finding('linking', path, 'DT_NEEDED', obj.get('needed'), other.get('needed'), 'UNKNOWN', 'MEDIUM', evidence=ev,
                 impact='Runtime implementation/dependency changed; dependency availability is checked separately.'))
         before_runtime, after_runtime = runtime_requirements(obj), runtime_requirements(other)
