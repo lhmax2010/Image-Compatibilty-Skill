@@ -4,14 +4,21 @@ Extracted debuginfo RPM trees can be supplied as additional read-only roots.
 from pathlib import Path
 import re
 import shutil
-from .core import finding, digest
+from .core import canonical, finding, digest
 from .elf import collect_elf
 from .images import Image
+
+DWARF_INTERFACE = 'DWARF type/layout ABI'
+DWARF_METHOD = 'libabigail abidiff'
 
 
 def debug_source(obj, image, additional_roots, tools):
     if obj.get('debug_info'):
-        return {'kind': 'embedded', 'path': str(image.resolve(obj['path']))}
+        path = image.resolve(obj['path'])
+        if path is not None:
+            return {'kind': 'embedded', 'path': str(path),
+                    'virtual_path': '/' + path.relative_to(image.root).as_posix(), 'location': 'image'}
+        return None
     build_id = obj.get('build_id', '')
     if not re.fullmatch(r'[0-9a-fA-F]{8,128}', build_id):
         return None
@@ -26,12 +33,23 @@ def debug_source(obj, image, additional_roots, tools):
             if path and path.is_file():
                 debug = collect_elf(path, virtual, tools, 'quick')
                 if debug.get('complete') and debug.get('build_id') == build_id and debug.get('debug_info'):
-                    return {'kind': 'split-build-id', 'path': str(path), 'build_id': build_id, 'evidence': debug.get('evidence', [])}
+                    return {'kind': 'split-build-id', 'path': str(path),
+                            'virtual_path': '/' + path.relative_to(root.root).as_posix(),
+                            'location': 'image' if root is image else 'debuginfo',
+                            'build_id': build_id, 'evidence': debug.get('evidence', [])}
     return None
+
+
+def report_source(source):
+    if source is None:
+        return None
+    return {k: v for k, v in source.items() if k not in ('virtual_path', 'path')} | {'path': source['virtual_path']}
 
 
 def advanced_abi(a, b, roots, tools):
     binary = tools.path('abidiff')
+    stage_root = tools.output.resolve() / 'abi-inputs'
+    tools.aliases[str(stage_root)] = '<abi-inputs>'
     right = {o['path']: o for o in b['elf_objects']}
     out = []
     for obj in a['elf_objects']:
@@ -48,13 +66,14 @@ def advanced_abi(a, b, roots, tools):
         reason = ('Candidate ELF unavailable' if other is None else 'abidiff unavailable' if not binary else
                   'Usable embedded DWARF or matching Build-ID debuginfo unavailable' if not all(sources) else '')
         status = 'UNKNOWN'; ev = []; output = reason; code = None
+        fingerprint = None
         if not reason:
             inputs = []; flags = []
             for n, (current, image, source) in enumerate(zip((obj, other), roots, sources), 1):
                 original = image.resolve(current['path'])
                 if not original:
                     reason = 'ELF file unavailable'; break
-                stage = tools.output / 'abi-inputs' / digest((obj['path'] + str(n)).encode())
+                stage = stage_root / digest((obj['path'] + str(n)).encode())
                 stage.mkdir(parents=True, exist_ok=True)
                 local = stage / 'object.elf'
                 shutil.copyfile(original, local)
@@ -68,15 +87,26 @@ def advanced_abi(a, b, roots, tools):
                 flags += ['--debug-info-dir' + str(n), str(debugdir)]
             if not reason:
                 result = tools.run([binary, '--no-default-suppression', '--fail-no-debug-info', *flags, *inputs])
-                code = result['returncode']; output = result['stdout']
+                code = result['returncode']; output = tools.normalize(result['stdout'])
                 ev = [result['stdout_evidence'], result['stderr_evidence']]
                 status = 'UNKNOWN' if code < 0 or code & 3 or result['stdout_truncated'] else 'INCOMPATIBLE' if code & 8 else 'UNKNOWN' if code & 4 else 'COMPATIBLE' if code == 0 else 'UNKNOWN'
+                if not result['stdout_truncated'] and not result.get('stderr_truncated'):
+                    fingerprint = [digest(text.encode()) for text in
+                                   (output, tools.normalize(result.get('stderr', '')), tools.normalize(result.get('error') or ''))]
             else:
                 output = reason
-        item = finding('abi', obj['path'], 'DWARF type/layout ABI', {'debug': sources[0]}, {'debug': sources[1], 'returncode': code, 'report': output},
-                       status, 'HIGH' if status == 'INCOMPATIBLE' else 'INFO', 'libabigail abidiff', ev,
+        old_source, new_source = map(report_source, sources)
+        item = finding('abi', obj['path'], DWARF_INTERFACE, {'debug': old_source},
+                       {'debug': new_source, 'returncode': code, 'report': output},
+                       status, 'HIGH' if status == 'INCOMPATIBLE' else 'INFO', DWARF_METHOD, ev,
                        impact='Coverage concerns externally reachable DWARF types, not every language/runtime behavior. Exit bit 4 alone is a difference, not a confirmed break.')
+        if fingerprint:
+            # Raw, content-addressed files may contain staging paths. Keep their
+            # original references and derive identity from the complete normalized diagnostics.
+            item['dwarf_evidence_fingerprint'] = fingerprint
+            logical = {k: v for k, v in item.items() if k not in ('id', 'evidence')}
+            item['id'] = 'TC-' + digest(canonical(logical).encode())[:16]
         item['coverage_unit'] = 'type-layout:' + obj['path']
-        item['debug_coverage'] = {'baseline': sources[0], 'candidate': sources[1], 'reason': reason}
+        item['debug_coverage'] = {'baseline': old_source, 'candidate': new_source, 'reason': reason}
         out.append(item)
     return out

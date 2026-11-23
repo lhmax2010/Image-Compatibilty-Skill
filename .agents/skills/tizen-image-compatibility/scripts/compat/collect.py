@@ -9,7 +9,7 @@ import re
 import xml.etree.ElementTree as ET
 from typing import Any
 
-from .core import VERSION, SCHEMA, Tools, canonical, digest, hash_file, limitation, write_json
+from .core import VERSION, SCHEMA, Tools, canonical, digest, expected_collectors, hash_file, limitation, write_json
 from .elf import ELF_INVENTORY_REVISION, collect_elf
 from .images import Image
 from .packages import collect_package_inventory
@@ -78,6 +78,7 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
     if getattr(image, 'extraction_manifest', None):
         m['image']['extraction_manifest'] = label + '-extraction-manifest.json'
     active = set(tools.config['analysis']['modes'])
+    collectors = expected_collectors(tools.config)
     input_scope = image.evidence_scope(tools.config['analysis'].get('input_scope', {}).get(label))
     m['image']['input_evidence_scope'] = input_scope
     elf_jobs = []
@@ -226,7 +227,7 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
                 (cache / Path(ref).name).write_bytes((tools.output / ref).read_bytes())
             write_json(cache_file, obj)
         return obj
-    if active & {'elf', 'abi', 'linking', 'compiler_runtime', 'performance'}:
+    if 'readelf' in collectors:
         with ThreadPoolExecutor(max_workers=int(tools.config['analysis']['workers'])) as pool:
             m['elf_objects'] = sorted(pool.map(elf_job, elf_jobs), key=lambda x: x['path'])
     source_files = {f['path']: f for f in m['filesystem']}
@@ -243,7 +244,7 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
     if release and release.is_file() and release.stat().st_size < max_bytes:
         m['image']['os_version'] = parse_keys(release.read_text(errors='replace'))
     m['image']['kernel_version'] = sorted({Path(x['path']).name.removeprefix('config-') for x in m['kernel'] if x['path'].startswith('/boot/config-')})
-    if 'packages' in active:
+    if 'rpm' in collectors:
         m['packages'], m['available_packages'], m['package_inventory'], limits = collect_package_inventory(image, tools, workspace)
         m['limitations'] += limits
     if not m['hardware']:
@@ -258,15 +259,26 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
     m['collection_complete'] = (m['filesystem_path_inventory_complete'] and scope_complete
                                 and not any(x['dimension'] == 'filesystem' for x in m['limitations']))
     m['collector_execution'] = {}
-    if elf_jobs and m['elf_objects']:
+    if 'readelf' in collectors:
         failures = [o for o in m['elf_objects'] if not o['complete']]
         done = len(m['elf_objects']) - len(failures)
-        m['collector_execution']['readelf'] = {
-            'status': 'COMPLETE' if not failures else 'PARTIAL' if done else 'FAILED',
-            'successful': done, 'attempted': len(m['elf_objects']),
-            'errors': [{'path': obj['path'], 'reason': obj['error'], 'evidence': obj.get('evidence', [])}
-                       for obj in failures]}
-    if 'packages' in active:
+        if tools.config['tools'].get('readelf') is False:
+            receipt = {'status': 'NOT_EXECUTED', 'reason_code': 'DISABLED',
+                       'reason': 'readelf explicitly disabled'}
+        elif elf_jobs:
+            receipt = {'status': 'COMPLETE' if not failures else 'PARTIAL' if done else 'FAILED',
+                       'successful': done, 'attempted': len(m['elf_objects']),
+                       'errors': [{'path': obj['path'], 'reason': obj['error'], 'evidence': obj.get('evidence', [])}
+                                  for obj in failures]}
+        elif image.format == 'rpm-collection' or (scope_complete and not image.errors and not any(
+                x['dimension'] == 'filesystem' and x['reason'].startswith('Unreadable:') for x in m['limitations'])):
+            receipt = {'status': 'NOT_EXECUTED', 'reason_code': 'NO_ELF_OBJECTS', 'applicable': False,
+                       'reason': 'No ELF objects in the scanned input scope'}
+        else:
+            receipt = {'status': 'UNKNOWN', 'reason_code': 'INCOMPLETE_INPUT',
+                       'reason': 'No ELF objects observed in an incomplete input scope'}
+        m['collector_execution']['readelf'] = receipt
+    if 'rpm' in collectors:
         inventory = m['package_inventory']
         archive_failed = inventory['archive_status'] == 'PARTIAL'
         status = inventory.get('execution', 'NOT_EXECUTED')
@@ -276,6 +288,19 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
             'status': status if status != 'NOT_EXECUTED' or not inventory['archive_count'] else 'COMPLETE',
             'reason': inventory['reason'] or ('RPM archive collection incomplete' if archive_failed else ''),
             'evidence': inventory.get('evidence', [])}
+        receipt = m['collector_execution']['rpm']
+        if tools.config['tools'].get('rpm') is False:
+            receipt.update(status='NOT_EXECUTED', reason_code='DISABLED', reason='rpm explicitly disabled')
+        elif status == 'NOT_EXECUTED':
+            if image.format == 'rpm-collection':
+                if inventory['archive_count']:
+                    receipt['reason'] = 'Collected RPM archives in the package scope'
+                else:
+                    receipt.update(applicable=False, reason_code='NO_RPM_ARCHIVES', reason='No RPM archive in the package scope')
+            else:
+                receipt['reason_code'] = 'RPM_DATABASE_NOT_FOUND'
+                if inventory['archive_count']:
+                    receipt['status'] = 'PARTIAL'
     m['header_inventory_complete'] = m['collection_complete'] and not header_failures
     m['header_inventory_scope'] = 'Readable installed .h/.hpp/.hh/.hxx paths under include directories; not SDK or semantic completeness'
     # Compiler include search roots are not inferred from filenames; quoted includes

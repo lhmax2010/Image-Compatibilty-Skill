@@ -347,6 +347,14 @@ class Tools:
                 out.write(canonical(record) + '\n')
 
 
+def expected_collectors(config):
+    modes = set(config['analysis']['modes'])
+    return [tool for tool, dimensions in (
+        ('readelf', {'elf', 'abi', 'linking', 'compiler_runtime', 'performance'}),
+        ('rpm', {'packages'}),
+    ) if modes & dimensions]
+
+
 def finding(dimension: str, component: str, interface: str, baseline: Any, candidate: Any,
             status: str = 'UNKNOWN', severity: str = 'MEDIUM', method: str = 'static comparison',
             evidence: Any = None, impact: str = '', action: str = '', confidence: str = 'medium') -> dict[str, Any]:
@@ -444,7 +452,9 @@ def read_manifest(path: Path) -> dict[str, Any]:
             recorded = data['collector_execution']
             if not isinstance(recorded, dict) or not all(
                     name in ('readelf', 'rpm') and isinstance(entry, dict)
-                    and entry.get('status') in ('COMPLETE', 'PARTIAL', 'FAILED', 'NOT_EXECUTED')
+                    and entry.get('status') in ('COMPLETE', 'PARTIAL', 'FAILED', 'UNKNOWN', 'NOT_EXECUTED')
+                    and type(entry.get('applicable', True)) is bool
+                    and (entry.get('applicable') is not False or entry['status'] == 'NOT_EXECUTED')
                     and isinstance(entry.get('reason', ''), str) and isinstance(entry.get('errors', []), list)
                     and all(isinstance(error, dict) and isinstance(error.get('path'), str)
                             and isinstance(error.get('reason'), str) for error in entry.get('errors', []))

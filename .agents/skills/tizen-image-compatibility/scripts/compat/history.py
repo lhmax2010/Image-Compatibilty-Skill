@@ -4,9 +4,11 @@ from contextlib import closing
 import csv
 import os
 from pathlib import Path
+import re
 import sqlite3
 import time
 
+from .debuginfo import DWARF_INTERFACE, DWARF_METHOD
 from .impact_source import Source, connection, file_version, read_json, readonly_uri, unpack_limited, virtual_path
 from .impact_store import ImpactGuard
 from .report_io import canonical, digest, hash_file, write_json
@@ -27,7 +29,9 @@ CREATE INDEX dimension_page ON entries(dimension,n);
 
 
 def contract_key(dimension, component, interface, check, consumer_side, consumer, root_side, root):
-    """Only exact startup Linking requirements have a status-independent shape."""
+    """Limit fallback pairing to known detector contracts with validated payloads."""
+    if dimension == 'abi' and interface == DWARF_INTERFACE and virtual_path(component):
+        return digest([dimension, component, interface])
     if dimension != 'linking' or not check or not check.startswith(('DT_NEEDED:', 'import:', 'version:')):
         return None
     if not (virtual_path(root) and virtual_path(consumer) and virtual_path(component)):
@@ -71,12 +75,48 @@ def architectures(source):
     return [images.get(side, {}).get('image', {}).get('architecture') for side in ('baseline', 'candidate')]
 
 
-def requirement(db, alias, ident):
+def finding_payload(db, alias, ident):
     row = db.execute(f'SELECT payload,payload_hash FROM {alias}.findings WHERE id=?', (ident,)).fetchone()
     data = unpack_limited(row[0])
     if digest(data) != row[1]:
         raise ValueError(f'Original Finding payload hash mismatch for {ident}')
-    return (data.get('baseline'), data.get('detection_method')), data.get('resolution')
+    return data
+
+
+def dwarf_observation(data, compare_fingerprint):
+    """Match historical extracted paths only when the rest of the observation reconciles."""
+    if (data.get('dimension') != 'abi' or data.get('interface') != DWARF_INTERFACE
+            or data.get('detection_method') != DWARF_METHOD
+            or data.get('coverage_unit') != 'type-layout:' + data['component']):
+        return None
+    observation = {k: v for k, v in data.items() if k not in ('id', 'dwarf_evidence_fingerprint')}
+    if compare_fingerprint:
+        observation['evidence'] = data['dwarf_evidence_fingerprint']
+    coverage = observation.get('debug_coverage')
+    if not isinstance(coverage, dict):
+        return None
+    observation['debug_coverage'] = dict(coverage)
+    for side in ('baseline', 'candidate'):
+        value = data.get(side)
+        if not isinstance(value, dict) or 'debug' not in value or value['debug'] != coverage.get(side):
+            return None
+        source = value['debug']
+        if source is None:
+            continue
+        if (not isinstance(source, dict) or source.get('kind') not in ('embedded', 'split-build-id')
+                or not isinstance(source.get('path'), str)):
+            return None
+        if 'location' not in source:
+            match = re.fullmatch(r'/(?:[^/]+/)*tizen-compat-[\w-]+/' + side + r'(?:-prepared/rootfs)?(/.+)',
+                                 source['path'])
+            if not match:
+                return None
+            source = source | {'path': match[1], 'location': 'image'}
+        if source['location'] not in ('image', 'debuginfo') or not virtual_path(source['path']):
+            return None
+        observation[side] = dict(value, debug=source)
+        observation['debug_coverage'][side] = source
+    return observation
 
 
 def build_history(before, after, output, scope):
@@ -142,24 +182,37 @@ def build_history(before, after, output, scope):
                 ON n.contract=o.contract''')
             possible = db.execute('''SELECT o.id,n.id,o.dimension,o.component,o.interface,o.status,n.status,
                  o.evidence,n.evidence,o.contract FROM unique_contract k JOIN older o USING(contract)
-                 JOIN newer n USING(contract) WHERE o.id<>n.id
+                 JOIN newer n USING(contract) WHERE (o.id<>n.id OR o.dimension='abi')
                  AND NOT EXISTS(SELECT 1 FROM entries e WHERE e.before_id=o.id)
                  AND NOT EXISTS(SELECT 1 FROM entries e WHERE e.after_id=n.id) ORDER BY o.id''')
             for row in possible:
                 old_id, new_id, dimension, component, interface, left, right, left_ev, right_ev, key = tuple(row)
-                prior, old_resolution = requirement(db, 'old_report', old_id)
-                next_requirement, new_resolution = requirement(db, 'new_report', new_id)
-                if prior[0] is None or not prior[1] or prior != next_requirement:
-                    continue
+                prior = finding_payload(db, 'old_report', old_id)
+                current = finding_payload(db, 'new_report', new_id)
                 outcome = change(left, right)
-                if ((outcome == 'FIXED_WITH_EVIDENCE' and new_resolution != 'verified')
-                        or (outcome == 'INTRODUCED' and old_resolution != 'verified')):
-                    outcome = 'STATUS_CHANGED_UNVERIFIED'
+                if dimension == 'abi':
+                    use_fingerprint = all(isinstance(doc.get('dwarf_evidence_fingerprint'), list)
+                                          and len(doc['dwarf_evidence_fingerprint']) == 3
+                                          and all(isinstance(h, str) and re.fullmatch('[a-f0-9]{64}', h)
+                                                  for h in doc['dwarf_evidence_fingerprint'])
+                                          for doc in (prior, current))
+                    observation = dwarf_observation(prior, use_fingerprint)
+                    if observation is None or observation != dwarf_observation(current, use_fingerprint):
+                        continue
+                    match = 'UNIQUE_DWARF_OBSERVATION'
+                else:
+                    requirement = (prior.get('baseline'), prior.get('detection_method'))
+                    if requirement[0] is None or not requirement[1] or requirement != (current.get('baseline'), current.get('detection_method')):
+                        continue
+                    if ((outcome == 'FIXED_WITH_EVIDENCE' and current.get('resolution') != 'verified')
+                            or (outcome == 'INTRODUCED' and prior.get('resolution') != 'verified')):
+                        outcome = 'STATUS_CHANGED_UNVERIFIED'
+                    match = 'UNIQUE_LINKER_CONTRACT'
                 db.execute('''INSERT INTO entries(before_id,after_id,dimension,component,interface,
                     before_status,after_status,before_evidence,after_evidence,change,evidence_change,match,contract)
                     VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                            (old_id, new_id, dimension, component, interface, left, right, left_ev, right_ev,
-                            outcome, evidence_change(left_ev, right_ev), 'UNIQUE_LINKER_CONTRACT', key))
+                            outcome, evidence_change(left_ev, right_ev), match, key))
             for side, column in (('older', 'before_id'), ('newer', 'after_id')):
                 left = side == 'older'
                 fields = ('s.id,NULL', 's.status,NULL', 's.evidence,NULL') if left else ('NULL,s.id','NULL,s.status','NULL,s.evidence')

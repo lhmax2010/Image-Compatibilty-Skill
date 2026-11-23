@@ -10,7 +10,35 @@ from pathlib import Path
 from typing import Any
 from .coverage import coverage_report
 from .package_analysis import analyze_packages
-from .core import DIMENSIONS, SCHEMA, STATUSES, canonical, write_json
+from .core import DIMENSIONS, SCHEMA, STATUSES, canonical, expected_collectors, write_json
+
+
+def collector_execution(a, b, config):
+    collectors = {}
+    states = set()
+    for side, manifest in (('baseline', a), ('candidate', b)):
+        recorded = manifest.get('collector_execution', {})
+        records = collectors[side] = {}
+        for tool in expected_collectors(config):
+            entry = recorded.get(tool)
+            if entry is None:
+                entry = {'status': 'UNKNOWN', 'recorded': False, 'reason_code': 'MISSING_RECEIPT',
+                         'reason': 'No execution receipt for this collector and image'}
+            records[tool] = entry
+            if entry.get('applicable') is not False:
+                states.add(entry['status'])
+    if 'FAILED' in states:
+        status = 'FAILED'
+    elif 'PARTIAL' in states or ('COMPLETE' in states and len(states) > 1):
+        status = 'PARTIAL'
+    elif 'UNKNOWN' in states:
+        status = 'UNKNOWN'
+    elif 'COMPLETE' in states:
+        status = 'COMPLETE'
+    else:
+        status = 'NOT_EXECUTED'
+    return {'status': status, 'collectors': collectors,
+            'fail_on_collector_failure': config['ci'].get('fail_on_collector_failure', True)}
 
 
 def build_results(a: dict[str, Any], b: dict[str, Any], findings: list[dict[str, Any]],
@@ -22,18 +50,8 @@ def build_results(a: dict[str, Any], b: dict[str, Any], findings: list[dict[str,
     expected = a.get('expected_tests', []) + b.get('expected_tests', [])
     status = 'INCOMPATIBLE' if counts['INCOMPATIBLE'] else 'UNKNOWN' if counts['UNKNOWN'] else 'COMPATIBLE' if findings else 'UNKNOWN'
     coverage, gate = coverage_report(a, b, findings, tests, matrix, config)
-    execution = {label: manifest.get('collector_execution', {})
-                 for label, manifest in (('baseline', a), ('candidate', b))}
-    enabled = set(config['analysis']['modes'])
-    relevant = {'rpm'} if 'packages' in enabled else set()
-    if enabled & {'elf', 'abi', 'linking', 'compiler_runtime', 'performance'}:
-        relevant.add('readelf')
-    states = [entry['status'] for records in execution.values()
-              for tool, entry in records.items() if tool in relevant]
-    execution_status = ('FAILED' if 'FAILED' in states else 'PARTIAL' if 'PARTIAL' in states else
-                        'UNKNOWN' if any('collector_execution' not in m for m in (a, b)) else
-                        'COMPLETE' if 'COMPLETE' in states else 'NOT_EXECUTED')
-    execution_gate = 'FAIL' if execution_status == 'FAILED' and config['ci'].get('fail_on_collector_failure', True) else 'PASS'
+    execution = collector_execution(a, b, config)
+    execution_gate = 'FAIL' if execution['status'] == 'FAILED' and execution['fail_on_collector_failure'] else 'PASS'
     gate['execution_status'] = execution_gate
     if execution_gate == 'FAIL':
         gate['status'] = 'FAIL'
@@ -44,8 +62,7 @@ def build_results(a: dict[str, Any], b: dict[str, Any], findings: list[dict[str,
             or any(p['overall'] == 'INCOMPATIBLE' for p in package_results)):
         status = 'INCOMPATIBLE'
     return {'package_inventory': package_inventory, 'package_results': package_results,
-        'execution': {'status': execution_status, 'collectors': execution,
-                      'fail_on_collector_failure': config['ci'].get('fail_on_collector_failure', True)},
+        'execution': execution,
         'finding_integrity': {'unique_findings': len(findings), 'source_occurrences': sum(f.get('occurrences', 1) for f in findings),
                               'deduplicated': [{'id': f['id'], 'occurrences': f['occurrences']} for f in findings if f.get('occurrences', 1) > 1]},
         'expected_tests': a.get('expected_tests', []) + b.get('expected_tests', []),
