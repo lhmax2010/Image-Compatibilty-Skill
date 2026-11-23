@@ -1,0 +1,123 @@
+{
+  "base_commit": "3336cdde5bb5c51daa0a6b5da36ca412f5279d9c",
+  "code_commit": "d7abbd7841945167cf1ca2d7256ac287ad43cdd6",
+  "commit_note": "code_commit is the tested Phase 8A source commit. This review bundle is a separate documentation-only child commit.",
+  "test_report": "REGRESSION_SUMMARY.md",
+  "real_sr_evidence": "SR_EVIDENCE_EXCERPTS.json",
+  "changes": [
+    {
+      "path": ".agents/skills/tizen-image-compatibility/SKILL.md",
+      "change": "modified",
+      "before_sha256": "08f4d879963a70c03201fef98944e38275acaa0a5cd592bad36bf688513125e5",
+      "sha256": "4dcd0b3f4088199c10553d0a652ba26e4cda980df02d8fe6f4cc5537fc9f573d"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/config.yaml",
+      "change": "modified",
+      "before_sha256": "17055eb333a926740e23eff07018931e83e10150b28c316f3c90796574c77189",
+      "sha256": "d5d9e7060a78a9aee11f48c192d95de32ad09633924fb85d7d59ff3f0f755c5f"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/references/image_preparation.md",
+      "change": "modified",
+      "before_sha256": "756784f7d6ef005936a8d5f461e2405b2ee3468882e0837c1181c9dd3d8c451d",
+      "sha256": "63bf27b3c67cc4c04889479b06629397b30c7725a011be344bce5c3bab832f36"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/references/report_schema.md",
+      "change": "modified",
+      "before_sha256": "750398edf5f978861a2b56f2b45dfca7c919500c49650fb9ec97124cb8160cf1",
+      "sha256": "c869bb03bc21d8c2ba4d956f6df892ae8ea4f5bfde96f13f7a1162ce4fb87e07"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/references/severity_rules.md",
+      "change": "modified",
+      "before_sha256": "3564ef18c549c36901df09d7cc8a2301a5281b3910622922f6a057f0f48f3ce4",
+      "sha256": "d3a091e0a399a589d4abd4e09187f9aa612e8e33989b7f19a1be55b40caa992d"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/scripts/compat/collect.py",
+      "change": "modified",
+      "before_sha256": "220e6219c662d8792645f801ee033113c3458120c4a9cf6a00be74fdbcb55608",
+      "sha256": "0a1f8049092750ef44c7f6ff86a1b253cec18ff7e36d8d94dc81cccb32cd7c05"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/scripts/compat/compare.py",
+      "change": "modified",
+      "before_sha256": "9176461b8a884446e06cee080484a8eb8fe345e48c911d27656be3c271db813c",
+      "sha256": "6f86625cc3d7edc0918e1d63c930b8c02197b13c82f520e6bb49efc9c9a8cfbf"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/scripts/compat/core.py",
+      "change": "modified",
+      "before_sha256": "77112f867a6826875d794ced407af959c66b5b757d2fe4b758375b8c48eff2c2",
+      "sha256": "65cee25fdbc90ab126b51891df0a62e35de9b8b101cf5d811e8e599b03873014"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/scripts/compat/coverage.py",
+      "change": "modified",
+      "before_sha256": "0fc031f147e4680c880d81a7b7a562be923febaa0cc1bef62bd47a2783009fab",
+      "sha256": "a1f90e9603b29336340055c61c4149bba704f5880479289e41b0e20301a60504"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/scripts/compat/elf.py",
+      "change": "modified",
+      "before_sha256": "1d6afdd6d213a7b98d9f75bea97035416ee3104e8dba13a951bfcc2d6cc5e8b0",
+      "sha256": "d963c9331b22f41f59e42e040ed58421e4ab28cf2cce92aaf85d3d2e3b09481f"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/scripts/compat/images.py",
+      "change": "modified",
+      "before_sha256": "59d67a2fb9219be4685b1db82533ee08290f0d360e03ce2b112dfd90b3cb98a2",
+      "sha256": "40bfebae446ef2f4ca84f01951fcf1044a33c5a7a2352e78c5c0e61faeff335b"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/scripts/compat/linker.py",
+      "change": "modified",
+      "before_sha256": "8f620c9cbdf4b3c379ea90a2bce51cb6a11108661127b4b77c6b96c5b569537c",
+      "sha256": "4229eae585ac9d2f873edac8726ebe9805862d506dfe1de170183e8e44e35ed5"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/scripts/compat/packages.py",
+      "change": "modified",
+      "before_sha256": "dfa6da5ac9cb4f9e82b982e73a28f16923f193f6393e840c7a2ed047f9755245",
+      "sha256": "6686493fac9238847d945888605effbb64bc3da53f97b77231f874e0b83754ae"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/scripts/compat/preparation.py",
+      "change": "modified",
+      "before_sha256": "1adddb9ee3ccd446d7de14416de236e92cc908d52a24817995dd7fb54604baf0",
+      "sha256": "3f83c13094e6f0964e0929e0040a6c128c45ab2991c3ca588a8cab3141568a07"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/scripts/compat/report.py",
+      "change": "modified",
+      "before_sha256": "7bc24739f515bd86a04054a2688f64314a0d2082756daf86efc07ae0c5ef373f",
+      "sha256": "33d8728627914765ceef7dc4b4fd7d138efa633a578bc2d0ed15daa92e70c837"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/scripts/compat/report_enhance.py",
+      "change": "modified",
+      "before_sha256": "84510dfd27da8706c59a1a3fbb95e3f26b42b8bf8bb5d413b37223238ace2084",
+      "sha256": "fe100aa3f649f28ac5431351178a46300845b27f765cfb978c6453ff342b4d9c"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/scripts/compat/report_io.py",
+      "change": "modified",
+      "before_sha256": "7348f49f2ba3817d789145bad8d2456b45caaafab669f4dc5583fdfcd2fc584d",
+      "sha256": "73d3f61aaff6fa5bc378db0f1251332893c94c1332dc05cd062a20775a2651a6"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/scripts/tizen_compat.py",
+      "change": "modified",
+      "before_sha256": "0e6cc0bbda098230de8300ed3baa6f30a5e99f6b1081e2f7d9ae69a6102c7eb9",
+      "sha256": "0164801f91722b1f811542c4f584657e0ec957acf5b8e85efeb4759f0f862440"
+    },
+    {
+      "path": ".agents/skills/tizen-image-compatibility/tests/test_phase8a.py",
+      "change": "added",
+      "before_sha256": null,
+      "sha256": "faf29a69749ff0fb64fe02de4c3866b3806335b10be790a605812e09a4397889"
+    }
+  ]
+}

@@ -1,0 +1,395 @@
+{
+  "description": "Selected fields from the real SR acceptance. Image paths are virtual paths inside the public images. Raw artifacts are workspace-local.",
+  "profile": "tizen-headless-armv7l",
+  "direction": "SR VD baseline consumers on SR LLVM candidate",
+  "images": {
+    "vd": {
+      "build": "tizen-unified-dev_20261119.012448",
+      "url": "https://download.tizen.org/RBS/TIZEN/Tizen/Tizen-Unified-Dev/tizen-unified-dev_20261119.012448/images/standard/tizen-headless-armv7l/tizen-unified-dev_20261119.012448_tizen-headless-armv7l.tar.gz",
+      "published_sha256": "ec4b0e371151711b881c2def2a11fd8c941b36ed030e61691650573a12546237",
+      "published_bytes": 307905023,
+      "observed_sha256_matches_published": true,
+      "path_inventory_complete": true,
+      "input_scope": {
+        "acl": "NOT_RESTORED",
+        "file_capabilities": "NOT_RESTORED",
+        "file_contents": "OBSERVABLE",
+        "hardlinks": "NOT_RESTORED",
+        "paths": "OBSERVABLE",
+        "ramdisk": "NOT_RESTORED",
+        "smack": "NOT_RESTORED",
+        "special_files": "ARCHIVE_METADATA",
+        "uid_gid_mode": "ARCHIVE_METADATA",
+        "xattrs": "NOT_RESTORED"
+      },
+      "rpm_count": 719,
+      "elf_objects": 2054,
+      "node_marker_count": 1,
+      "extraction_input_sha256": "cb34620e5d21b3bba1e5276f987c5b0026ed064bdf6e16e0d60df0b272bb921d"
+    },
+    "llvm": {
+      "build": "tizen-unified-toolchain_20261120.082536",
+      "url": "https://download.tizen.org/RBS/TIZEN/Tizen/Tizen-Unified-Toolchain/tizen-unified-toolchain_20261120.082536/images/standard/tizen-headless-armv7l/tizen-unified-toolchain_20261120.082536_tizen-headless-armv7l.tar.gz",
+      "published_sha256": "a1e6e12cae12f890a02b699c3909b5c8bd871013da1d9a34f84b53b65ae99878",
+      "published_bytes": 295132527,
+      "observed_sha256_matches_published": true,
+      "path_inventory_complete": true,
+      "input_scope": {
+        "acl": "NOT_RESTORED",
+        "file_capabilities": "NOT_RESTORED",
+        "file_contents": "OBSERVABLE",
+        "hardlinks": "NOT_RESTORED",
+        "paths": "OBSERVABLE",
+        "ramdisk": "NOT_RESTORED",
+        "smack": "NOT_RESTORED",
+        "special_files": "ARCHIVE_METADATA",
+        "uid_gid_mode": "ARCHIVE_METADATA",
+        "xattrs": "NOT_RESTORED"
+      },
+      "rpm_count": 736,
+      "elf_objects": 2120,
+      "node_marker_count": 0,
+      "extraction_input_sha256": "8ed19e697d14ecef98cdfb6a4688571d9674eda815e955225a66cf4979ec1d35"
+    }
+  },
+  "reports": {
+    "before": {
+      "uncompressed_results_sha256": "2d2fbc84a614062c8c755ed2ba1832eb45fb9470d027d176468e716276bb8417",
+      "status_counts": {
+        "UNKNOWN": 868075,
+        "INCOMPATIBLE": 11646,
+        "IDENTICAL": 332,
+        "COMPATIBLE": 23486
+      },
+      "wall_seconds": 183.64
+    },
+    "after": {
+      "uncompressed_results_sha256": "b14b9814e16c6e49151d22f3be84eac59a00bbb4050b41f9db585495ac6f5f32",
+      "gzip_results_sha256": "5d6ad47f8681822691b9078c9a1dba037e4f87212e83f3af88daeacf3f62c2f2",
+      "status_counts": {
+        "UNKNOWN": 868075,
+        "INCOMPATIBLE": 11490,
+        "IDENTICAL": 332,
+        "COMPATIBLE": 23486
+      },
+      "wall_seconds": 191.22,
+      "peak_rss_kib": 3867160,
+      "verification": "PARTIAL",
+      "compatibility_status": "INCOMPATIBLE"
+    },
+    "comparison": {
+      "stable_ids": 903376,
+      "stable_id_status_changes": 0,
+      "removed_markers": 156,
+      "reissued_dwarf_unknown_ids": [
+        {
+          "component": "/usr/lib/debug/lib/ld-linux.so.3.debug",
+          "old_id": "TC-4017f0c3679943d2",
+          "new_id": "TC-96dc0f17acde7f1b",
+          "status": "UNKNOWN"
+        },
+        {
+          "component": "/usr/lib/debug/lib/libc.so.6.debug",
+          "old_id": "TC-9478507463ad76a2",
+          "new_id": "TC-04e5287e26c47aa8",
+          "status": "UNKNOWN"
+        },
+        {
+          "component": "/usr/lib/ld-linux.so.3",
+          "old_id": "TC-98f6eeb872a2288e",
+          "new_id": "TC-9dd308b2952bf379",
+          "status": "UNKNOWN"
+        },
+        {
+          "component": "/usr/lib/libc.so.6",
+          "old_id": "TC-b1b301be05394f2f",
+          "new_id": "TC-9ffb5a490e203ef4",
+          "status": "UNKNOWN"
+        },
+        {
+          "component": "/usr/lib/libstd-82981c869470ee41.so",
+          "old_id": "TC-502aced662858999",
+          "new_id": "TC-c2cd3538ebf7bc76",
+          "status": "UNKNOWN"
+        },
+        {
+          "component": "/usr/lib/rustlib/dylib/libregex.so",
+          "old_id": "TC-5700c980a54ad82b",
+          "new_id": "TC-e34c86dababe6e7e",
+          "status": "UNKNOWN"
+        },
+        {
+          "component": "/usr/lib/rustlib/dylib/libregex_syntax.so",
+          "old_id": "TC-dd542963c5224074",
+          "new_id": "TC-a31e0547c1cf35dd",
+          "status": "UNKNOWN"
+        }
+      ],
+      "linking_after": [
+        {
+          "status": "UNKNOWN",
+          "resolution": "unknown_symbol_scope",
+          "count": 442049
+        },
+        {
+          "status": "UNKNOWN",
+          "resolution": "unknown_symbol_semantics",
+          "count": 314185
+        },
+        {
+          "status": "UNKNOWN",
+          "resolution": "unknown_version_requirement",
+          "count": 57107
+        },
+        {
+          "status": "UNKNOWN",
+          "resolution": "unknown_search_environment",
+          "count": 43789
+        },
+        {
+          "status": "UNKNOWN",
+          "resolution": "unknown_loader_abi",
+          "count": 1486
+        },
+        {
+          "status": "UNKNOWN",
+          "resolution": "other",
+          "count": 1062
+        },
+        {
+          "status": "UNKNOWN",
+          "resolution": "unknown_loader_feature",
+          "count": 618
+        },
+        {
+          "status": "UNKNOWN",
+          "resolution": "missing_provider",
+          "count": 2
+        },
+        {
+          "status": "UNKNOWN",
+          "resolution": "unknown_collection",
+          "count": 2
+        }
+      ],
+      "coverage_before_percent": {
+        "abi": 45.42,
+        "api": 0.0,
+        "commands": 0.0,
+        "compiler_runtime": 0.0,
+        "elf": 5.99,
+        "filesystem": 0.0,
+        "hardware": 0.0,
+        "headers": 0.0,
+        "ipc": 0.0,
+        "kernel": 0.0,
+        "linking": 0.0,
+        "network": 0.0,
+        "packages": 0.0,
+        "performance": null,
+        "runtime": 0.0,
+        "security": 0.0,
+        "services": 0.0
+      },
+      "coverage_after_percent": {
+        "abi": 45.42,
+        "api": 0.0,
+        "commands": 0.0,
+        "compiler_runtime": 0.0,
+        "elf": 5.99,
+        "filesystem": 0.0,
+        "hardware": 0.0,
+        "headers": 0.0,
+        "ipc": 0.0,
+        "kernel": 0.0,
+        "linking": 0.0,
+        "network": 0.0,
+        "packages": 0.0,
+        "performance": null,
+        "runtime": 0.0,
+        "security": 0.0,
+        "services": 0.0
+      },
+      "unique_evidence_refs_verified": 4086,
+      "unassigned_finding_count_after": 10258
+    }
+  },
+  "gnu_version_review": {
+    "original_finding": {
+      "id": "TC-1dc09eab2397194b",
+      "component": "/usr/lib/libavcodec.so.62.11.100",
+      "interface": "LIBAVCODEC_62",
+      "status": "INCOMPATIBLE"
+    },
+    "examples": [
+      {
+        "id": "TC-1dc09eab2397194b",
+        "component": "/usr/lib/libavcodec.so.62.11.100",
+        "interface": "LIBAVCODEC_62"
+      },
+      {
+        "id": "TC-19a0b015e5d1e748",
+        "component": "/usr/lib/libavfilter.so.11.4.100",
+        "interface": "LIBAVFILTER_11"
+      },
+      {
+        "id": "TC-49be3b5ef7689a36",
+        "component": "/usr/lib/libavformat.so.62.3.100",
+        "interface": "LIBAVFORMAT_62"
+      },
+      {
+        "id": "TC-7fbd9cadbb7ad37c",
+        "component": "/usr/lib/libavutil.so.60.8.100",
+        "interface": "LIBAVUTIL_60"
+      },
+      {
+        "id": "TC-0f871fce9dc55e6c",
+        "component": "/usr/lib/libbtrfs.so.0.1.5",
+        "interface": "LIBBTRFS_0.1"
+      }
+    ],
+    "readelf": {
+      "vd": {
+        "dynsym_sha256": "385b9e3a2c9548fca4cbf60d4fcbd18b8424e8465c8bee97c2251c94679c3190",
+        "version_info_sha256": "234333bcef30d5a9071b766e8e60f31e727af4dce528d194adb8a57c5fa85b80",
+        "dynsym_excerpt": [
+          "290: 00000000     0 OBJECT  GLOBAL DEFAULT  ABS LIBAVCODEC_62",
+          "400: 0035496d    72 FUNC    GLOBAL DEFAULT   13 avcodec_version@@LIBAVCODEC_62"
+        ],
+        "version_definition_excerpt": [
+          "0x001c: Rev: 1  Flags: none  Index: 2  Cnt: 1  Name: LIBAVCODEC_62"
+        ]
+      },
+      "llvm": {
+        "dynsym_sha256": "a5e2f3d243f823791ea8a2380a1af815b748a5a76c2d4d2d3727b005773d9b09",
+        "version_info_sha256": "9b9e17160369793e5c361d3bdee793bed7ea7876d8a4534556fe4cdcd484def5",
+        "dynsym_excerpt": [
+          "324: 003200e9    52 FUNC    GLOBAL DEFAULT   14 avcodec_version@@LIBAVCODEC_62"
+        ],
+        "version_definition_excerpt": [
+          "0x001c: Rev: 1  Flags: none  Index: 2  Cnt: 1  Name: LIBAVCODEC_62"
+        ]
+      }
+    }
+  },
+  "collector_negative_control": {
+    "fault": "Read-only sandbox lacked a usable /dev/null binding for child processes.",
+    "before": {
+      "exit_code": 0,
+      "compatibility": "UNKNOWN",
+      "gate": "PASS",
+      "collector_examples": {
+        "readelf": {
+          "returncode": -1,
+          "error": "[Errno 13] Permission denied: '/dev/null'"
+        },
+        "rpm": {
+          "returncode": -1,
+          "error": "[Errno 13] Permission denied: '/dev/null'"
+        }
+      }
+    },
+    "after": {
+      "exit_code": 3,
+      "compatibility": "UNKNOWN",
+      "execution": "FAILED",
+      "gate": "FAIL",
+      "compatibility_gate": "PASS",
+      "rpm_counts": [
+        null,
+        null
+      ],
+      "unknown_findings": 12642,
+      "collector_status_by_side": {
+        "baseline": {
+          "readelf": "FAILED",
+          "rpm": "FAILED"
+        },
+        "candidate": {
+          "readelf": "FAILED",
+          "rpm": "FAILED"
+        }
+      }
+    }
+  },
+  "linking_examples": [
+    {
+      "id": "TC-063f63c2674b34ea",
+      "component": "/etc/actd/available-modules/activation_dm.so",
+      "interface": "baseline consumers on candidate:import:pop_epc_event",
+      "status": "UNKNOWN",
+      "after": {
+        "id": "TC-063f63c2674b34ea",
+        "status": "UNKNOWN",
+        "resolution": "unknown_symbol_scope"
+      },
+      "evidence_basenames": [
+        "5e8aaa164d8563f2dd88002924a5c83b52f47cefa50852c96fc9d82a5cadaf7b.txt",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.txt"
+      ]
+    },
+    {
+      "id": "TC-000be73b4a4e552a",
+      "component": "/etc/alternatives/halt",
+      "interface": "baseline consumers on candidate:import:gethostname_malloc@SD_SHARED",
+      "status": "UNKNOWN",
+      "after": {
+        "id": "TC-000be73b4a4e552a",
+        "status": "UNKNOWN",
+        "resolution": "unknown_symbol_semantics"
+      },
+      "evidence_basenames": [
+        "fcb8e21b5e0acee34d54a3eb1cc7e4ba77ae3fb94d76a6f40fddf820f6ff3e21.txt",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.txt"
+      ],
+      "scope_proven": false,
+      "lookup_candidate_count": 1,
+      "required_provider": "libsystemd-shared-244.so"
+    },
+    {
+      "id": "TC-1f8a019a1fcbc848",
+      "component": "/etc/actd/available-modules/activation_dm.so",
+      "interface": "baseline consumers on candidate:version:libgcc_s.so.1:GCC_3.5",
+      "status": "UNKNOWN",
+      "after": {
+        "id": "TC-1f8a019a1fcbc848",
+        "status": "UNKNOWN",
+        "resolution": "unknown_version_requirement"
+      },
+      "evidence_basenames": [
+        "5e8aaa164d8563f2dd88002924a5c83b52f47cefa50852c96fc9d82a5cadaf7b.txt",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.txt"
+      ],
+      "required_version": {
+        "file": "libgcc_s.so.1",
+        "name": "GCC_3.5",
+        "index": 2,
+        "flags": "none"
+      }
+    },
+    {
+      "id": "TC-1164a6c8dfac4200",
+      "component": "/etc/actd/available-modules/activation_dm.so",
+      "interface": "baseline consumers on candidate:loader context",
+      "status": "UNKNOWN",
+      "after": {
+        "id": "TC-1164a6c8dfac4200",
+        "status": "UNKNOWN",
+        "resolution": "unknown_search_environment"
+      },
+      "evidence_basenames": [
+        "5e8aaa164d8563f2dd88002924a5c83b52f47cefa50852c96fc9d82a5cadaf7b.txt",
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855.txt"
+      ],
+      "consumer_mode": "0o755",
+      "security_metadata_complete": false
+    }
+  ],
+  "enhancement_preflight": {
+    "stage": "preflight",
+    "status": "FAIL",
+    "disk_free_bytes": 2431811584,
+    "disk_estimated_work_bytes": 12118494034,
+    "disk_required_free_bytes": 13192235858
+  }
+}
