@@ -248,7 +248,7 @@ class Tools:
         return text
 
     def run(self, argv: list[str], timeout: float | None = None, *, max_capture_bytes: int | None = None,
-            cwd: Path | None = None) -> dict[str, Any]:
+            cwd: Path | None = None, keep_interrupt=False) -> dict[str, Any]:
         timeout = timeout or self.config['analysis']['timeout_seconds']
         env = os.environ.copy()
         env.update({'LC_ALL': 'C', 'TZ': 'UTC'})
@@ -267,6 +267,10 @@ class Tools:
                         os.killpg(proc.pid, signal.SIGKILL)
                         proc.wait()
                         code, error = -1, 'timeout'
+            except KeyboardInterrupt:
+                if not keep_interrupt or max_capture_bytes is None:
+                    raise
+                code, error = -1, 'interrupted'
             except OSError as exc:
                 code, error = -1, str(exc)
             result: dict[str, Any] = {'argv': [self.normalize(a) for a in argv], 'returncode': code, 'error': error}
@@ -298,37 +302,59 @@ class Tools:
         deadline, remaining = time.monotonic() + timeout, limit
         with subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               env=env, cwd=cwd, start_new_session=True) as proc, selectors.DefaultSelector() as selector:
-            selector.register(proc.stdout, selectors.EVENT_READ, stdout)
-            selector.register(proc.stderr, selectors.EVENT_READ, stderr)
-            error = ''
-            while selector.get_map():
-                wait = deadline - time.monotonic()
-                if wait <= 0:
-                    error = 'timeout'
-                    break
-                for key, _ in selector.select(wait):
-                    block = os.read(key.fd, min(65536, remaining + 1))
-                    if not block:
-                        selector.unregister(key.fileobj)
-                        continue
-                    key.data.write(block[:remaining])
-                    if len(block) > remaining:
-                        error = 'adapter output limit exceeded'
-                        break
-                    remaining -= len(block)
-                if error:
-                    break
-            if not error:
-                try:
-                    return proc.wait(timeout=max(0, deadline - time.monotonic())), ''
-                except subprocess.TimeoutExpired:
-                    error = 'timeout'
+            completed = False
             try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            proc.wait()
-            return -1, error
+                code, error = Tools.drain_bounded(proc, selector, stdout, stderr, deadline, remaining)
+                completed = not error
+                return code, error
+            finally:
+                # Also reap the local adapter group on interruption and pipe errors.
+                if not completed:
+                    try:
+                        os.killpg(proc.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    # Retain bytes already written to the pipes, including on SIGINT.
+                    # A detached process must not keep this drain blocked.
+                    for pipe, stream in ((proc.stdout, stdout), (proc.stderr, stderr)):
+                        try:
+                            os.set_blocking(pipe.fileno(), False)
+                            while available := limit - stdout.tell() - stderr.tell():
+                                block = os.read(pipe.fileno(), min(65536, available))
+                                if not block:
+                                    break
+                                stream.write(block)
+                        except BlockingIOError:
+                            continue
+
+    @staticmethod
+    def drain_bounded(proc, selector, stdout, stderr, deadline, remaining):
+        selector.register(proc.stdout, selectors.EVENT_READ, stdout)
+        selector.register(proc.stderr, selectors.EVENT_READ, stderr)
+        error = ''
+        while selector.get_map():
+            wait = deadline - time.monotonic()
+            if wait <= 0:
+                error = 'timeout'
+                break
+            for key, _ in selector.select(wait):
+                block = os.read(key.fd, min(65536, remaining + 1))
+                if not block:
+                    selector.unregister(key.fileobj)
+                    continue
+                key.data.write(block[:remaining])
+                if len(block) > remaining:
+                    error = 'adapter output limit exceeded'
+                    break
+                remaining -= len(block)
+            if error:
+                break
+        if not error:
+            try:
+                return proc.wait(timeout=max(0, deadline - time.monotonic())), ''
+            except subprocess.TimeoutExpired:
+                error = 'timeout'
+        return -1, error
 
     def discover(self) -> dict[str, Any]:
         for name in ('readelf', 'nm', 'objdump', 'abidiff', 'abi-dumper', 'abi-compliance-checker',

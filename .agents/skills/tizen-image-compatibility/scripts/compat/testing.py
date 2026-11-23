@@ -333,11 +333,17 @@ def run_target(environment: dict[str, Any], binary: Path, args: list[str], label
     if (executable == binary.resolve() or executable.is_relative_to(image.root.resolve())
             or executable.is_relative_to((tools.output / 'build').resolve())):
         raise InputError('Runtime runner must be an external isolation adapter; direct target execution is forbidden')
-    result = tools.run([*runner, *args], timeout=tools.config['runtime']['timeout_seconds'], max_capture_bytes=4 * 1024 * 1024)
+    binding = environment.get('receipt_binding')
+    extra = {'keep_interrupt': True} if binding else {}
+    result = tools.run([*runner, *args], timeout=tools.config['runtime']['timeout_seconds'],
+                       max_capture_bytes=4 * 1024 * 1024, **extra)
     result['runtime_evidence'] = [result[k] for k in ('stdout_evidence', 'stderr_evidence') if k in result]
     result['runtime_environment'] = {'id': environment['id'], 'backend': 'operator-adapter'}
     result['runtime_reason'] = 'Missing or invalid target receipt'
     result['stages'] = {'deployment_status': 'UNKNOWN', 'execution_status': 'UNKNOWN', 'behavior_status': 'UNKNOWN'}
+    if binding:
+        result['adapter_error'] = result.get('error') or ''
+        result['adapter_returncode'] = result['returncode']
     # An adapter process exiting zero alone does not prove deployment or target execution.
     try:
         receipt = json.loads(result['stdout'])
@@ -346,7 +352,15 @@ def run_target(environment: dict[str, Any], binary: Path, args: list[str], label
         valid = (result['returncode'] == 0 and not result['stdout_truncated'] and not result.get('error') and isinstance(receipt, dict)
                  and receipt.get('schema') == 'tizen-compat-runner/v1' and receipt.get('environment_id') == environment['id']
                  and source and source.is_file() and receipt.get('binary_sha256') == hash_file(source)
+                 and (not binding or all(receipt.get(k) == v for k, v in binding.items()))
                  and (not companion or receipt.get('companion_sha256') == values['companion_sha256'] == hash_file(companion)))
+        if binding and valid:
+            if receipt.get('deployment') == 'failed':
+                result['stages']['deployment_status'] = 'FAILED'
+                result['runtime_reason'] = 'Target deployment failed'
+            elif receipt.get('deployment') == 'ok' and receipt.get('execution') in ('failed', 'timeout', 'disconnected'):
+                result['stages']['execution_status'] = receipt['execution'].upper()
+                result['runtime_reason'] = 'Target execution ' + receipt['execution']
         if valid and receipt.get('deployment') == 'ok':
             result['companion_sha256'] = receipt.get('companion_sha256') if companion else None
             result['stages']['deployment_status'] = 'SUCCESS'
