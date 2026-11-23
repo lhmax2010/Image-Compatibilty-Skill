@@ -152,7 +152,8 @@ def run_case(case, target, controller, binary, tools, timeout):
     adapter = {'id': target['id'], 'receipt_binding': binding,
                'runner': [str(controller), 'run', *identity, '--artifact', '{binary}', '--sha256', expected,
                           '--timeout-seconds', str(timeout)]}
-    case.update(attempt_id=run_id, status='UNKNOWN')
+    case.update(attempt_id=run_id, status='UNKNOWN', verification_status='NOT_VERIFIED',
+                target_process_cleanup_status='NOT_VERIFIED')
     try:
         observed = execute_target(adapter, binary, [], case['destination_image'],
                                   SimpleNamespace(root=Path(target['rootfs'])), tools, expected=expected)
@@ -173,15 +174,13 @@ def run_case(case, target, controller, binary, tools, timeout):
             receipt = json.loads(cleanup['stdout'])
         except ValueError:
             receipt = {}
-        clean = (cleanup['returncode'] == 0 and not cleanup['error'] and not cleanup['stdout_truncated']
-                 and isinstance(receipt, dict) and receipt.get('schema') == 'tizen-compat-runner-cleanup/v1'
-                 and receipt.get('environment_id') == target['id'] and receipt.get('cleanup') == 'ok'
-                 and all(receipt.get(key) == value for key, value in binding.items()))
-        case['cleanup_receipt_status'] = 'ACCEPTED' if clean else 'UNCONFIRMED'
-        case['target_process_cleanup_status'] = 'NOT_VERIFIED'
-        local = (case.get('run_local_process_group_status'), case['cleanup_local_process_group_status'])
-        # Preserve the legacy gate while reporting its evidence separately from target exit.
-        case['cleanup_status'] = 'SUCCESS' if clean and local == ('VERIFIED', 'VERIFIED') else 'UNKNOWN'
+        accepted = (cleanup['returncode'] == 0 and not cleanup['error'] and not cleanup['stdout_truncated']
+                    and isinstance(receipt, dict) and receipt.get('schema') == 'tizen-compat-runner-cleanup/v1'
+                    and receipt.get('environment_id') == target['id'] and receipt.get('cleanup') == 'ok'
+                    and all(receipt.get(key) == value for key, value in binding.items()))
+        # Controller stdout acknowledges cleanup. Independent target proof has no enrolled source yet.
+        case['cleanup_receipt_status'] = 'ACCEPTED' if accepted else 'UNCONFIRMED'
+        case['cleanup_status'] = 'UNKNOWN'
 
 
 def frozen_runtime(manifest, manifest_sha, bundle, output, *, enrollment=None, execute=False):
@@ -200,7 +199,8 @@ def frozen_runtime(manifest, manifest_sha, bundle, output, *, enrollment=None, e
         a = artifacts[row['artifact_id']]
         ref, side = a['native_reference'], row['destination_image']
         compiler = a['build']['compile_argv'][0]
-        row.update(native_image=ref, status='NOT_EXECUTED', plan_id=None, environment=None,
+        row.update(native_image=ref, status='NOT_EXECUTED', verification_status='NOT_EXECUTED',
+                   plan_id=None, environment=None,
                    build_proof={'status': 'FROZEN_SHA256_VERIFIED', 'sdk': images[ref]['sdk_base_snapshot'],
                                 'sdk_package_lock_sha256': images[ref]['sdk_package_lock_sha256'],
                                 'native_image_sha256': images[ref]['image']['published_sha256'],
@@ -240,16 +240,25 @@ def frozen_runtime(manifest, manifest_sha, bundle, output, *, enrollment=None, e
         expected = {k: expectation[k] for k in ('exit_code', 'stdout', 'stderr')} if native else references[ident]
         try:
             run_case(case, targets[side], controller, stage / ident, tools, timeout)
+            observed = case.get('observation')
+            behavior_observed = bool(observed and observed['exit_code'] not in RESERVED_EXIT_CODES)
+            match = behavior_observed and observed == expected
+            if behavior_observed:
+                case['stages']['behavior_status'] = 'SUCCESS' if match else 'MISMATCH'
+            local = (case['run_local_process_group_status'], case['cleanup_local_process_group_status'])
             if 'interrupted' in (case['adapter_error'], case['cleanup_error']):
                 stop_reason = 'Execution interrupted'
-            elif case['cleanup_status'] != 'SUCCESS':
+            elif case['cleanup_receipt_status'] != 'ACCEPTED' or local != ('VERIFIED', 'VERIFIED'):
                 stop_reason = 'Cleanup receipt or local process group could not be verified'
+            elif case['target_process_cleanup_status'] != 'VERIFIED':
+                stop_reason = 'Independent target process exit was not verified'
+            else:
+                case['cleanup_status'] = 'SUCCESS'
             if stop_reason:
                 case['runtime_reason'] = stop_reason
-            elif (observed := case.get('observation')) and observed['exit_code'] not in RESERVED_EXIT_CODES:
-                match = observed == expected
-                case['stages']['behavior_status'] = 'SUCCESS' if match else 'MISMATCH'
+            elif behavior_observed:
                 case['status'] = 'COMPATIBLE' if match else ('UNKNOWN' if native else 'INCOMPATIBLE')
+                case['verification_status'] = 'NOT_VERIFIED' if case['status'] == 'UNKNOWN' else 'VERIFIED'
                 if native and match:
                     references[ident] = observed
                 elif not match:

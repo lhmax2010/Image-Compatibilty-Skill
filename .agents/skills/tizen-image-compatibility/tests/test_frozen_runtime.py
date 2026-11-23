@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
+from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -15,6 +16,7 @@ from unittest.mock import patch
 ENTRY = Path(__file__).resolve().parents[1] / 'scripts' / 'frozen_runtime.py'
 sys.path.insert(0, str(ENTRY.parent))
 from compat.core import DEFAULTS, Tools
+import frozen_runtime
 
 
 def process_is_live(pid):
@@ -62,6 +64,14 @@ class FrozenRuntimeTests(unittest.TestCase):
                 receipt.update(schema='tizen-compat-runner-cleanup/v1', cleanup='ok')
                 if mode == 'bad-cleanup':
                     receipt['run_id'] = 'other'
+                if mode in ('forged-cleanup', 'escaped-fixture'):
+                    receipt.update(target_process_cleanup_status='VERIFIED', remaining_processes=0)
+                if mode == 'cleanup-disconnect':
+                    print('transport disconnected', file=sys.stderr)
+                    sys.exit(125)
+                if mode == 'cleanup-timeout':
+                    print('cleanup started', flush=True)
+                    time.sleep(30)
                 if mode == 'cleanup-interrupt':
                     proc = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)'])
                     (root / 'child.pid').write_text(str(proc.pid))
@@ -147,7 +157,7 @@ class FrozenRuntimeTests(unittest.TestCase):
                                controller_sha256=hashlib.sha256(self.controller.read_bytes()).hexdigest())
         self.reports = 0
 
-    def launch(self, *, execute=False, enrollment=True, wrong_manifest_hash=False):
+    def launch(self, *, execute=False, enrollment=True, wrong_manifest_hash=False, verified_target_fixture=False):
         self.manifest_path.write_text(json.dumps(self.manifest))
         self.enrollment_path.write_text(json.dumps(self.enrollment))
         self.reports += 1
@@ -159,7 +169,20 @@ class FrozenRuntimeTests(unittest.TestCase):
             cmd.extend(['--enrollment', str(self.enrollment_path)])
         if execute:
             cmd.append('--execute')
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        if verified_target_fixture:
+            run_case = frozen_runtime.run_case
+
+            def with_simulated_independent_verification(case, *args):
+                run_case(case, *args)
+                case['target_process_cleanup_status'] = 'VERIFIED'
+
+            # Exercise the post-verification matrix rules without trusting controller stdout.
+            with patch.object(frozen_runtime, 'run_case', side_effect=with_simulated_independent_verification):
+                code = frozen_runtime.frozen_runtime(self.manifest_path, digest, self.bundle, directory,
+                                                     enrollment=self.enrollment_path, execute=execute)
+            result = SimpleNamespace(returncode=code, stderr='')
+        else:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=20)
         report = directory / 'runtime.json'
         return result, json.loads(report.read_text())['cases'] if report.exists() else [], directory
 
@@ -212,7 +235,7 @@ class FrozenRuntimeTests(unittest.TestCase):
         self.assertFalse(self.calls.exists())
 
     def test_exact_bytes_native_first_fresh_receipts_and_cleanup(self):
-        result, plan, out = self.launch(execute=True)
+        result, plan, out = self.launch(execute=True, verified_target_fixture=True)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual({row['status'] for row in plan}, {'COMPATIBLE'})
         calls = [json.loads(line) for line in self.calls.read_text().splitlines()]
@@ -223,6 +246,7 @@ class FrozenRuntimeTests(unittest.TestCase):
         self.assertEqual(len({row['attempt_id'] for row in plan}), 8)
         for row in plan:
             self.assertEqual(row['cleanup_status'], 'SUCCESS')
+            self.assertEqual(row['verification_status'], 'VERIFIED')
             for path in row['runtime_evidence'] + row['cleanup_evidence']:
                 self.assertTrue((out / path).is_file())
 
@@ -237,7 +261,7 @@ class FrozenRuntimeTests(unittest.TestCase):
                                     ('native-mismatch', 'behavior_status', 'MISMATCH')):
             with self.subTest(mode=mode):
                 self.mode.write_text(mode)
-                result, plan, _ = self.launch(execute=True)
+                result, plan, _ = self.launch(execute=True, verified_target_fixture=True)
                 self.assertEqual(result.returncode, 3, result.stderr)
                 native, cross = (row for row in plan if row['artifact_id'] == 'vd-A-C')
                 self.assertEqual(native['status'], 'UNKNOWN')
@@ -247,7 +271,7 @@ class FrozenRuntimeTests(unittest.TestCase):
 
     def test_cross_mismatch_and_unconfirmed_cleanup(self):
         self.mode.write_text('mismatch')
-        result, plan, _ = self.launch(execute=True)
+        result, plan, _ = self.launch(execute=True, verified_target_fixture=True)
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertEqual(sum(row['status'] == 'INCOMPATIBLE' for row in plan), 4)
         self.mode.write_text('bad-cleanup')
@@ -263,7 +287,8 @@ class FrozenRuntimeTests(unittest.TestCase):
                 result, plan, out = self.launch(execute=True)
                 self.assertEqual(result.returncode, code, result.stderr)
                 self.assertEqual(plan[0]['adapter_error'], reason)
-                self.assertEqual(plan[0]['cleanup_status'], 'SUCCESS')
+                self.assertEqual(plan[0]['cleanup_status'], 'UNKNOWN')
+                self.assertEqual(plan[0]['cleanup_receipt_status'], 'ACCEPTED')
                 self.assertEqual(plan[0]['run_local_process_group_status'], 'VERIFIED')
                 self.assertTrue(any('partial output' in (out / path).read_text()
                                     for path in plan[0]['runtime_evidence']))
@@ -278,11 +303,35 @@ class FrozenRuntimeTests(unittest.TestCase):
                 result, plan, _ = self.launch(execute=True)
                 pid = int((self.root / 'child.pid').read_text())
                 self.addCleanup(stop_fixture, pid)
-                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.returncode, 3, result.stderr)
                 self.assertEqual(plan[0]['run_local_process_group_status'], 'VERIFIED')
                 self.assertEqual(plan[0]['cleanup_receipt_status'], 'ACCEPTED')
                 self.assertEqual(plan[0]['target_process_cleanup_status'], 'NOT_VERIFIED')
+                self.assertEqual(plan[0]['stages']['behavior_status'], 'SUCCESS')
+                self.assertEqual(plan[0]['status'], 'UNKNOWN')
+                self.assertEqual(plan[0]['verification_status'], 'NOT_VERIFIED')
+                self.assertTrue(all(row['status'] == 'NOT_EXECUTED' for row in plan[1:]))
                 self.assertEqual(process_is_live(pid), alive)
+
+    def test_unproven_target_cleanup_blocks_even_with_matching_behavior(self):
+        for mode, receipt, error, evidence in (
+                ('ok', 'ACCEPTED', '', 'cleanup'),
+                ('forged-cleanup', 'ACCEPTED', '', 'remaining_processes'),
+                ('cleanup-timeout', 'UNCONFIRMED', 'timeout', 'cleanup started'),
+                ('cleanup-disconnect', 'UNCONFIRMED', '', 'transport disconnected')):
+            with self.subTest(mode=mode):
+                self.mode.write_text(mode)
+                result, plan, out = self.launch(execute=True)
+                self.assertEqual(result.returncode, 3, result.stderr)
+                first, *later = plan
+                self.assertEqual(first['stages']['behavior_status'], 'SUCCESS')
+                self.assertEqual(first['cleanup_receipt_status'], receipt)
+                self.assertEqual(first['cleanup_error'], error)
+                self.assertEqual(first['cleanup_status'], 'UNKNOWN')
+                self.assertEqual(first['target_process_cleanup_status'], 'NOT_VERIFIED')
+                self.assertEqual(first['status'], 'UNKNOWN')
+                self.assertTrue(any(evidence in (out / path).read_text() for path in first['cleanup_evidence']))
+                self.assertTrue(all(row['status'] == 'NOT_EXECUTED' and 'attempt_id' not in row for row in later))
 
     def test_cleanup_interrupt_stops_matrix_and_keeps_evidence(self):
         self.mode.write_text('cleanup-interrupt')
