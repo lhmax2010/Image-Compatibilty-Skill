@@ -90,6 +90,10 @@ Reports separately expose `compile_status`, `deployment_status`, `execution_stat
 
 ARM example triples/float flags must match your product's SDK; do not assume all Tizen ARMv7 builds use the same PCS. Read [correctness.md](correctness.md) for exact analysis boundaries.
 
+## SR headed SDB observations
+
+The single-device SDB entry can plan, admit, or run one allowed Phase 8E artifact in an existing authorized nonroot user scope. The observation report keeps this workflow separate from the formal headless matrix and records independent process and directory observations. See the [SDB adapter protocol](../../../../docs/reviews/phase8j/ADAPTER_PROTOCOL.md).
+
 ## Expected tests and complete verification (1.2)
 
 The harness inventories SDK headers and writes `expected-tests.json` before invoking compilers or adapters. Stable IDs bind compiler family/binary hash/configuration, source path/hash, SDK label/path, build provenance, configured target ABI, native reference and destination. Missing prerequisites remain planned. `header_limit` controls execution only; it does not remove mandatory expected headers. A baseline SDK header absent from the candidate is still planned for both. Missing header inventories create an unknown discovery test.
