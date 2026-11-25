@@ -6,7 +6,8 @@ import json
 from pathlib import Path
 import re
 
-from .core import InputError, hash_file, write_json
+from .core import hash_file, write_json
+from . import runtime_plan
 
 
 def read(path):
@@ -63,29 +64,28 @@ def static_summary(spec):
             'finding_counts':[{'dimension':dim,'status':status,'count':n} for (dim,status),n in sorted(counts.items())]}
 
 
-def collect(config, output):
+def collect(config, output, *, plan=None, live_attempts=None):
     static = static_summary(config['static_report']) if config.get('static_report') else None
     builds = []
     for source in config.get('build_reports', []):
         path = Path(source)
         builds.append({'source':str(path),'sha256':hash_file(path),'record':read(path)})
-    rows = []
-    for source in config.get('runtime_reports', []):
-        path = Path(source)
-        data = read(path)
-        if data.get('schema') != 'tizen-compat-sdb-observation/v1' or data.get('scope') not in (
-                'SR_HEADED_RUNTIME','SR_RUNTIME'):
-            raise InputError('Invalid SDB observation schema or scope')
-        rows.append({'source':str(path),'sha256':hash_file(path),'record':data})
-    status = Counter(r['record']['result'] for r in rows)
+    rows = runtime_plan.read_attempts(config.get('runtime_reports', []))
+    if plan is None and config.get('expected_runtime_plan'):
+        plan = runtime_plan.pinned_document(config['expected_runtime_plan'])
+    plan = plan if plan is not None else {'schema':runtime_plan.PLAN, 'tests':[]}
+    reconciled = runtime_plan.reconcile(config, plan, rows, live_attempts or {})
     results = {'schema':'tizen-compat-workflow-report/v1','static':static,'compile_link':builds,'runtime':rows,
-               'runtime_status_counts':dict(status),'formal_compatibility':'UNKNOWN',
+               'runtime_status_counts':reconciled['counts'],'expected_runtime':reconciled,'formal_compatibility':'UNKNOWN',
+               'runtime_run_note':config.get('runtime_run_note'),
                'limitations':['Runtime observations do not update static findings',
                               'Release and execution scopes are independently recorded',
                               'Formal target-process proof is not established by the SDB observation']}
     write_json(output/'results.json',results)
     md = ['# Tizen compatibility workflow','',
           'Formal compatibility: UNKNOWN','']
+    if results['runtime_run_note']:
+        md.extend([html.escape(results['runtime_run_note']),''])
     if static:
         md.extend(['## Static analysis','',f"Scope: {static['scope']}",f"Findings: {static['findings']:,}",
                    f"Package assessment rows: {sum(static['package_rows'].values()):,}",''])
@@ -95,27 +95,41 @@ def collect(config, output):
     md.extend(['## Compile and link',''])
     for item in builds:
         md.append(f"- {len(item['record']['steps'])} recorded steps, evidence SHA256 {item['sha256']}")
-    md.extend(['','## Runtime observations','',
-               '| Scope | Artifact | Result | Exit | Behavior match | Cleanup | Formal |',
-               '| --- | --- | --- | --- | --- | --- | --- |'])
+    md.extend(['','## Raw Runtime receipts','',
+               '| Scope | Artifact | Claimed result | Exit | Behavior match | Cleanup | Formal | Disposition |',
+               '| --- | --- | --- | --- | --- | --- | --- | --- |'])
     incomplete = []
     for item in rows:
         r = item['record']
-        if r['result'] in ('BLOCKED', 'OBSERVATION_INCOMPLETE'):
-            stderr = (r.get('captured_output') or r.get('receipt') or {}).get('stderr', '')
-            reason = r.get('error') or ' '.join(stderr.split()) or 'Behavior or cleanup did not match the contract'
-            incomplete.append(f"- {r['artifact_id']}: {html.escape(reason[:300])}")
-        cells=(r['scope'],r['artifact_id'],r['result'],r.get('target_returncode',''),r['behavior_match'],
-               r['target_cleanup_status'],r['formal_runtime_status'])
-        md.append('| '+' | '.join(str(v).replace('|','\\|') for v in cells)+' |')
+        if item.get('input_error'):
+            continue
+        if r['result'] in ('BLOCKED', 'OBSERVATION_INCOMPLETE', 'BEHAVIOR_MISMATCH', 'NOT_VERIFIED'):
+            capture = r.get('captured_output') or r.get('receipt')
+            stderr = capture.get('stderr', '') if isinstance(capture, dict) else ''
+            reason = r.get('error') or ' '.join(str(stderr).split()) or 'Behavior or cleanup did not match the contract'
+            incomplete.append(f"- {html.escape(r['artifact_id'])}: {html.escape(str(reason)[:300])}")
+        cells=(r['scope'],r['artifact_id'],r['result'],r.get('target_returncode',''),r.get('behavior_match'),
+               r.get('target_cleanup_status'),r.get('formal_runtime_status'),item['disposition'])
+        md.append('| '+' | '.join(html.escape(str(v)).replace('|','\\|').replace('\n',' ') for v in cells)+' |')
     if incomplete:
         md.extend(['','## Incomplete observations','',*incomplete])
+    md.extend(['','## Expected Runtime tests','',
+               '| Test ID | Scope | Artifact | Repetition | Required | Status | Reason |',
+               '| --- | --- | --- | --- | --- | --- | --- |'])
+    for record in reconciled['tests']:
+        test = record['test']
+        cells = (test['test_id'], test['target']['scope'], test['artifact_id'],
+                 f"{test['repetition']}/{test['repetitions']}", test['required'], record['status'], record['reason'])
+        md.append('| '+' | '.join(html.escape(str(value)).replace('|','\\|').replace('\n',' ') for value in cells)+' |')
+    if not reconciled['tests']:
+        md.append('\nNo expected Runtime plan supplied. Imported observations remain unverified.')
     md.extend(['','Full build arguments, stdout/stderr hashes, Loader files, version checks, binding events,',
                'cleanup observations and source references are available in results.json.',''])
     summary='\n'.join(md)
     (output/'summary.md').write_text(summary)
     # Include the detailed sections in HTML. Escaping keeps untrusted tool output inert.
-    sections=[('Overview',summary),('Static finding and package counts',static),('Compile and link',builds),
+    sections=[('Overview',summary),('Expected Runtime tests and reconciliation',reconciled),
+              ('Static finding and package counts',static),('Compile and link',builds),
               ('Runtime, Loader, behavior and cleanup',rows),('Coverage limitations',results['limitations'])]
     body=''.join('<details><summary>'+html.escape(title)+'</summary><pre>'+
                  html.escape(data if isinstance(data,str) else json.dumps(data,indent=2,ensure_ascii=False))+

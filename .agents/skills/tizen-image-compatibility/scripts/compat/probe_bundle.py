@@ -5,6 +5,7 @@ import re
 import struct
 
 from .core import InputError, canonical, digest, hash_file
+from .runtime_binding import validate_contracts
 
 SCHEMA = 'tizen-compat-probe-bundle/v1'
 PIN = re.compile('[a-f0-9]{64}')
@@ -87,6 +88,7 @@ def load(path, pin, root):
         binding = case.get('binding_symbols', [])
         check(isinstance(binding, list) and len(binding) <= 16 and len(set(binding)) == len(binding)
               and all(re.fullmatch(r'[A-Za-z0-9_.$]+', s) for s in binding), 'Invalid Loader diagnostic symbols')
+        validate_contracts(case)
         provenance = case['build']
         check(isinstance(provenance, dict) and isinstance(provenance['records'], list) and provenance['records']
               and PIN.fullmatch(provenance['evidence_sha256']), 'Missing build provenance')

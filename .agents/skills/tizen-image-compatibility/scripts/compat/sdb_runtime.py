@@ -12,7 +12,7 @@ import shlex
 import time
 from uuid import uuid4
 
-from . import probe_bundle
+from . import probe_bundle, runtime_binding, runtime_plan
 from . import sdb_protocol as wire
 from .core import InputError, canonical, digest, hash_file, write_json
 
@@ -313,17 +313,14 @@ def verify_loaded(transport, attempt, artifact, log, *, startup_failure=False):
     versions = re.findall(rb"checking for version `([^']+)' in file ((?:/|\./)\S+)", log)
     version_rows = [{'version': v.decode('ascii'), 'path': p.decode('ascii')} for v, p in versions]
     wanted = set(artifact.get('binding_symbols', []))
-    bindings = []
-    for consumer, provider, symbol, version in re.findall(
-            rb"binding file (\S+) \[\d+\] to (\S+) \[\d+\]: .*?symbol `([^']+)'(?: \[([^]\n]+)\])?", log):
-        name = symbol.decode('ascii')
-        if name in wanted:
-            bindings.append({'symbol': name, 'consumer': consumer.decode('ascii'),
-                             'provider': provider.decode('ascii'), 'version': version.decode('ascii') or None})
+    contracts = artifact.get('binding_contracts', [])
+    events = list(runtime_binding.events(log, wanted | {item['symbol'] for item in contracts}))
+    bindings = [{key: row[key] for key in ('symbol', 'consumer', 'provider', 'version')} for row in events]
     base = {'versions': version_rows, 'bindings': bindings,
             'unobserved_binding_symbols': sorted(wanted - {row['symbol'] for row in bindings})}
     if startup_failure and not initialized:
-        return base | {'status': 'STARTUP_REJECTED', 'files': []}
+        return base | {'status': 'STARTUP_REJECTED', 'files': [],
+                       'exact_bindings': runtime_binding.exact_results(contracts, events, [], attempt, artifact)}
     require(initialized and versions, 'Loader diagnostics do not establish actual loading')
     paths = [p.decode('ascii') for p in initialized]
     companions = {name: sha for name, sha in artifact.get('files', {}).items() if name != 'probe'}
@@ -340,8 +337,9 @@ def verify_loaded(transport, attempt, artifact, log, *, startup_failure=False):
     require(expected <= pins.keys() and len(rows) == len(paths) and {asked for asked, _, _ in rows} == set(paths)
             and {(pins[name]['path'], pins[name]['sha256']) for name in expected} <= found
             and found <= {(p['path'], p['sha256']) for p in pins.values()}, 'Unpinned or missing actual Loader/provider')
-    return base | {'status': 'VERIFIED', 'files': [{'requested': a, 'path': b, 'sha256': c} for a,b,c in rows],
-                   'evidence': response.evidence}
+    files = [{'requested': requested, 'path': path, 'sha256': checksum} for requested, path, checksum in rows]
+    return base | {'status': 'VERIFIED', 'files': files, 'evidence': response.evidence,
+                   'exact_bindings': runtime_binding.exact_results(contracts, events, files, attempt, artifact)}
 
 
 def run_attempt(transport, device, artifact, source, output, report):
@@ -398,7 +396,7 @@ def run_attempt(transport, device, artifact, source, output, report):
         launcher = ['systemd-run','--user','--scope','--no-ask-password',f'--unit={attempt.unit}',
                     '-p','RuntimeMaxSec=10s','-p','TimeoutStopSec=1s','-p','KillMode=control-group',
                     '/usr/bin/setsid','-w','/bin/sh','-c',wire.WORKER,'worker',directory,binary_sha,uid,boot,aid]
-        if artifact.get('binding_symbols'):
+        if artifact.get('binding_symbols') or artifact.get('binding_contracts'):
             launcher.append('bindings')
         started = time.monotonic()
         report['launch_requested'] = True
@@ -486,6 +484,8 @@ def classify_execution(transport, attempt, artifact, output, report, files, ende
     report['behavior_match'] = loader_failure or (kind == 'exit' and remote_rc == expected['exit_code']
         and stdout == expected['stdout'].encode() and stderr == expected['stderr'].encode()
         and not report['loader']['unobserved_binding_symbols'])
+    if re.search(rb"(?m)^glibc: dlopen blocked for object .+ attempting to load ", stderr):
+        report['environment_limit'] = 'TARGET_LOADER_POLICY_BLOCKED'
     report['receipt'] = {'schema':'tizen-compat-runner/v1', 'environment_id':report['environment_id'],
                          'binary_sha256':attempt.artifact_sha, 'deployment':'ok', 'execution':'ok',
                          'returncode':remote_rc, 'stdout':stdout.decode('utf-8','replace'),
@@ -493,32 +493,43 @@ def classify_execution(transport, attempt, artifact, output, report, files, ende
                          'plan_id': report['plan_id'], 'scope':report['scope']}
 
 
-def handle(transport, spec, artifact, source, output, *, read_device, execute, expected_boot=None):
+def handle(transport, spec, artifact, source, output, *, read_device, execute, expected_boot=None,
+           expected_environment=None, test_id=None):
     report = dict(schema='tizen-compat-sdb-observation/v1', scope=spec['scope'],
                   artifact_id=artifact['artifact_id'], artifact_sha256=artifact['sha256'],
                   manifest_sha256=artifact.get('manifest_sha256', PHASE8E_MANIFEST_SHA256),
+                  bundle_sha256=runtime_plan.bundle_digest(artifact), test_id=test_id,
                   deployment_status='NOT_EXECUTED', execution_status='NOT_EXECUTED',
                   execution_success=None, behavior_match=None, target_cleanup_status='NOT_VERIFIED',
                   native_reference_status='NOT_VERIFIED', cross_image_compatibility='UNKNOWN',
                   formal_runtime_status='NOT_VERIFIED', target_process_cleanup_status='NOT_VERIFIED', result='PLANNED')
     try:
         validate_enrollment(spec, artifact, execute)
+        report.update(enrolled_target_sha256=probe_bundle.target_pin(spec), build_id=spec['build_id'],
+                      profile=spec['build_id'].rsplit('_', 1)[1])
         if read_device or execute:
             device, evidence = admit(transport, spec)
             require(expected_boot is None or expected_boot == device.boot,
                     'Boot identity changed since the previous observation', 'IDENTITY_MISMATCH')
             target = [spec['scope'], spec['sdb_serial'], spec['cpu_serial_sha256'], spec['build_id'],
                       device.boot, device.uid, device.providers]
+            environment = digest(canonical(target).encode())
+            require(expected_environment is None or expected_environment == environment,
+                    'Pinned Runtime environment identity differs', 'IDENTITY_MISMATCH')
             report.update(admission_status='VERIFIED', admission_evidence=evidence,
-                          environment_id=digest(canonical(target).encode()), build_id=spec['build_id'],
+                          environment_id=environment, build_id=spec['build_id'],
                           boot_id=device.boot, providers=device.providers)
             report['plan_id'] = digest(canonical([target, report['manifest_sha256'], artifact['artifact_id'], artifact['sha256']]).encode())
         if execute:
             run_attempt(transport, device, artifact, source, output, report)
-            if report['behavior_match'] is True and report['target_cleanup_status']=='VERIFIED':
+            incomplete_bindings = any(row['status'] != 'VERIFIED' for row in
+                                      report.get('loader', {}).get('exact_bindings', []))
+            if report['target_cleanup_status'] != 'VERIFIED' or incomplete_bindings:
+                report['result'] = 'NOT_VERIFIED'
+            elif report['behavior_match'] is True:
                 report['result'] = 'OBSERVED_SUCCESS' if report['execution_success'] else 'OBSERVED_EXPECTED_FAILURE'
             else:
-                report['result'] = 'OBSERVATION_INCOMPLETE'
+                report['result'] = 'BEHAVIOR_MISMATCH'
         return 0 if report['result'] in ('PLANNED', 'OBSERVED_SUCCESS', 'OBSERVED_EXPECTED_FAILURE') else 3
     except KeyboardInterrupt:
         report.update(result='BLOCKED', error='Interrupted', error_code='INTERRUPTED')

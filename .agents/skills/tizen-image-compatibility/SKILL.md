@@ -53,6 +53,8 @@ Review the Collector execution section alongside compatibility and coverage. A f
 
 Run static analysis with the regular CLI or reuse an existing report. Use `scripts/runtime_workflow.py build` to compile reviewed recipes with pinned SDKs and freeze the output. Review the new manifest and enroll its digest and selected artifact hashes for the exact SDB target. `runtime_workflow.py run` defaults to a local plan, `--admit` reads device identity, and `--execute` requires explicit authorization. The run command emits JSON, HTML and Markdown with per-stage evidence, even when a runtime observation fails. `runtime_workflow.py report` can combine previously collected observations. Existing Phase 8E manifests remain supported by `scripts/sdb_runtime.py`.
 
+Inspect `runtime-expected-plan.json` and the report's `expected_runtime` section. Each planned repetition has its own Test ID. Keep missing, blocked and skipped tests visible. Imported receipts require an independent review ledger for observation credit. For exact bindings, use `binding_contracts` with Consumer, Provider, Symbol, Version and Provider SHA256. An observed version check alone cannot verify a binding. [Expected tests and import contract](../../../docs/reviews/phase8k-final/EXPECTED_TEST_RECONCILIATION.md)
+
 Keep headless static findings separate from `SR_HEADED_RUNTIME` observations. Actual exit, expected behavior, Loader evidence and cleanup are separate fields. The SDB observation cannot satisfy the formal headless or cross-image classification on its own. See the [integrated workflow guide](../../../docs/reviews/phase8k-llvm-full-validation/USER_GUIDE.md).
 
 ## Validation and synthetic example
