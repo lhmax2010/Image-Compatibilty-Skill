@@ -1,6 +1,6 @@
 # 真实 SR SQLite 验收
 
-使用 Phase 8C 的同一未压缩只读源报告。启动时工作区所在 ext4 卷可用 291,220,434,944 B，超过 25 GiB 准入要求。被记录的五个源文件合计 5,543,410,883 B。SQLite 临时文件与输出均位于工作区内的全新目录，沿用生产 ResourceGuard。历史报告与失败证据继续保留。
+使用 Phase 8C 的同一未压缩只读源报告。启动时工作区所在 ext4 卷可用 291,220,434,944 B，超过 25 GiB 准入要求。五个索引输入合计 5,521,133,297 B，生产 ResourceGuard 的实际启动门槛为 13,189,750,242 B。源摘要记录覆盖 11 个文件，共 5,543,410,883 B。SQLite 临时文件与输出均位于工作区内的全新目录。历史报告与失败证据继续保留。
 
 ```bash
 python3 .agents/skills/tizen-image-compatibility/scripts/enhance_report.py build \
@@ -18,3 +18,5 @@ python3 .agents/skills/tizen-image-compatibility/scripts/enhance_report.py build
 - 实测采样进程 RSS 峰值 259,149,824 B，进程树采样 RSS 高水位 231,317,504 B。
 
 本地保留 `sqlite.log`、`sqlite/resource-samples.jsonl`、阶段和输入摘要。独立审计已安排在构建成功后检查全量载荷、关系、Evidence 与只读查询。完整 SQLite 是独立子任务，工作流功能验收使用原始静态报告及实机回执。
+
+独立重读的 11 个源文件 SHA256 与历史 Phase 8E 审计及本轮启动快照全部相符。该检查只授予源文件不可变性证据，完整建库仍需成功回执和独立索引对账。
