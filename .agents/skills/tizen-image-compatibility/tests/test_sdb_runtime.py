@@ -64,7 +64,7 @@ class DeviceFixture:
             return self.respond([*session,'ELF='+('0'*64 if self.mode=='digest' else SHA)])
         if operation.startswith('exec systemd-run '):
             assert '--user --scope' in operation and 'RuntimeMaxSec=10s' in operation
-            if not self.released.wait(0.12):
+            if not self.released.wait(5):
                 return self.respond([],143)
             if self.mode == 'disconnect':
                 raise sdb.SdbRuntimeError('connection ended', 'SDB_DISCONNECTED')
@@ -101,7 +101,8 @@ class DeviceFixture:
         if operation == wire.CAPTURE:
             if self.mode=='output-limit':
                 return self.respond(['OUTPUT_LIMIT=yes'],7)
-            files={'probe.stdout':b'expected\n','probe.stderr':b'', 'loader.55':(
+            stdout = b'' if self.mode == 'timeout' else b'expected\n'
+            files={'probe.stdout':stdout,'probe.stderr':b'', 'loader.55':(
                 b'calling init: /lib/ld-linux.so.3\ncalling init: /lib/libc.so.6\n'
                 b"checking for version `GLIBC_2.4' in file /lib/libc.so.6\n")}
             return self.respond([f'FILE|{name}|{len(data)}|{sdb.digest(data)}|'+base64.b64encode(data).decode()

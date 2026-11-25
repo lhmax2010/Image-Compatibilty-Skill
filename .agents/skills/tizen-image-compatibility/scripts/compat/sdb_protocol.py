@@ -66,6 +66,21 @@ x="$(sha256sum "$f")"
 printf 'ELF=%s\n' "${x%% *}"
 '''
 
+CHECK_BUNDLE = BIND + DIRECTORY + r'''
+for f do
+    [ -f "$dir/$f" ] && [ ! -L "$dir/$f" ] && [ "$(stat -c '%u' "$dir/$f")" = "$uid" ]
+    if [ "$f" = probe ]; then chmod 0700 "$dir/$f"; else chmod 0400 "$dir/$f"; fi
+    sum="$(sha256sum "$dir/$f")"
+    printf 'BUNDLE|%s|%s\n' "$f" "${sum%% *}"
+done
+n=0
+for f in "$dir/"* "$dir/".*; do
+    case "$f" in */.|*/..) continue;; esac
+    if [ -e "$f" ] || [ -L "$f" ]; then n=$((n+1)); fi
+done
+printf 'COUNT=%s\n' "$n"
+'''
+
 # The actual exec replaces the independently observed shell and keeps its PID/starttime.
 WORKER = r'''
 set -eu
@@ -79,14 +94,23 @@ while [ ! -f go ]; do /usr/bin/sleep 0.1; done
 x="$(sha256sum probe)"
 [ "${x%% *}" = "$2" ]
 [ ! -e probe.stdout ] && [ ! -L probe.stdout ] && [ ! -e probe.stderr ] && [ ! -L probe.stderr ]
+ulimit -c 0
 ulimit -f 256
-exec /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C LD_DEBUG=libs,versions,files LD_DEBUG_OUTPUT="$1/loader" "$1/probe" >probe.stdout 2>probe.stderr
+debug=libs,versions,files
+[ "${6:-}" != bindings ] || debug=$debug,bindings
+exec /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C TMPDIR="$1" LD_DEBUG="$debug" LD_DEBUG_OUTPUT="$1/loader" "$1/probe" >probe.stdout 2>probe.stderr
 '''
 
 ARM = BIND + DIRECTORY + r'''
-attempt=$1; pid=$2; start=$3; group=$4
+attempt=$1; pid=$2; start=$3; group=$4; shift 4
 [ -f "$dir/armed" ] && [ ! -L "$dir/armed" ] && [ "$(cat "$dir/armed")" = "$pid" ]
 [ "$(sed -n 's/^[0-9]*:name=systemd://p' "/proc/$pid/cgroup")" = "$group" ]
+while [ "$#" -gt 0 ]; do
+    file=$1; expected=$2; shift 2
+    [ -f "$dir/$file" ] && [ ! -L "$dir/$file" ]
+    x="$(sha256sum "$dir/$file")"
+    [ "${x%% *}" = "$expected" ]
+done
 line="$(cat "/proc/$pid/stat")"
 fields="${line##*) }"
 set -- $fields
@@ -188,5 +212,13 @@ done
 
 REMOVE = BIND + DIRECTORY + r'''
 for leaf do rm -f -- "$dir/$leaf"; done
+# Fork/exec can emit additional Loader diagnostics under child PIDs.
+for path in "$dir"/loader.*; do
+    [ -e "$path" ] || continue
+    leaf=${path##*/loader.}
+    case "$leaf" in ''|*[!0-9]*) continue;; esac
+    [ -f "$path" ] && [ ! -L "$path" ] && [ "$(stat -c %u "$path")" = "$uid" ]
+    rm -- "$path"
+done
 rmdir -- "$dir"
 '''

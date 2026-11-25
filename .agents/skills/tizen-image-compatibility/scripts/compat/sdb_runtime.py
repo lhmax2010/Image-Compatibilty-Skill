@@ -12,6 +12,7 @@ import shlex
 import time
 from uuid import uuid4
 
+from . import probe_bundle
 from . import sdb_protocol as wire
 from .core import InputError, canonical, digest, hash_file, write_json
 
@@ -19,6 +20,7 @@ HEADED = 'SR_HEADED_RUNTIME'
 HEADLESS = 'SR_RUNTIME'
 PHASE8E_MANIFEST_SHA256 = 'fe59f50a2501d0c165b5e7a3b037e969b418e06bbb8951e917412a4a06713c32'
 PROVIDERS = {'ld-linux.so.3', 'libc.so.6', 'libgcc_s.so.1', 'libm.so.6', 'libstdc++.so.6'}
+OPTIONAL_PROVIDERS = {'libpthread.so.0', 'libdl.so.2', 'librt.so.1', 'libatomic.so.1', 'libunwind.so.8'}
 CAPTURE_LIMIT = 640 * 1024
 REMOTE_FILE_LIMIT = 128 * 1024
 MAX_OBSERVER_AGE = 3.0
@@ -64,14 +66,20 @@ def validate_enrollment(spec, artifact, execute):
     require(re.fullmatch(rf'tizen-unified-{train}_[0-9]{{8}}\.[0-9]{{6}}_tizen-{profile}-armv7l',
                          spec['build_id']), 'Build ID must specify the selected family and profile')
     providers = spec['provider_sha256']
-    require(set(providers) == PROVIDERS and all(HASH.fullmatch(s) for s in providers.values())
+    require(PROVIDERS <= providers.keys() <= (PROVIDERS | OPTIONAL_PROVIDERS)
+            and all(HASH.fullmatch(s) for s in providers.values())
             and HASH.fullmatch(spec['cpu_serial_sha256']), 'Incomplete identity pins')
-    allowed = spec.get('authorization', {}).get('artifact_sha256', {})
+    auth = spec.get('authorization', {})
+    allowed = auth.get('artifact_sha256', {})
     if execute:
         require(scope == HEADED, 'Headless execution is managed by the existing formal entry', 'UNAUTHORIZED')
         require(spec.get('authorization', {}).get('execute') is True
                 and allowed.get(artifact['artifact_id']) == artifact['sha256'],
                 'Explicit authorization and exact artifact digest are required', 'UNAUTHORIZED')
+        if 'manifest_sha256' in artifact:
+            require(auth.get('manifest_sha256') == artifact['manifest_sha256']
+                    and auth.get('target_sha256') == probe_bundle.target_pin(spec),
+                    'New bundles require independent manifest and target authorization pins', 'UNAUTHORIZED')
 
 
 @dataclass(frozen=True)
@@ -142,7 +150,7 @@ class Device:
 
 
 def admit(transport, spec):
-    response = transport.shell(wire.ADMIT, spec['build_id'], *sorted(PROVIDERS), timeout=8)
+    response = transport.shell(wire.ADMIT, spec['build_id'], *sorted(spec['provider_sha256']), timeout=8)
     require(response.returncode == 0, 'Target release/Profile or prerequisites did not match', 'IDENTITY_MISMATCH')
     vals = good(response, 'admission')
     require(vals.get('DEVICE') == spec['cpu_serial_sha256'], 'Pinned board identity differs', 'IDENTITY_MISMATCH')
@@ -156,7 +164,7 @@ def admit(transport, spec):
             'No accepted private staging base or observable user manager')
     rows = table(response.text, 'FILE', 3)
     providers = {name: {'path': path, 'sha256': sha} for name, path, sha in rows}
-    require(len(rows) == len(PROVIDERS) and all(safe_path(p['path']) for p in providers.values())
+    require(len(rows) == len(spec['provider_sha256']) and all(safe_path(p['path']) for p in providers.values())
             and {k: v['sha256'] for k, v in providers.items()} == spec['provider_sha256'],
             'Pinned provider identity differs', 'IDENTITY_MISMATCH')
     return Device(boot, uid, base, manager, providers), response.evidence
@@ -300,37 +308,58 @@ def capture_files(transport, attempt, output, names):
     return contents, response.evidence
 
 
-def verify_loaded(transport, attempt, artifact, log):
-    initialized = list(dict.fromkeys(re.findall(rb'calling init:\s+(/\S+)', log)))
-    versions = re.findall(rb"checking for version `([^']+)' in file (/\S+)", log)
-    require(initialized and versions, 'Loader diagnostics do not establish actual binding')
-    paths = [b.decode('ascii') for b in initialized]
-    require(all(safe_path(p) and p.startswith(('/lib/', '/usr/lib/')) for p in paths), 'Unexpected Loader path')
+def verify_loaded(transport, attempt, artifact, log, *, startup_failure=False):
+    initialized = list(dict.fromkeys(re.findall(rb'calling init:[ \t]+((?:/|\./)\S+)', log)))
+    versions = re.findall(rb"checking for version `([^']+)' in file ((?:/|\./)\S+)", log)
+    version_rows = [{'version': v.decode('ascii'), 'path': p.decode('ascii')} for v, p in versions]
+    wanted = set(artifact.get('binding_symbols', []))
+    bindings = []
+    for consumer, provider, symbol, version in re.findall(
+            rb"binding file (\S+) \[\d+\] to (\S+) \[\d+\]: .*?symbol `([^']+)'(?: \[([^]\n]+)\])?", log):
+        name = symbol.decode('ascii')
+        if name in wanted:
+            bindings.append({'symbol': name, 'consumer': consumer.decode('ascii'),
+                             'provider': provider.decode('ascii'), 'version': version.decode('ascii') or None})
+    base = {'versions': version_rows, 'bindings': bindings,
+            'unobserved_binding_symbols': sorted(wanted - {row['symbol'] for row in bindings})}
+    if startup_failure and not initialized:
+        return base | {'status': 'STARTUP_REJECTED', 'files': []}
+    require(initialized and versions, 'Loader diagnostics do not establish actual loading')
+    paths = [p.decode('ascii') for p in initialized]
+    companions = {name: sha for name, sha in artifact.get('files', {}).items() if name != 'probe'}
+    private = {attempt.directory+'/'+name: sha for name, sha in companions.items()}
+    paths = list(dict.fromkeys(attempt.directory+'/'+p[2:] if p.startswith('./') else p for p in paths))
+    require(all(safe_path(p) and (p.startswith(('/lib/', '/usr/lib/')) or p in private) for p in paths),
+            'Unexpected Loader path')
     response = transport.shell(wire.PROVIDERS, *attempt.session, *paths)
     good(response, 'loaded providers')
     rows = table(response.text, 'FILE', 3)
     expected = {Path(artifact['elf']['interpreter']).name, *artifact['elf']['needed']}
-    pins = attempt.device.providers
-    # Use canonical paths and hashes, not the Loader's spelling of a symlink.
+    pins = attempt.device.providers | {Path(p).name: {'path': p, 'sha256': sha} for p, sha in private.items()}
     found = {(path, sha) for _, path, sha in rows}
-    require(len(rows) == len(paths) and {asked for asked, _, _ in rows} == set(paths)
+    require(expected <= pins.keys() and len(rows) == len(paths) and {asked for asked, _, _ in rows} == set(paths)
             and {(pins[name]['path'], pins[name]['sha256']) for name in expected} <= found
             and found <= {(p['path'], p['sha256']) for p in pins.values()}, 'Unpinned or missing actual Loader/provider')
-    return {'status':'VERIFIED', 'files':[{'requested':a,'path':b,'sha256':c} for a,b,c in rows],
-            'versions':[{'version':v.decode('ascii'),'path':p.decode('ascii')} for v,p in versions],
-            'evidence':response.evidence}
+    return base | {'status': 'VERIFIED', 'files': [{'requested': a, 'path': b, 'sha256': c} for a,b,c in rows],
+                   'evidence': response.evidence}
 
 
 def run_attempt(transport, device, artifact, source, output, report):
     aid = uuid4().hex[:16]
     boot, uid = device.boot, device.uid
     binary_sha = artifact['sha256']
-    artifact_copy = output / 'frozen.elf'
-    # Read once and verify the staged bytes. The source bundle is never executed on the host.
-    with artifact_copy.open('xb') as copy:
-        copy.write(source.read_bytes())
-    artifact_copy.chmod(0o444)
-    require(hash_file(artifact_copy) == binary_sha, 'Frozen artifact changed before staging')
+    bundle = artifact.get('files', {'probe': binary_sha})
+    copies = {}
+    for leaf, checksum in bundle.items():
+        original = source if leaf == 'probe' else source.parent/leaf
+        require(original.is_file() and not original.is_symlink() and original.stat().st_size <= 4*1024**2,
+                'Frozen bundle changed before staging')
+        copy = output / ('frozen.elf' if leaf == 'probe' else leaf)
+        with copy.open('xb') as out:
+            out.write(original.read_bytes())
+        copy.chmod(0o444)
+        require(hash_file(copy) == checksum, 'Frozen bundle changed before staging')
+        copies[leaf] = copy
     created = transport.shell(wire.CREATE, boot, uid, device.base, aid)
     values = good(created, 'private directory')
     directory, identity = values['DIR'], values['DIR_ID']
@@ -344,22 +373,36 @@ def run_attempt(transport, device, artifact, source, output, report):
     active = None
     released = None
     launch_sent = False
-    files = ['probe', 'armed', 'go', 'probe.stdout', 'probe.stderr']
+    files = [*bundle, 'armed', 'go', 'probe.stdout', 'probe.stderr']
     remote_rc = None
     try:
         before = observe(transport, attempt, 'before')
         require(before.fields.get('GROUP_ABSENT') == 'yes' and before.fields.get('ActiveState') == 'inactive',
                 'Attempt scope already exists')
-        report['deployment_transport_evidence'] = transport.push(artifact_copy, directory+'/probe')
-        deployed = transport.shell(wire.DEPLOYED, *attempt.stage)
-        require(good(deployed, 'deployment').get('ELF') == binary_sha,
-                'Deployment SHA256 mismatch', 'DEPLOYMENT_MISMATCH')
+        report['deployment_transport_evidence'] = {
+            leaf: transport.push(copy, directory+'/'+leaf) for leaf, copy in copies.items()}
+        if 'files' in artifact:
+            deployed = transport.shell(wire.CHECK_BUNDLE, *attempt.stage, *bundle)
+            values = good(deployed, 'bundle deployment')
+            rows = table(deployed.text, 'BUNDLE', 2)
+            require(len(rows) == len(bundle) and dict(rows) == bundle and values.get('COUNT') == str(len(bundle)),
+                    'Deployment bundle SHA256 mismatch', 'DEPLOYMENT_MISMATCH')
+        else:
+            deployed = transport.shell(wire.DEPLOYED, *attempt.stage)
+            require(good(deployed, 'deployment').get('ELF') == binary_sha,
+                    'Deployment SHA256 mismatch', 'DEPLOYMENT_MISMATCH')
+        report['deployed_sha256'] = bundle
         report['deployment_status'] = 'VERIFIED'
         report['deployment_evidence'] = deployed.evidence
 
         launcher = ['systemd-run','--user','--scope','--no-ask-password',f'--unit={attempt.unit}',
                     '-p','RuntimeMaxSec=10s','-p','TimeoutStopSec=1s','-p','KillMode=control-group',
                     '/usr/bin/setsid','-w','/bin/sh','-c',wire.WORKER,'worker',directory,binary_sha,uid,boot,aid]
+        if artifact.get('binding_symbols'):
+            launcher.append('bindings')
+        started = time.monotonic()
+        report['launch_requested'] = True
+        write_json(output/'runtime.json', report)
         with ThreadPoolExecutor(max_workers=1) as pool:
             launch_sent = True
             launch = pool.submit(transport.shell, 'exec '+shlex.join(launcher), timeout=16)
@@ -367,6 +410,9 @@ def run_attempt(transport, device, artifact, source, output, report):
             while time.monotonic() < end and not launch.done():
                 candidate = observe(transport, attempt, 'active')
                 if 'ARMED' in candidate.fields:
+                    if time.monotonic() - candidate.response.received > MAX_OBSERVER_AGE:
+                        # No grant was sent. A fresh sample within the existing lease can still admit it.
+                        continue
                     pid = candidate.assert_running(attempt, time.monotonic())
                     active = candidate
                     break
@@ -375,16 +421,17 @@ def run_attempt(transport, device, artifact, source, output, report):
             report['active_observer_evidence'] = active.response.evidence
             files.append('loader.'+pid)
             report['execution_status'] = 'RELEASE_REQUESTED'
-            write_json(output/'runtime.json', report)
             released = time.monotonic()
             active.assert_running(attempt, released)
-            armed = transport.shell(wire.ARM, *attempt.stage, aid, pid, active.processes[pid][3], attempt.cgroup)
+            pins = [v for leaf, checksum in bundle.items() if leaf != 'probe' for v in (leaf, checksum)]
+            armed = transport.shell(wire.ARM, *attempt.stage, aid, pid, active.processes[pid][3], attempt.cgroup, *pins)
             good(armed, 'execution grant')
             report['execution_status'] = 'RELEASED'
             report['grant_evidence'] = armed.evidence
             finished = launch.result()
             report['controller_evidence'] = finished.evidence
             remote_rc = finished.returncode
+            report['scope_wall_seconds'] = round(time.monotonic()-started, 6)
     except (InputError, OSError) as error:
         report['execution_error'] = str(error)
         raise
@@ -417,19 +464,28 @@ def run_attempt(transport, device, artifact, source, output, report):
 
 def classify_execution(transport, attempt, artifact, output, report, files, ended, remote_rc):
     report['target_returncode'] = remote_rc
-    if ended.fields.get('Result') == 'timeout':
-        report['execution_status'] = 'TIMEOUT'
-        return
+    expected = artifact['runtime_expectation']
+    kind = expected.get('outcome', 'exit')
     out, evidence = capture_files(transport, attempt, output, files[-3:])
     stdout, stderr = out['probe.stdout'], out['probe.stderr']
-    report['execution_status'] = 'EXITED'
-    report['execution_success'] = remote_rc == 0
     report['output_evidence'] = evidence
     report['output_sha256'] = {leaf:digest(raw) for leaf,raw in out.items()}
-    report['loader'] = verify_loaded(transport, attempt, artifact, out[files[-1]])
-    expected = artifact['runtime_expectation']
-    report['behavior_match'] = (remote_rc == expected['exit_code'] and stdout == expected['stdout'].encode()
-                                and stderr == expected['stderr'].encode())
+    report['captured_output'] = {'stdout':stdout.decode('utf-8','replace'),
+                                 'stderr':stderr.decode('utf-8','replace')}
+    if ended.fields.get('Result') == 'timeout':
+        report['execution_status'] = 'TIMEOUT'
+        report['execution_success'] = False
+        report['behavior_match'] = (kind == 'timeout' and remote_rc == expected['exit_code']
+                                    and stdout == expected['stdout'].encode() and stderr == expected['stderr'].encode())
+        return
+    report['execution_status'] = 'EXITED'
+    report['execution_success'] = remote_rc == 0
+    loader_failure = (kind == 'loader-error' and expected['stderr_contains'].encode() in stderr
+                      and remote_rc == expected['exit_code'] and not stdout)
+    report['loader'] = verify_loaded(transport, attempt, artifact, out[files[-1]], startup_failure=loader_failure)
+    report['behavior_match'] = loader_failure or (kind == 'exit' and remote_rc == expected['exit_code']
+        and stdout == expected['stdout'].encode() and stderr == expected['stderr'].encode()
+        and not report['loader']['unobserved_binding_symbols'])
     report['receipt'] = {'schema':'tizen-compat-runner/v1', 'environment_id':report['environment_id'],
                          'binary_sha256':attempt.artifact_sha, 'deployment':'ok', 'execution':'ok',
                          'returncode':remote_rc, 'stdout':stdout.decode('utf-8','replace'),
@@ -437,9 +493,10 @@ def classify_execution(transport, attempt, artifact, output, report, files, ende
                          'plan_id': report['plan_id'], 'scope':report['scope']}
 
 
-def handle(transport, spec, artifact, source, output, *, read_device, execute):
+def handle(transport, spec, artifact, source, output, *, read_device, execute, expected_boot=None):
     report = dict(schema='tizen-compat-sdb-observation/v1', scope=spec['scope'],
                   artifact_id=artifact['artifact_id'], artifact_sha256=artifact['sha256'],
+                  manifest_sha256=artifact.get('manifest_sha256', PHASE8E_MANIFEST_SHA256),
                   deployment_status='NOT_EXECUTED', execution_status='NOT_EXECUTED',
                   execution_success=None, behavior_match=None, target_cleanup_status='NOT_VERIFIED',
                   native_reference_status='NOT_VERIFIED', cross_image_compatibility='UNKNOWN',
@@ -448,17 +505,21 @@ def handle(transport, spec, artifact, source, output, *, read_device, execute):
         validate_enrollment(spec, artifact, execute)
         if read_device or execute:
             device, evidence = admit(transport, spec)
+            require(expected_boot is None or expected_boot == device.boot,
+                    'Boot identity changed since the previous observation', 'IDENTITY_MISMATCH')
             target = [spec['scope'], spec['sdb_serial'], spec['cpu_serial_sha256'], spec['build_id'],
                       device.boot, device.uid, device.providers]
             report.update(admission_status='VERIFIED', admission_evidence=evidence,
                           environment_id=digest(canonical(target).encode()), build_id=spec['build_id'],
                           boot_id=device.boot, providers=device.providers)
-            report['plan_id'] = digest(canonical([target, artifact['artifact_id'], artifact['sha256']]).encode())
+            report['plan_id'] = digest(canonical([target, report['manifest_sha256'], artifact['artifact_id'], artifact['sha256']]).encode())
         if execute:
             run_attempt(transport, device, artifact, source, output, report)
-            report['result'] = ('OBSERVED_SUCCESS' if report['behavior_match'] is True
-                                and report['target_cleanup_status']=='VERIFIED' else 'OBSERVATION_INCOMPLETE')
-        return 0 if report['result'] in ('PLANNED', 'OBSERVED_SUCCESS') else 3
+            if report['behavior_match'] is True and report['target_cleanup_status']=='VERIFIED':
+                report['result'] = 'OBSERVED_SUCCESS' if report['execution_success'] else 'OBSERVED_EXPECTED_FAILURE'
+            else:
+                report['result'] = 'OBSERVATION_INCOMPLETE'
+        return 0 if report['result'] in ('PLANNED', 'OBSERVED_SUCCESS', 'OBSERVED_EXPECTED_FAILURE') else 3
     except KeyboardInterrupt:
         report.update(result='BLOCKED', error='Interrupted', error_code='INTERRUPTED')
         return 130

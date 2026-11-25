@@ -49,6 +49,12 @@ Use `--exclude abi,runtime,performance` to omit dimensions from classification, 
 
 Review the Collector execution section alongside compatibility and coverage. A failed critical collector normally returns exit 3 after writing reports. Partial collection retains per-object gaps. Set `ci.fail_on_collector_failure: false` to reproduce the previous gate behavior. [CI and severity](references/severity_rules.md)
 
+## Optional SR device workflow
+
+Run static analysis with the regular CLI or reuse an existing report. Use `scripts/runtime_workflow.py build` to compile reviewed recipes with pinned SDKs and freeze the output. Review the new manifest and enroll its digest and selected artifact hashes for the exact SDB target. `runtime_workflow.py run` defaults to a local plan, `--admit` reads device identity, and `--execute` requires explicit authorization. The run command emits JSON, HTML and Markdown with per-stage evidence, even when a runtime observation fails. `runtime_workflow.py report` can combine previously collected observations. Existing Phase 8E manifests remain supported by `scripts/sdb_runtime.py`.
+
+Keep headless static findings separate from `SR_HEADED_RUNTIME` observations. Actual exit, expected behavior, Loader evidence and cleanup are separate fields. The SDB observation cannot satisfy the formal headless or cross-image classification on its own. See the [integrated workflow guide](../../../docs/reviews/phase8k-llvm-full-validation/USER_GUIDE.md).
+
 ## Validation and synthetic example
 
 ```bash

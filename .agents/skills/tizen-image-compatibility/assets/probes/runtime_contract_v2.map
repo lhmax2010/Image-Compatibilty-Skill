@@ -1,0 +1,1 @@
+SR_PROBE_2 { global: sr_contract; probe_alive; local: *; };
