@@ -1,42 +1,27 @@
-# v1.5.1 release acceptance
+# v1.5.2 release acceptance
 
-**Native RPM payload and repository reporting — PASS on locally built RPMs. Standard EROFS extraction — NOT VERIFIED with a real filesystem. Samsung KantSU2e EROFS and VD repository acceptance — NOT VERIFIED.** This internal developer release covers archive and static analysis.
+**Local release candidate accepted for a scoped offline pilot and the synthetic headquarters demo. Full company production rollout remains NOT READY.** The [production readiness decision](docs/production-readiness/PRODUCTION_READINESS.md) records separate functional, security, portability, company Agent, demo and distribution gates.
 
-## Clean install and RPM evidence
+## Evidence
 
-A separate checkout and a fresh extraction of the release package were tested offline. The packaged CLI ran from an unrelated directory with spaces. The audit rebuilt both synthetic repositories with `rpmbuild`, read the RPM headers and payloads, compared the extracted ELF objects, and verified the output independently.
+- Two genuine synthetic ARMv7l RPMs built with the authorized local SR GCC 14.2.0 and Clang 22.1.8 SDKs were analyzed by the freshly unpacked candidate. ELF32, EABI5, ARMv7 and Base PCS were observed. The archived CLI detected the versioned removal and addition, with a complete export objective and independently incomplete product coverage. [Reproduction](docs/production-readiness/validate_arm_rpms.py)
+- Rootfs directories, TAR/TAR.GZ, single and recursive RPM inputs, metadata-only results, EROFS fallback and manifest replay exercised their real engine paths. A regular unsupported input and a corrupt RPM retained their failure evidence. Native standard EROFS decoding needs local mkfs.erofs and fsck.erofs, which were unavailable. [Feature matrix](docs/production-readiness/FEATURE_ACCEPTANCE_MATRIX.md)
+- The packaged workflow ran concurrently from two independently unpacked Skill paths and two HOME/cwd environments, with Unicode and spaces and the same actual UID. Evidence includes successful parallel jobs, a read-only output refusal, exclusive output ownership, atomic cache publication and a real occupied browser port. [Portability](docs/production-readiness/MULTI_USER_VALIDATION.md)
+- Live and backup synthetic reports were independently generated. Actual Chromium verified the direct HTML and the optional loopback index, package-filtered detail, Evidence reads and denied off-tree access. The browser recorded zero JavaScript exceptions. Eight presentation slides passed structural checks. [Demo](docs/production-readiness/DEMO_GUIDE.md)
 
-| Measurement | Baseline | Candidate |
-| --- | ---: | ---: |
-| RPM archives discovered | 9 | 9 |
-| Metadata parsed and payload extracted | 9 | 8 |
-| Payload coverage | 100% | 88.89% |
-| ELF objects collected | 2 | 2 |
-| Complete export tables among collected ELF objects | 2 | 2 |
-| Export observations | 18 | 18 |
-| Import observations | 2 | 6 |
-
-The damaged candidate archive failed the metadata query and was recorded in `extraction-errors.csv`. Two packages carrying the same internal path retained distinct object identities. The test covers noarch data packages, ARMv7l and AArch64 package identities, multiple available versions, an unsafe CPIO path, and names resembling security and network components. The compiled test ELF objects are x86-64. The deterministic source archive digests were unchanged across analysis. The case with a package scriptlet confirmed that the scriptlet did not run.
-
-The detailed symbol CSV has 25 rows (16 matched, five added, three changed and one missing). It includes separate observations for one GNU symbol version change, one data symbol size change and one function code size change. Tests also verify C++ mangled names, TLS, IFUNC and ASAN dependency observations. The JSON and Finding CSV ID sets reconcile and the evidence files match their content-addressed references. The package, ELF, symbol and extraction CSVs and the HTML report were generated before optional indexing. Chromium rendered the scope and removed export. The optional loopback browser served multiple distinct pages from the small derived index.
-
-See [test_rpm_payload.py](.agents/skills/tizen-image-compatibility/tests/test_rpm_payload.py), the [RPM guide](.agents/skills/tizen-image-compatibility/references/rpm_repository.md) and the [EROFS preparation guide](.agents/skills/tizen-image-compatibility/references/image_preparation.md).
-
-## Regression and packaging
+## Regression and versioned package
 
 | Gate | Result |
 | --- | --- |
-| Full repository tests | 321 total, 315 PASS, six SKIP, zero FAIL |
-| Unpacked standalone tests | 306 total, 300 PASS, six SKIP, zero FAIL. The 15 historical host administration tests remain repository-only |
-| Python compileall, browser JavaScript syntax and Git whitespace checks | PASS |
-| Package reproduction | Two builds from the reviewed tree produced identical archive and file manifest |
+| Clean staged-source suite | 343 total, 337 PASS, 6 SKIP, 0 FAIL, 36.245 s, peak 105,448 KiB |
+| Fresh unpacked Skill suite | 328 total, 322 PASS, 6 SKIP, 0 FAIL, 36.495 s, peak 105,164 KiB |
+| Python compileall, JavaScript syntax and Git whitespace | PASS |
+| Reproducible package | Two byte-identical builds from one reviewed Skill tree. The v1.5.0 and v1.5.1 archive hashes and tag targets were cross-checked |
 
-The six skips cover explicit libabigail and Clang integrations, a host GCC/Clang matrix, the Clang ARM architecture/VFP case, the Clang PCS case, and real standard EROFS extraction without local `mkfs.erofs` and `fsck.erofs`. An existing Runtime interrupt-output test failed once during a preliminary parallel run and passed on serial re-execution. The Runtime process execution and cleanup implementation was unchanged.
+Five skips are the explicit libabigail integration, explicit Clang integration, host GCC/Clang matrix, Clang ARM ISA/VFP and Clang PCS. These require the opt-in or host tools described in the tests. The sixth skip is real EROFS extraction. The true ARMv7 RPM test is a separate SDK-based end-to-end check. The 15 historical host-admin tests are repository-only.
 
-Reproduce the tests with `python3 -m unittest discover -s .agents/skills/tizen-image-compatibility/tests -v` and rebuild with `python3 tools/package_skill.py --tree v1.5.1 --output ./release-assets`. See [PACKAGE_FILES.txt](PACKAGE_FILES.txt) and [SHA256SUMS](SHA256SUMS). The v1.5.0 archive, commit and tag remain available locally.
+Rebuild the candidate with `python3 tools/package_skill.py --tree v1.5.2 --output ./release-assets`. Validate the archive and embedded file inventory with [SHA256SUMS](SHA256SUMS) and [PACKAGE_FILES.txt](PACKAGE_FILES.txt).
 
-## EROFS and real VD follow-up
+## Scope requiring follow-up
 
-Synthetic superblocks verify feature, compression and extra-device identification and refusal for unknown feature bits. A controlled host tool verifies read-only staging, stderr evidence and normalized extraction. A separate end-to-end test verifies that a blocked EROFS input can fall back to both explicitly supplied RPM collections. Real EROFS decoding and Samsung-specific feature interpretation still require matching trusted tools and sample inputs. If a partition uses external devices, a verified same-build replacement or the corresponding RPM repositories can be used.
-
-Large VD repository throughput, actual ARM ELF coverage, product installation state and Runtime compatibility remain unverified by these fixtures. The [Quick Start](QUICK_START.md) provides the direct VD repository command. This package and its supporting evidence are local under the [publication policy](docs/PUBLICATION_POLICY.md).
+Current company Agent behavior, two distinct actual accounts, actual VD repositories, secure production resource isolation, standard and Samsung EROFS, full-size SR SQLite and formal cross-image Runtime still need evidence. This candidate was prepared locally. Distribution requires separate authorization for this release. [Known limitations](KNOWN_LIMITATIONS.md)

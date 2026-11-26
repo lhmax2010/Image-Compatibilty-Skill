@@ -6,10 +6,12 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
 import xml.etree.ElementTree as ET
 from typing import Any
 
-from .core import VERSION, SCHEMA, Tools, canonical, digest, expected_collectors, hash_file, limitation, write_json
+from .core import (DEFAULT_CAPTURE_BYTES, VERSION, SCHEMA, Tools, atomic_output, canonical, digest, expected_collectors,
+                   hash_file, limitation)
 from .elf import ELF_INVENTORY_REVISION, collect_elf
 from .images import Image
 from .packages import collect_package_inventory
@@ -19,6 +21,20 @@ RUNTIMES = re.compile(r'lib(c\+\+|stdc\+\+|gcc|clang_rt|unwind|omp|gomp|atomic|a
 HARDWARE = re.compile(r'(lib(EGL|GLES|GL\.|vulkan|drm|wayland|asound|avcodec|avformat|swscale|v4l|va\.)|gstreamer|camera|/dri/|/vulkan/|/alsa/)')
 NETWORK = re.compile(r'(lib(ssl|crypto|gnutls|nss|curl|nghttp2)|/ssl/|/NetworkManager/|/connman/|/resolv\.conf$|/hosts$|/bluetooth/|/systemd/network/|/include/(net|netinet|arpa)/)')
 SECURITY = re.compile(r'(selinux|smack|apparmor|seccomp|/security/|/polkit|/sudoers|/passwd$|/group$|/dbus-1/system.d/)')
+CACHE_REVISION = 2
+MAX_CACHE_OBJECT_BYTES = 128 * 1024 * 1024
+
+
+def read_cache_file(path, limit):
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(fd, 'rb') as stream:
+        info = os.fstat(stream.fileno())
+        if not stat.S_ISREG(info.st_mode) or info.st_size > limit:
+            raise ValueError('Invalid cache file')
+        data = stream.read(limit + 1)
+        if len(data) > limit:
+            raise ValueError('Cache file exceeds size limit')
+        return data
 
 
 def parse_keys(text: str) -> dict[str, list[str]]:
@@ -89,7 +105,14 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
     header_failures = []
     max_bytes = tools.config['analysis']['max_text_bytes']
     if cache:
-        cache.mkdir(parents=True, exist_ok=True)
+        try:
+            cache.mkdir(parents=True, exist_ok=True, mode=0o700)
+            info = cache.lstat()
+            if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid() or info.st_mode & 0o022:
+                raise ValueError('Use a cache directory owned by the current account without group or other write permission')
+        except (OSError, ValueError) as error:
+            m['limitations'].append(limitation('elf', 'Cache unavailable, collecting directly: ' + str(error)))
+            cache = None
     m['limitations'] += [limitation('abi', 'Function/data type layouts, calling convention, padding and member offsets require usable debug info and libabigail; symbol equality alone is not ABI proof.'),
         limitation('api', 'Lexical declarations do not resolve conditional compilation, overloads or typedef-equivalent signatures. Use SDK compile probes for semantic confirmation.'),
         limitation('linking', 'Loader cache, namespaces, interposition, dlopen paths, weak-symbol behavior and full versioned symbol resolution require target execution.'),
@@ -208,30 +231,48 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
         m['limitations'].append(limitation('filesystem', f'Directory traversal failed: {error.strerror}', '*'))
     def elf_job(job: tuple[Path, str]) -> dict[str, Any]:
         path, virtual = job
-        key = digest(canonical([VERSION, ELF_INVENTORY_REVISION, mode, virtual, hash_file(path), tools.versions.get('readelf'), tools.versions.get('nm')]).encode())
+        key = digest(canonical([VERSION, CACHE_REVISION, ELF_INVENTORY_REVISION, mode, virtual, hash_file(path),
+                                tools.versions.get('readelf'), tools.versions.get('nm')]).encode())
         cache_file = cache / (key + '.json') if cache else None
-        if cache_file and cache_file.exists():
+        if cache_file:
             try:
-                stored = json.loads(cache_file.read_text())
-                if not isinstance(stored, dict) or stored.get('path') != virtual or not stored.get('complete'):
+                record = json.loads(read_cache_file(cache_file, MAX_CACHE_OBJECT_BYTES))
+                stored = record.get('object') if isinstance(record, dict) and record.get('key') == key else None
+                if not isinstance(stored, dict) or stored.get('path') != virtual or stored.get('complete') is not True:
                     raise ValueError('Invalid cache record')
-                for ref in stored.get('evidence', []):
+                refs = stored.get('evidence')
+                if not isinstance(refs, list) or not refs:
+                    raise ValueError('Missing cache evidence')
+                for ref in refs:
                     if not isinstance(ref, str) or not re.fullmatch(r'evidence/[a-f0-9]{64}\.txt', ref):
                         raise ValueError('Invalid cache evidence path')
-                    source = cache / Path(ref).name
-                    (tools.output / ref).write_bytes(source.read_bytes())
+                    blob = read_cache_file(cache / Path(ref).name, DEFAULT_CAPTURE_BYTES)
+                    if digest(blob) != Path(ref).stem:
+                        raise ValueError('Cache evidence digest mismatch')
+                    with atomic_output(tools.output / ref) as output:
+                        output.write(blob)
                 return stored
             except (OSError, ValueError):
                 pass
         obj = collect_elf(path, virtual, tools, mode)
         if cache_file and obj['complete']:
-            for ref in obj.get('evidence', []):
-                (cache / Path(ref).name).write_bytes((tools.output / ref).read_bytes())
-            write_json(cache_file, obj)
+            try:
+                for ref in obj.get('evidence', []):
+                    with (tools.output / ref).open('rb') as source, atomic_output(cache / Path(ref).name) as output:
+                        while block := source.read(1024 * 1024):
+                            output.write(block)
+                with atomic_output(cache_file, 'w', encoding='utf-8') as output:
+                    json.dump({'key': key, 'object': obj}, output, ensure_ascii=False, sort_keys=True)
+            except OSError:
+                # Caching is optional. Keep accepted analysis when publication fails.
+                pass
         return obj
     if 'readelf' in collectors:
-        with ThreadPoolExecutor(max_workers=int(tools.config['analysis']['workers'])) as pool:
+        pool = ThreadPoolExecutor(max_workers=tools.config['analysis']['workers'])
+        try:
             m['elf_objects'] = sorted(pool.map(elf_job, elf_jobs), key=lambda x: x['path'])
+        finally:
+            pool.shutdown(wait=True, cancel_futures=True)
     source_files = {f['path']: f for f in m['filesystem']}
     for obj in m['elf_objects']:
         # Content caches never establish permissions/capabilities: observe the source again.

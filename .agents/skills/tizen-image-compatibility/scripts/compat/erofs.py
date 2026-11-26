@@ -1,5 +1,4 @@
 """Identify an EROFS superblock and stage extraction with trusted host tools."""
-import os
 from pathlib import Path
 import re
 import shutil
@@ -75,23 +74,22 @@ def extract(source,work,tools,record,info):
     if (version.get('error') or version['returncode'] or not record['extractor']['version'] or
             '--extract' not in help_text or not re.search(r'--(?:no-|\[no-\])preserve(?![-\w])',help_text)):
         raise PreparationError('EROFS_EXTRACTOR_UNAVAILABLE','fsck.erofs must support --extract and --no-preserve')
-    destination = work/'erofs-scratch'
-    destination.mkdir()
     archive = work/'erofs-rootfs.tar'
     reserve = 64*1024**2
     limit = min(tools.config['analysis']['max_extract_bytes'],shutil.disk_usage(work).free-reserve)
     if limit <= 0:
         raise PreparationError('EROFS_STORAGE_LIMIT','Insufficient space for staged TAR')
     size = min(tools.config['preparation']['erofs_scratch_mib']*1024**2,limit)
-    # Only tmpfs is writable inside the sandbox. The image is an ordinary read-only
-    # file, never mounted. Redirect fsck stdout to stderr so TAR stays a byte stream.
+    # Use a fresh root with host tools/libraries and the selected image only.
+    # Extraction writes to private tmpfs. The original image is never mounted.
     command = '"$1" --extract="$2" --no-preserve "$3" >&2 && "$4" -cf - -C "$2" .'
     argv = [tools.path('bwrap'),'--unshare-user','--unshare-net','--unshare-pid','--die-with-parent',
-            '--ro-bind','/','/','--dev','/dev','--proc','/proc','--size',str(size),'--tmpfs',str(destination),
-            '--chdir',str(destination),'--','/bin/sh','-c',command,'erofs',str(binary),str(destination),str(source),
-            tools.path('tar')]
-    env = {k:v for k,v in os.environ.items() if k not in ('LD_PRELOAD','LD_LIBRARY_PATH','BASH_ENV','ENV','TAR_OPTIONS')}
-    env.update(LC_ALL='C',TZ='UTC',TMPDIR=str(destination))
+            '--ro-bind','/usr','/usr','--ro-bind-try','/bin','/bin','--ro-bind-try','/lib','/lib',
+            '--ro-bind-try','/lib64','/lib64','--dev','/dev','--proc','/proc',
+            '--ro-bind',str(binary),'/input/fsck.erofs','--ro-bind',str(source),'/input/image',
+            '--ro-bind',tools.path('tar'),'/input/tar','--size',str(size),'--tmpfs','/work',
+            '--chdir','/work','--','/bin/sh','-c',command,'erofs','/input/fsck.erofs','/work','/input/image','/input/tar']
+    env = {'LC_ALL':'C','TZ':'UTC','TMPDIR':'/work','PATH':'/usr/bin:/bin'}
     with archive.open('x+b') as stdout,tempfile.TemporaryFile(dir=work) as stderr:
         code,error,cleanup = Tools.capture_bounded(argv,env,stdout,stderr,tools.config['preparation']['adapter_timeout_seconds'],limit,work)
         stderr.seek(0)

@@ -64,7 +64,7 @@ class Image:
             else:
                 raise InputError(f'Unsupported image format: {source}. For EXT4 use an isolated guest or read-only userspace extractor; for OCI export a merged rootfs. Supply the extracted directory or a rootfs TAR. No privileged mount is performed.')
         if self.format in ('directory','tar') and not looks_like_root(self.root) and any(
-                p.is_file() and not p.is_symlink() for p in self.root.rglob('*.rpm')):
+                p.is_file() and not p.is_symlink() for p in self.root.rglob('*.[rR][pP][mM]')):
             self.format = 'rpm-collection'
         tools.aliases[str(self.root)] = f'<{label}-rootfs>'
 
@@ -106,18 +106,28 @@ class Image:
     def _extract_tar(self, tools: Tools) -> None:
         total = count = 0
         links: list[tuple[Path, str, bool]] = []
+        byte_limit = tools.config['analysis']['max_extract_bytes']
+        file_limit = tools.config['analysis']['max_extract_files']
+        reserve = 64 * 1024**2
+
+        def check_write(size):
+            if shutil.disk_usage(self.root).free < size + reserve:
+                raise InfrastructureError('Insufficient scratch storage for TAR extraction')
+
         # Build only regular files/directories first. No archive-controlled parent symlinks.
         with tarfile.open(self.source, 'r|*') as archive:
-            for member in archive:
+            for member in iter(archive.next, None):
+                # We resolve links using our metadata, so the stdlib need not retain every header.
+                archive.members.clear()
                 name = PurePosixPath(member.name)
                 if name.is_absolute() or '..' in name.parts:
                     raise InputError(f'Unsafe TAR path: {member.name}')
-                if str(name) == '.':
-                    continue
                 count += 1
                 total += max(member.size, 0)
-                if count > tools.config['analysis']['max_extract_files'] or total > tools.config['analysis']['max_extract_bytes']:
+                if count > file_limit or total > byte_limit:
                     raise InputError('Archive exceeds configured extraction limit')
+                if str(name) == '.':
+                    continue
                 path = self.root.joinpath(*name.parts)
                 if path.exists():
                     if not (member.isdir() and path.is_dir()):
@@ -133,6 +143,7 @@ class Image:
                 if member.isdir():
                     path.mkdir(exist_ok=True)
                 elif member.isfile():
+                    check_write(member.size)
                     source = archive.extractfile(member)
                     if source is None:
                         raise InputError(f'Unreadable archive entry: {name}')
@@ -148,6 +159,11 @@ class Image:
                 resolved = self.resolve('/' + target)
                 if not resolved or not resolved.is_file():
                     raise InputError(f'Unsupported or unsafe TAR hardlink: {target}')
+                size = resolved.stat().st_size
+                total += size
+                if total > byte_limit:
+                    raise InputError('Archive exceeds configured extraction limit after materializing TAR hardlinks')
+                check_write(size)
                 shutil.copyfile(resolved, path)
             else:
                 # Absolute links are left intact; resolve() never follows host roots.
@@ -184,8 +200,9 @@ class Image:
 
     def walk(self) -> Iterator[tuple[str, Path, dict[str, Any]]]:
         seen = set()
+        excluded = {'proc', 'sys', 'run'}
         for directory, dirs, files in os.walk(self.root, followlinks=False, onerror=self.errors.append):
-            dirs[:] = sorted(d for d in dirs if not (Path(directory) == self.root and d in ('proc', 'sys', 'run')))
+            dirs[:] = sorted(d for d in dirs if not (Path(directory) == self.root and d in excluded))
             for name in sorted(dirs + files):
                 path = Path(directory) / name
                 virtual = '/' + path.relative_to(self.root).as_posix()
@@ -196,7 +213,14 @@ class Image:
                 metadata = self.metadata.get(virtual, dict(path=virtual, type=kind, mode=oct(stat.S_IMODE(info.st_mode)),
                     uid=info.st_uid, gid=info.st_gid, target=os.readlink(path) if kind == 'symlink' else None,
                     device=[os.major(info.st_rdev), os.minor(info.st_rdev)] if kind in ('char', 'block') else None))
+                if metadata.get('type') != kind:
+                    raise InputError(f'Image metadata type does not match physical file type: {virtual}')
                 seen.add(virtual)
                 yield virtual, path, metadata
         for virtual in sorted(set(self.metadata) - seen):
-            yield virtual, self.root / virtual.lstrip('/'), self.metadata[virtual]
+            # TAR records special entries without materializing them. A missing ordinary
+            # path cannot be read by trusting metadata in place of the physical walk.
+            metadata = self.metadata[virtual]
+            relative = PurePosixPath(virtual.lstrip('/'))
+            if relative.parts and relative.parts[0] not in excluded and metadata.get('type') in ('char', 'block', 'fifo', 'socket'):
+                yield virtual, self.root / relative, metadata

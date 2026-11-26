@@ -6,6 +6,7 @@ import importlib.util
 import json
 from pathlib import Path
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import threading
@@ -244,6 +245,18 @@ class EnhancementTests(unittest.TestCase):
             self.assertEqual(caught.exception.code, 501)
         finally:
             server.shutdown(); worker.join(); server.server_close()
+
+    def test_occupied_report_port_produces_actionable_cli_error(self):
+        script = Path(__file__).resolve().parents[1] / 'scripts/enhance_report.py'
+        with ThreadingHTTPServer(('127.0.0.1', 0), self.browser.handler()) as incumbent:
+            args = [sys.executable, str(script), 'serve', '--report', str(self.output),
+                    '--port', str(incumbent.server_port)]
+            result = subprocess.run(args, capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn('already in use', result.stderr)
+            self.assertIn('--port 0', result.stderr)
+            self.assertNotIn('Traceback', result.stderr)
+            self.assertEqual(incumbent.socket.getsockname()[1], incumbent.server_port)
 
     def test_output_cannot_overwrite_source_or_existing_output(self):
         with self.assertRaises(ValueError): build(self.source, self.source / 'child', FixtureGuard)

@@ -24,6 +24,7 @@ DIMENSIONS = ('elf', 'abi', 'api', 'headers', 'linking', 'compiler_runtime', 'ke
               'runtime', 'hardware', 'network', 'performance')
 SEVERITIES = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO')
 STATUSES = ('IDENTICAL', 'COMPATIBLE', 'INCOMPATIBLE', 'UNKNOWN', 'NOT_APPLICABLE')
+DEFAULT_CAPTURE_BYTES = 16 * 1024 * 1024
 DEFAULTS: dict[str, Any] = {
     'comparison': {'baseline_name': 'baseline', 'candidate_name': 'candidate',
                    'baseline_toolchain': 'unknown', 'candidate_toolchain': 'unknown'},
@@ -122,6 +123,8 @@ def validate_config(c: dict[str, Any]) -> None:
                 require(value >= (0 if key in ('header_limit', 'tolerance_percent') else 1),
                         f'Invalid range: {section}.{key}')
     require(all(x in DIMENSIONS for x in c['analysis']['modes']), 'Unknown analysis dimension')
+    require(type(c['analysis']['workers']) is int and 1 <= c['analysis']['workers'] <= 32,
+            'analysis.workers must be an integer between 1 and 32')
     scope_fields = {'paths', 'file_contents', 'uid_gid_mode', 'xattrs', 'acl', 'smack', 'file_capabilities',
                     'hardlinks', 'ramdisk', 'special_files'}
     for image, scope in c['analysis']['input_scope'].items():
@@ -259,6 +262,19 @@ def defer_console_interrupt():
             signal.signal(signal.SIGINT, signal.default_int_handler)
 
 
+@contextmanager
+def atomic_output(path, mode='wb', **kwargs):
+    """Publish a fully written file and discard an interrupted staging file."""
+    with tempfile.NamedTemporaryFile(mode=mode, dir=path.parent, delete=False, **kwargs) as stream:
+        pending = Path(stream.name)
+        try:
+            yield stream
+            stream.close()
+            pending.replace(path)
+        finally:
+            pending.unlink(missing_ok=True)
+
+
 def live_group_members(group):
     for path in Path('/proc').iterdir():
         if not path.name.isdigit():
@@ -296,6 +312,7 @@ class Tools:
     def run(self, argv: list[str], timeout: float | None = None, *, max_capture_bytes: int | None = None,
             cwd: Path | None = None, keep_interrupt=False) -> dict[str, Any]:
         timeout = timeout or self.config['analysis']['timeout_seconds']
+        limit = DEFAULT_CAPTURE_BYTES if max_capture_bytes is None else max_capture_bytes
         env = os.environ.copy()
         env.update({'LC_ALL': 'C', 'TZ': 'UTC'})
         for key in ('CPATH', 'C_INCLUDE_PATH', 'CPLUS_INCLUDE_PATH', 'LIBRARY_PATH', 'LD_PRELOAD', 'LD_LIBRARY_PATH'):
@@ -304,48 +321,35 @@ class Tools:
         local_group = 'NOT_VERIFIED'
         with tempfile.TemporaryFile(dir=self.raw) as stdout, tempfile.TemporaryFile(dir=self.raw) as stderr:
             try:
-                if max_capture_bytes is not None:
-                    code, error, local_group = self.capture_bounded(argv, env, stdout, stderr, timeout, max_capture_bytes, cwd)
-                    if error == 'interrupted' and not keep_interrupt:
-                        raise KeyboardInterrupt
-                else:
-                    proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=stdout, stderr=stderr, env=env, cwd=cwd, start_new_session=True)
-                    try:
-                        code = proc.wait(timeout=timeout)
-                    except subprocess.TimeoutExpired:
-                        os.killpg(proc.pid, signal.SIGKILL)
-                        proc.wait()
-                        code, error = -1, 'timeout'
+                code, error, local_group = self.capture_bounded(argv, env, stdout, stderr, timeout, limit, cwd)
             except KeyboardInterrupt:
-                if not keep_interrupt or max_capture_bytes is None:
-                    raise
                 code, error = -1, 'interrupted'
             except OSError as exc:
                 code, error = -1, str(exc)
             result: dict[str, Any] = {'argv': [self.normalize(a) for a in argv], 'returncode': code, 'error': error}
-            if max_capture_bytes is not None:
-                result['local_process_group_status'] = local_group
-            # Keep raw output in full on disk; parsing is bounded and marked incomplete.
+            result['local_process_group_status'] = local_group
+            # Preserve bounded raw evidence even when the command failed or output was capped.
             hashes = []
             for name, stream in (('stdout', stdout), ('stderr', stderr)):
                 stream.seek(0)
                 h = hashlib.sha256()
-                temp = tempfile.NamedTemporaryFile(dir=self.raw, delete=False)
-                with temp:
-                    while block := stream.read(1024 * 1024):
-                        h.update(block)
-                        temp.write(block)
+                while block := stream.read(1024 * 1024):
+                    h.update(block)
                 raw_id = h.hexdigest()
-                os.replace(temp.name, self.raw / f'{raw_id}.txt')
                 stream.seek(0)
-                data = stream.read(16 * 1024 * 1024 + 1)
-                result[name] = self.normalize(data[:16 * 1024 * 1024].decode('utf-8', 'replace'))
-                result[f'{name}_truncated'] = len(data) > 16 * 1024 * 1024
+                with atomic_output(self.raw / f'{raw_id}.txt') as evidence:
+                    shutil.copyfileobj(stream, evidence, 1024 * 1024)
+                stream.seek(0)
+                data = stream.read(DEFAULT_CAPTURE_BYTES + 1)
+                result[name] = self.normalize(data[:DEFAULT_CAPTURE_BYTES].decode('utf-8', 'replace'))
+                result[f'{name}_truncated'] = len(data) > DEFAULT_CAPTURE_BYTES
                 result[f'{name}_evidence'] = f'evidence/{raw_id}.txt'
                 hashes.append(raw_id)
             result['evidence_id'] = digest(canonical([result['argv'], code, hashes, error]).encode())
             with self.lock:
                 self.records.append({k: v for k, v in result.items() if k not in ('stdout', 'stderr')})
+            if error == 'interrupted' and not keep_interrupt:
+                raise KeyboardInterrupt
             return result
 
     @staticmethod
@@ -417,13 +421,18 @@ class Tools:
                 error = 'timeout'
                 break
             for key, _ in selector.select(wait):
-                block = os.read(key.fd, min(65536, remaining + 1))
-                if not block:
-                    selector.unregister(key.fileobj)
-                    continue
-                key.data.write(block[:remaining])
-                if len(block) > remaining:
+                # Once a read removes pipe bytes, commit them before handling SIGINT.
+                with defer_console_interrupt() as reading:
+                    block = os.read(key.fd, min(65536, remaining + 1))
+                    if block:
+                        key.data.write(block[:remaining])
+                    else:
+                        selector.unregister(key.fileobj)
+                if reading():
+                    error = 'interrupted'
+                elif len(block) > remaining:
                     error = 'adapter output limit exceeded'
+                if error:
                     break
                 remaining -= len(block)
             if error:
@@ -556,15 +565,18 @@ def read_manifest(path: Path) -> dict[str, Any]:
         for field in ('collection_complete', 'filesystem_path_inventory_complete'):
             if field in data and type(data[field]) is not bool:
                 raise ValueError('invalid collection completeness')
+        repository = 'repository' in data
         if 'collector_execution' in data:
             recorded = data['collector_execution']
+            collectors = ('readelf', 'rpm', 'rpm2cpio') if repository else ('readelf', 'rpm')
             if not isinstance(recorded, dict) or not all(
-                    name in ('readelf', 'rpm') and isinstance(entry, dict)
+                    name in collectors and isinstance(entry, dict)
                     and entry.get('status') in ('COMPLETE', 'PARTIAL', 'FAILED', 'UNKNOWN', 'NOT_EXECUTED')
                     and type(entry.get('applicable', True)) is bool
                     and (entry.get('applicable') is not False or entry['status'] == 'NOT_EXECUTED')
                     and isinstance(entry.get('reason', ''), str) and isinstance(entry.get('errors', []), list)
-                    and all(isinstance(error, dict) and isinstance(error.get('path'), str)
+                    and all(isinstance(error, dict)
+                            and isinstance(error.get('archive' if repository and name != 'readelf' else 'path'), str)
                             and isinstance(error.get('reason'), str) for error in entry.get('errors', []))
                     for name, entry in recorded.items()):
                 raise ValueError('invalid collector execution records')
@@ -580,6 +592,8 @@ def read_manifest(path: Path) -> dict[str, Any]:
                     raise ValueError('invalid ELF versions')
             if any(not isinstance(v.get('file'), str) for v in obj.get('version_requirements', [])):
                 raise ValueError('invalid version requirement file')
+        if repository:
+            validate_repository_context(data)
         validate_package_context(data)
         if not isinstance(data.get('expected_tests', []), list):
             raise ValueError('Invalid expected test manifest')
@@ -610,6 +624,81 @@ def read_manifest(path: Path) -> dict[str, Any]:
         raise InputError(f'Invalid manifest {path}: {exc}') from exc
 
 
+def validate_repository_context(data):
+    repo = data['repository']
+    if (data['schema_version'] != SCHEMA or not isinstance(repo, dict)
+            or repo.get('scope') not in ('RPM_REPOSITORY_PAYLOAD', 'RPM_REPOSITORY_METADATA')
+            or data['image'].get('format') != 'rpm-collection' or data['image'].get('scope') != repo['scope']
+            or type(repo.get('inventory_complete')) is not bool):
+        raise ValueError('Invalid RPM repository scope')
+    archives, errors, counts = (repo.get(key) for key in ('archives', 'errors', 'counts'))
+    if not isinstance(archives, list) or not isinstance(errors, list) or not isinstance(counts, dict):
+        raise ValueError('Invalid RPM repository inventory')
+
+    def evidence(row):
+        return isinstance(row.get('evidence'), list) and all(isinstance(ref, str) for ref in row['evidence'])
+
+    objects = {obj['path']: obj for obj in data['elf_objects']}
+    refs = set()
+    if len(objects) != len(data['elf_objects']):
+        raise ValueError('Duplicate ELF identities in RPM repository')
+    paths = set()
+    for row in archives:
+        if (not isinstance(row, dict) or not isinstance(row.get('archive'), str)
+                or row['archive'] in paths or not isinstance(row.get('objects'), list) or not evidence(row)
+                or row.get('metadata_status') not in ('UNKNOWN', 'COMPLETE')
+                or row.get('extraction_status') not in ('NOT_EXECUTED', 'COMPLETE', 'FAILED')
+                or type(row.get('elf_count')) is not int or row['elf_count'] < len(row['objects'])):
+            raise ValueError('Invalid RPM archive row')
+        paths.add(row['archive'])
+        if row['metadata_status'] == 'COMPLETE':
+            sha = row.get('sha256')
+            if (not isinstance(sha, str) or not re.fullmatch(r'[0-9a-f]{64}', sha)
+                    or row.get('id') != 'RPM-' + digest(canonical([row['archive'], sha]).encode())[:24]):
+                raise ValueError('RPM archive path and digest do not match its recorded ID')
+            package = row.get('package')
+            if (not isinstance(package, dict) or not all(isinstance(package.get(field), str)
+                    for field in ('name', 'epoch', 'version', 'release', 'arch'))
+                    or any(not isinstance(package.get(key), list) or any(
+                        not isinstance(cap, dict) or not isinstance(cap.get('name'), str) for cap in package[key])
+                        for key in ('provides', 'requires', 'obsoletes'))):
+                raise ValueError('Invalid RPM package identity or capabilities')
+        if row['extraction_status'] != 'COMPLETE' and row['objects']:
+            raise ValueError('Uncollected RPM archive cannot reference ELF objects')
+        if row['extraction_status'] == 'COMPLETE' and (row['metadata_status'] != 'COMPLETE'
+                or repo['scope'] != 'RPM_REPOSITORY_PAYLOAD'):
+            raise ValueError('RPM payload evidence requires an archive identity and payload scope')
+        for ref in row['objects']:
+            obj = objects.get(ref) if isinstance(ref, str) else None
+            if (not obj or ref in refs or obj.get('rpm_archive_id') != row.get('id')
+                    or not isinstance(obj.get('package_path'), str) or not obj['package_path'].startswith('/')
+                    or ref != f"/@rpm/{row['id']}{obj['package_path']}"):
+                raise ValueError('Invalid RPM archive ELF reference')
+            refs.add(ref)
+    if refs != objects.keys() or any(not isinstance(row, dict) or not evidence(row)
+            or not all(isinstance(row.get(key), str) for key in ('archive', 'stage', 'reason')) for row in errors):
+        raise ValueError('Invalid RPM repository ELF or error records')
+    if any(not isinstance(obj.get('exports', []), list) or any(not isinstance(s, dict)
+            or not isinstance(s.get('name'), str) for s in obj.get('exports', [])) for obj in objects.values()):
+        raise ValueError('Invalid RPM ELF export records')
+    from .elf import dynamic_exports
+    actual = {'rpm_total': len(archives), 'elf_collected': len(objects),
+              'metadata_complete': sum(row['metadata_status'] == 'COMPLETE' for row in archives),
+              'extracted': sum(row['extraction_status'] == 'COMPLETE' for row in archives),
+              'extraction_failed': sum(row['extraction_status'] == 'FAILED' for row in archives),
+              'elf_observed': sum(row['elf_count'] for row in archives),
+              'elf_complete': sum(obj['complete'] for obj in objects.values()),
+              'export_inventories_complete': sum(obj.get('export_inventory_complete') is True for obj in objects.values()),
+              'exports': sum(sum(1 for _ in dynamic_exports(obj)) for obj in objects.values()),
+              'imports': sum(len(obj.get('imports', [])) for obj in objects.values())}
+    actual['payload_unscanned'] = actual['rpm_total'] - actual['extracted']
+    if any(type(counts.get(key)) is not int or counts[key] != value for key,value in actual.items()):
+        raise ValueError('RPM repository counts do not match manifest records')
+    if repo['inventory_complete'] and (not archives or actual['metadata_complete'] != len(archives)
+                                      or any(row['stage'] == 'inventory' for row in errors)):
+        raise ValueError('Incomplete RPM repository inventory cannot claim completeness')
+
+
 def validate_package_context(data, nested=False):
     for section in ('packages', 'available_packages'):
         records = data.get(section, [])
@@ -623,9 +712,12 @@ def validate_package_context(data, nested=False):
                 raise ValueError('Invalid RPM provenance')
     info = data.get('package_inventory')
     if info is not None:
-        if not isinstance(info, dict) or info.get('status') not in ('COMPLETE', 'PARTIAL', 'UNKNOWN', 'NOT_EXECUTED'):
+        if not isinstance(info, dict) or info.get('status') not in ('COMPLETE', 'PARTIAL', 'UNKNOWN', 'NOT_EXECUTED', 'NOT_APPLICABLE'):
             raise ValueError('Invalid package inventory status')
         count = info.get('installed_count')
+        if info['status'] == 'NOT_APPLICABLE' and (nested or 'repository' not in data
+                or info.get('source_kind') != 'rpm_repository' or count is not None or data.get('packages')):
+            raise ValueError('Only an RPM repository with no installed inventory can set NOT_APPLICABLE')
         if count is not None and (type(count) is not int or count < 0): raise ValueError('Invalid installed package count')
         if info['status'] == 'COMPLETE' and count != len(data.get('packages', [])):
             raise ValueError('Installed package count differs from inventory records')

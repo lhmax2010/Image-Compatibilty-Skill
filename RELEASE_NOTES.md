@@ -1,11 +1,11 @@
-# Tizen Image Compatibility Skill v1.5.1
+# Tizen Image Compatibility Skill v1.5.2
 
-**Internal Developer Release — native RPM payload and EROFS**
+**Internal production-readiness candidate**
 
-Compare two local recursive RPM repositories with the normal `tizen_compat.py` entry. The default RPM payload mode detects real ELF via magic and reuses the existing ABI, symbol version and ARM collectors. Package identity, archive SHA256 and package paths stay distinct from installed product inventory. The full package, ELF, symbol and extraction CSVs do not require SQLite. Metadata-only mode remains available.
+The offline `compat_workflow.py` entry validates paired local inputs, an explicit objective and report destinations. It produces a bounded handoff with separate execution, objective, compatibility and coverage statuses. The original CLIs and schema 1.2 reports remain supported.
 
-EROFS preparation now records the superblock, feature bits, compression, extra devices, extractor version and stderr. Standard extraction uses a trusted host `fsck.erofs` inside bounded read-only isolation. A vendor adapter must account for detected feature bits and bind input and output digests. When EROFS is blocked, supply two opted-in RPM inputs or a verified same-build rootfs replacement.
+RPM manifests can be reloaded for analysis. Variant inventories retain unpaired ELF evidence and distinguish raw export observations, unique base names, per-library lookup identities and difference rows. Export CSV annotations cite the corresponding original Finding when available. The rootfs export workflow also generates per-library and per-symbol CSVs.
 
-Synthetic RPMs built with real ELF verify symbol add/remove, GNU versions, TLS/IFUNC, C++ mangling, code/data size and ASAN observations. Repository tests cover independent package paths, multiple versions and architectures, a damaged archive, and controlled unsafe CPIO. Standard EROFS and Samsung KantSU2e extraction still require real tool and input validation. No internal VD data was accessed.
+The release includes defensive changes to report output ownership, cache publication and evidence validation, tool capture, interrupt handling, TAR extraction and EROFS confinement. See the [independent review](docs/production-readiness/INDEPENDENT_REVIEW.md) for individual findings.
 
-Start with [Quick Start](QUICK_START.md), see the [RPM repository guide](.agents/skills/tizen-image-compatibility/references/rpm_repository.md), and verify [SHA256SUMS](SHA256SUMS). The v1.5.0 archive, commit and tag are retained. Prior image Runtime and certification limits are unchanged.
+The bundled [workflow guide](.agents/skills/tizen-image-compatibility/references/workflow.md) and [Quick Start](QUICK_START.md) cover ordinary static runs. The [acceptance record](docs/production-readiness/PRODUCTION_READINESS.md) identifies the remaining external gates. Prior v1.5.0 and v1.5.1 archives and tags are retained.

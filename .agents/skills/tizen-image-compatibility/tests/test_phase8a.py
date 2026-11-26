@@ -1,6 +1,9 @@
 """Regression tests for the real SR static acceptance findings."""
 import copy
 import json
+import shutil
+import subprocess
+import unittest
 from unittest.mock import patch
 
 from test_framework import Environment
@@ -84,6 +87,23 @@ Version needs section '.gnu.version_r' contains 1 entry:
                 self.assertEqual([s['name'] for s in result['exports']], ['api@@V1'])
                 self.assertEqual([s['name'] for s in result['version_node_markers']], ['V1'])
                 self.assertEqual(result['imports'][0]['version_file'], 'libc.so')
+
+    @unittest.skipUnless(shutil.which('gcc') and shutil.which('readelf'), 'Needs native GCC/binutils')
+    def test_real_readelf_distinguishes_full_symbol_names_from_first_token(self):
+        objects = []
+        for index,name in enumerate(('sample name (4)','sample')):
+            source = self.base/f'{index}.S'
+            source.write_text(f'.data\n.globl "{name}"\n.type "{name}",%object\n'
+                              f'"{name}":\n.long 1\n.size "{name}",4\n')
+            library = source.with_suffix('.so')
+            subprocess.run(['gcc','-nostdlib','-shared',str(source),'-o',str(library)],
+                           check=True,capture_output=True,timeout=20)
+            collected = collect_elf(library,'/lib/fixture.so',self.tools,'static')
+            self.assertTrue(collected['export_inventory_complete'])
+            self.assertEqual([(item['name'],item['version_index']) for item in collected['exports']],[(name,None)])
+            objects.append(collected)
+        self.assertIn(('sample name (4)','INCOMPATIBLE'),
+                      {(f['interface'],f['status']) for f in self.compare(*objects)})
 
     def test_bounded_linking_scope_and_required_version(self):
         consumer = elf(needed=['a.so'], version_requirements=[dict(file='a.so', name='V1', flags='none')],

@@ -1,5 +1,6 @@
 """Synthetic RPM payload end-to-end coverage. The package scriptlets are never run."""
 import copy
+from collections import Counter
 import csv
 import hashlib
 import io
@@ -80,6 +81,46 @@ class CpioTests(unittest.TestCase):
             return dict(package_path=path,soname='one.so',complete=True,machine='ARM',size=4)
         peers = list(repository.object_pairs([obj('/old/a')],[obj('/usr/a'),obj('/usr/b')]))
         self.assertEqual(peers[0][0],'BASELINE_ONLY_OR_UNRESOLVED')
+
+    def test_lookup_identity_default_demotion_and_incomplete_inventory(self):
+        def symbol(name):
+            return {'name':name,'type':'FUNC','size':4,'binding':'GLOBAL','visibility':'DEFAULT'}
+
+        def obj(*names, complete=True):
+            return {'exports':[symbol(name) for name in names],'export_inventory_complete':complete}
+
+        old = obj('example@@ONE','same','absent')
+        candidate = obj('example@ONE','example@@TWO','same')
+        self.assertEqual(repository.symbol_counts([old,candidate]),{
+            'export_unique_symbol_names':3,'export_lookup_identities':8,
+            'import_unique_symbol_names':0,'import_lookup_identities':0})
+        pair = {'package_id':'rpm-test','component':'example'}
+        findings = {'example:default lookup':[{'status':'UNKNOWN','id':'default-lookup'}]}
+        rows = list(repository.symbol_rows(pair,old,candidate,findings))
+        by_old = {row['baseline']['name']:row for row in rows if row['baseline']}
+        default = by_old['example@@ONE']
+        self.assertEqual(default['candidate']['name'],'example@ONE')
+        self.assertEqual(default['details'],['DEFAULT_LOOKUP_CHANGED'])
+        self.assertEqual(default['finding_ids'],['default-lookup'])
+        self.assertEqual(by_old['absent']['change'],'MISSING')
+        observed = list(repository.symbol_rows(pair,old,candidate | {'export_inventory_complete':False},{}))
+        self.assertEqual(next(row['change'] for row in observed if row['baseline']==symbol('absent')),'BASELINE_OBSERVED')
+        self.assertEqual(next(row['change'] for row in observed if row['candidate']==symbol('example@@TWO')),
+                         'CANDIDATE_OBSERVED')
+        self.assertEqual(next(row['change'] for row in observed if row['baseline']==symbol('example@@ONE')),
+                         'BASELINE_OBSERVED')
+
+    def test_completed_digest_duplicate_is_preferred_and_others_remain_observed(self):
+        bad = {'id':'before-sort','extraction_status':'FAILED','objects':[]}
+        successful = {'id':'after-sort','extraction_status':'COMPLETE','objects':['/a']}
+        duplicate = {'id':'last-sort','extraction_status':'COMPLETE','objects':['/b']}
+        candidate = {'id':'candidate','extraction_status':'COMPLETE','objects':['/c']}
+        left = [bad,successful,duplicate]
+        self.assertIs(repository.preferred_archive(left),successful)
+        a,b,c = ({'path':'/'+x,'package_path':'/example'} for x in 'abc')
+        self.assertEqual(list(repository.package_objects((left,[candidate]),(successful,candidate),
+                         ({'/a':a,'/b':b},{'/c':c}),True)),[
+            ('PATH',a,c,''),('UNPAIRED_ARCHIVE_OBSERVATION',b,None,'/baseline/b')])
 
 
 @unittest.skipUnless(all(shutil.which(x) for x in ('g++','readelf','rpm','rpmbuild','rpm2cpio')), 'Requires local RPM tools and host g++')
@@ -223,7 +264,8 @@ touch "{cls.root}/SCRIPTLET-RAN"
         self.assertTrue(any('CODE_SIZE_CHANGED' in row['details'] for row in rows))
         self.assertTrue(any('DATA_SIZE_CHANGED' in row['details'] for row in rows))
         self.assertTrue(any('VERSION_CHANGED' in row['details'] for row in rows))
-        self.assertTrue(any(row['change']=='ADDED' and 'added_symbol' in row['candidate'] for row in rows))
+        self.assertTrue(any(row['change']=='ADDED' and row['status']=='COMPATIBLE' and 'added_symbol' in row['candidate']
+                            for row in rows))
         self.assertTrue(any('_Z' in row['baseline'] for row in rows))
         self.assertTrue(any(row['role']=='IMPORT' and 'external_contract' in row['baseline'] for row in rows))
         exports = [json.loads(row['baseline']) for row in rows if row['role']=='EXPORT' and row['baseline']!='UNKNOWN']
@@ -231,6 +273,64 @@ touch "{cls.root}/SCRIPTLET-RAN"
         self.assertTrue(any(s['name'].startswith('ifunc_contract') and s['type'] in ('IFUNC','GNU_IFUNC') for s in exports))
         if self.asan_available:
             self.assertIn('libasan.so',(self.output/'elf-symbol-summary.csv').read_text())
+        stats = self.results['repository']['symbol_differences']
+        changes = dict(Counter(r['change'] for r in rows))
+        self.assertEqual(stats['by_change'],changes)
+        for role,summary in stats['by_role'].items():
+            self.assertEqual(summary['by_change'],dict(Counter(r['change'] for r in rows if r['role']==role)))
+        if self.asan_available:
+            self.assertEqual(changes,{'MATCHED':16,'ADDED':5,'CHANGED':3,'MISSING':1})
+            self.assertEqual(stats['rows'],25)
+        for side in ('baseline','candidate'):
+            counts = self.results['repository'][side]
+            self.assertEqual(counts['exports'],18)
+            self.assertEqual(counts['export_unique_symbol_names'],9 if side=='baseline' else 10)
+            self.assertEqual(counts['export_lookup_identities'],36)
+
+    def test_ambiguous_versions_retain_every_real_elf_as_observed(self):
+        root = self.root/'ambiguous-elf'
+        baseline,candidate = root/'left',root/'right'
+        for side in (baseline,candidate):
+            side.mkdir(parents=True)
+        first,second = (next(side.glob('security-network-codec*.rpm')) for side in (self.before,self.after))
+        for rpm in (first,second):
+            shutil.copyfile(rpm,baseline/rpm.name)
+        self.build_rpm(candidate,'security-network-codec','3',self.root/'new.bin')
+        output = root/'report'
+        self.run_cli(baseline,candidate,output,0)
+        result = json.loads((output/'results.json').read_text())['repository']
+        self.assertEqual(result['packages'][0]['inventory_status'],'AMBIGUOUS_MULTIPLE_VERSIONS')
+        pairs = result['elf_pairs']
+        self.assertEqual(len({r['component'] for r in pairs}),3)
+        self.assertTrue(all(r['match']=='UNPAIRED_ARCHIVE_OBSERVATION' for r in pairs))
+        with (output/'symbol-differences.csv').open() as stream:
+            exports = [r for r in csv.DictReader(stream) if r['role']=='EXPORT']
+        self.assertEqual(Counter(r['change'] for r in exports),{'BASELINE_OBSERVED':18,'CANDIDATE_OBSERVED':9})
+
+    def test_native_repository_manifest_replay_preserves_scope_and_rejects_dangling_objects(self):
+        baseline = self.output/'baseline-manifest.json'
+        candidate = self.output/'candidate-manifest.json'
+        output = self.root/'replay-report'
+        argv = [sys.executable,str(SCRIPTS/'tizen_compat.py'),'--baseline-manifest',str(baseline)]
+        result = subprocess.run([*argv,'--candidate-manifest',str(candidate),'--output',str(output)],
+                                capture_output=True,text=True,timeout=30)
+        self.assertEqual(result.returncode,1,result.stderr)
+        reused = json.loads((output/'results.json').read_text())
+        self.assertEqual(reused['scope'],'RPM_REPOSITORY_PAYLOAD')
+        self.assertEqual(reused['repository']['symbol_differences'],self.results['repository']['symbol_differences'])
+        self.assertEqual({row['id'] for row in reused['findings']},{row['id'] for row in self.results['findings']})
+        self.assertIn('broken.rpm',(output/'extraction-errors.csv').read_text())
+        self.assertEqual((output/'symbol-differences.csv').read_bytes(),(self.output/'symbol-differences.csv').read_bytes())
+
+        data = json.loads(candidate.read_text())
+        data['repository']['archives'][0]['objects'].append('/no/such/ELF')
+        malformed = self.root/'invalid-replay-manifest.json'
+        malformed.write_text(json.dumps(data))
+        result = subprocess.run([*argv,'--candidate-manifest',str(malformed),'--output',str(self.root/'invalid-replay')],
+                                capture_output=True,text=True,timeout=30)
+        self.assertEqual(result.returncode,2,result.stderr)
+        self.assertIn('Invalid manifest',result.stderr)
+        self.assertNotIn('Traceback',result.stderr)
 
     def test_complete_archive_inventory_identifies_missing_and_replacement_hints(self):
         before = next(self.before.glob('replaced-package*.rpm'))
@@ -274,6 +374,10 @@ touch "{cls.root}/SCRIPTLET-RAN"
         self.assertEqual(result['scope'],'RPM_REPOSITORY_METADATA')
         self.assertEqual(result['repository']['baseline']['elf_collected'],0)
         self.assertIsNone(result['repository']['baseline']['export_coverage_percent'])
+        summary = json.loads((output/'run-summary.json').read_text())
+        self.assertEqual(summary['requested_objective'],'PACKAGE_INVENTORY')
+        self.assertEqual(summary['objective_completion'],'COMPLETE')
+        self.assertEqual(summary['statistics']['baseline']['export_analysis_status'],'NOT_EXECUTED')
         from compat.repository_browser import build,RepositoryBrowser
         indexed = self.root/'indexed'
         build(self.output,indexed)
@@ -300,6 +404,16 @@ touch "{cls.root}/SCRIPTLET-RAN"
         self.assertEqual(receipt['failure']['code'],'EROFS_FEATURE_UNSUPPORTED')
         self.assertIn('EROFS_FEATURE_UNSUPPORTED',report['baseline']['fallback_reason'])
         self.assertEqual(image.read_bytes(),blob)
+        workflow = self.root/'fallback-job.json'
+        workflow.write_text(json.dumps({'baseline':str(image),'candidate':str(image),'output':'workflow-fallback',
+            'baseline_rpm_fallback':str(before),'candidate_rpm_fallback':str(after),'same_build_confirmed':True}))
+        run = subprocess.run([sys.executable,str(SCRIPTS/'compat_workflow.py'),'run','--config',str(workflow)],
+                             capture_output=True,text=True,timeout=45)
+        self.assertEqual(run.returncode,1,run.stdout+run.stderr)
+        summary = json.loads((self.root/'workflow-fallback/run-summary.json').read_text())
+        self.assertEqual(summary['scope'],'RPM_REPOSITORY_PAYLOAD')
+        self.assertEqual(summary['objective_completion'],'COMPLETE')
+        self.assertTrue(any('RPM fallback' in e['reason'] for e in summary['errors']))
 
 
 class ErofsTests(unittest.TestCase):
@@ -341,6 +455,8 @@ class ErofsTests(unittest.TestCase):
                             '--version) echo "synthetic host fixture";;\n'
                             '--help) echo "--extract --[no-]preserve";;\n'
                             '--extract=*) dest=${1#*=}; test "$2" = --no-preserve || exit 9; '
+                            'test -r "$3" && test ! -w "$3" || exit 10; '
+                            'test ! -e /home && test ! -e /etc/passwd || exit 11; '
                             'mkdir "$dest/etc"; echo fixture > "$dest/etc/os-release"; echo extraction-fixture >&2;;\n'
                             '*) exit 8;;\nesac\n')
             tool.chmod(0o700)

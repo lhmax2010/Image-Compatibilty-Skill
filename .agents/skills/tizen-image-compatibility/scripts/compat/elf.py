@@ -9,7 +9,9 @@ from .core import Tools
 
 HEADER_KEYS = {'Class': 'class', 'Data': 'endianness', 'OS/ABI': 'osabi',
                'ABI Version': 'abi_version', 'Type': 'type', 'Machine': 'machine', 'Flags': 'flags'}
-ELF_INVENTORY_REVISION = 3
+ELF_INVENTORY_REVISION = 4
+DYNAMIC_SYMBOL_ROW = re.compile(r'^[ \t]*(\d+):[ \t]+([0-9a-fA-F]+)[ \t]+(\d+)[ \t]+(\S+)[ \t]+(\S+)'
+                                r'[ \t]+(\S+)[ \t]+(\S+)(?:[ \t](.*))?$')
 
 
 def elf_runtime_role(text: str, size: int, stderr: str = '') -> str:
@@ -99,6 +101,24 @@ def parse_readelf(text: str) -> dict[str, Any]:
     version_mode = None
     version_file = None
     for line in text.splitlines():
+        if line.startswith("Symbol table '"):
+            in_dynamic = line.startswith("Symbol table '.dynsym' ")
+        elif not line.strip():
+            in_dynamic = False
+        if in_dynamic and (match := DYNAMIC_SYMBOL_ROW.match(line)):
+            _,value,size,kind,binding,visibility,section,name = match.groups()
+            if name:
+                version_index = re.fullmatch(r'(.*@\S+) \((\d+)\)',name) if section=='UND' else None
+                if version_index:
+                    name = version_index[1]
+                symbol = dict(name=name, value=int(value, 16), size=int(size), type=kind, binding=binding,
+                              visibility=visibility, section=section, **symbol_identity(name))
+                symbol['version_index'] = int(version_index[2]) if version_index else None
+                if section == 'UND':
+                    obj['imports'].append(symbol)
+                elif binding in ('GLOBAL', 'WEAK', 'UNIQUE', 'GNU_UNIQUE') and visibility in ('DEFAULT', 'PROTECTED'):
+                    obj['exports'].append(symbol)
+            continue
         if line.startswith('Version definition section'):
             version_mode = 'definitions'
         elif line.startswith('Version needs section'):
@@ -129,20 +149,6 @@ def parse_readelf(text: str) -> dict[str, Any]:
             match = re.match(r'\s*' + re.escape(key) + r':\s*(.*)', line)
             if match:
                 obj[name] = match[1].strip()
-        if "Symbol table '" in line:
-            in_dynamic = "'.dynsym'" in line
-        if in_dynamic:
-            match = re.match(r'\s*\d+:\s+([0-9a-fA-F]+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line)
-            if match:
-                value, size, kind, binding, visibility, section, name = match.groups()
-                symbol = dict(name=name, value=int(value, 16), size=int(size), type=kind, binding=binding, visibility=visibility,
-                              section=section, **symbol_identity(name))
-                version_index = re.search(r'\((\d+)\)\s*$', line)
-                symbol['version_index'] = int(version_index[1]) if version_index else None
-                if section == 'UND':
-                    obj['imports'].append(symbol)
-                elif binding in ('GLOBAL', 'WEAK', 'UNIQUE', 'GNU_UNIQUE') and visibility in ('DEFAULT', 'PROTECTED'):
-                    obj['exports'].append(symbol)
         match = re.search(r'\((NEEDED|SONAME|RPATH|RUNPATH)\).*?\[(.*?)\]', line)
         if match:
             key, value = match.groups()
@@ -198,14 +204,15 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str, *, bounded=Fa
             obj['elf_runtime_role'] = elf_runtime_role(result['stdout'], obj['size'], result['stderr'])
         # ELF-header success is independent of complete negative export evidence.
         symbols = re.search(r"Symbol table '\.dynsym' contains (\d+) entries:\n(.*?)(?:\n\n|\Z)", result['stdout'], re.S)
-        rows = re.findall(r'^\s*(\d+):\s+[0-9a-fA-F]+\s+\d+\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)(?:[ \t]+(\S+))?[^\n]*$', symbols[2], re.M) if symbols else []
+        rows = [match.groups() for line in symbols[2].splitlines() if (match := DYNAMIC_SYMBOL_ROW.match(line))] if symbols else []
         rows_valid = bool(symbols and result['stdout'].count("Symbol table '.dynsym' contains") == 1
             and int(symbols[1]) >= 1 and len(rows) == int(symbols[1])
-            and all(int(row[0]) == i and row[1] in ('NOTYPE', 'OBJECT', 'FUNC', 'SECTION', 'FILE', 'COMMON', 'TLS', 'IFUNC', 'GNU_IFUNC')
-                    and row[2] in ('LOCAL', 'GLOBAL', 'WEAK', 'UNIQUE', 'GNU_UNIQUE')
-                    and row[3] in ('DEFAULT', 'INTERNAL', 'HIDDEN', 'PROTECTED')
-                    and (i == 0 or (row[5] and '[...]' not in row[5])) for i, row in enumerate(rows))
-            and rows[0][1:5] == ('NOTYPE', 'LOCAL', 'DEFAULT', 'UND') and not rows[0][5])
+            and all(int(index) == i and kind in ('NOTYPE', 'OBJECT', 'FUNC', 'SECTION', 'FILE', 'COMMON', 'TLS', 'IFUNC', 'GNU_IFUNC')
+                    and binding in ('LOCAL', 'GLOBAL', 'WEAK', 'UNIQUE', 'GNU_UNIQUE')
+                    and visibility in ('DEFAULT', 'INTERNAL', 'HIDDEN', 'PROTECTED')
+                    and (i == 0 or (name and '[...]' not in name))
+                    for i, (index,_,_,kind,binding,visibility,_,name) in enumerate(rows))
+            and rows[0][3:7] == ('NOTYPE', 'LOCAL', 'DEFAULT', 'UND') and not (rows[0][7] or '').strip())
         # Advertised version records and every observed versioned symbol must reconcile.
         version_valid = True
         for title, key in [('definition', 'version_definitions'), ('needs', 'version_requirements')]:

@@ -1,6 +1,21 @@
 # Quick Start
 
-Install the complete `tizen-image-compatibility` directory from the internal v1.5.1 archive. Keep its name and set `SKILL` to its absolute path. Run Python 3.10+ on Linux, including WSL or a remote Linux terminal. Use `readelf` (GNU binutils) for ELF analysis and `rpm` when RPM inventory matters. The default static CLI needs no Python packages, network, SDK, SDB, QEMU or root. A host C compiler is only needed to generate the synthetic example.
+Install the complete `tizen-image-compatibility` directory from the internal v1.5.2 archive. Keep its name and set `SKILL` to its absolute path. Run Python 3.10+ on Linux, including WSL or a remote Linux terminal. Use `readelf` (GNU binutils) for ELF analysis and `rpm` when RPM inventory matters. The default static CLI needs no Python packages, network, SDK, SDB, QEMU or root. A host C compiler is only needed to generate the synthetic example.
+
+## Run a configured job
+
+Copy `examples/workflow.json` from the Skill, then edit the input and output paths. All paths in that file are relative to the config file.
+
+```bash
+SKILL=/path/to/tizen-image-compatibility
+cp "$SKILL/examples/workflow.json" ./job.json
+# Edit job.json with your actual paths before running.
+python3 "$SKILL/scripts/compat_workflow.py" plan --config ./job.json
+python3 "$SKILL/scripts/compat_workflow.py" run --config ./job.json
+python3 "$SKILL/scripts/compat_workflow.py" summary --output ./reports/job
+```
+
+Read the compact summary first. A completed export comparison can find an incompatibility and return 1. See the [workflow guide](.agents/skills/tizen-image-compatibility/references/workflow.md) for required objectives, fallback and status fields.
 
 ## Compare two images
 

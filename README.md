@@ -1,10 +1,10 @@
-# Tizen Image Compatibility Skill v1.5.1
+# Tizen Image Compatibility Skill v1.5.2
 
 Internal Developer Release for Linux. Compare the public interfaces required by applications built for a baseline Tizen image against a candidate image. The default Python CLI runs offline and records findings, coverage and reviewable evidence. The same directory works as an Agent Skill in Cline.
 
 ## Start here
 
-1. Get the approved internal v1.5.1 archive and checksum. Extract the complete `tizen-image-compatibility` directory.
+1. Get the approved internal v1.5.2 archive and checksum. Extract the complete `tizen-image-compatibility` directory.
 2. Use the [Quick Start](QUICK_START.md) for your first static comparison. Python 3.10+ on Linux is required. Use Linux, WSL or a remote Linux shell with Cline.
 3. Use the [User Guide](USER_GUIDE.md) for project/user Cline installation, report navigation, SDKs and authorized Runtime. See the [release notes](RELEASE_NOTES.md) and [verification record](RELEASE_ACCEPTANCE.md).
 
@@ -18,6 +18,8 @@ Internal Developer Release for Linux. Compare the public interfaces required by 
 Switch baseline and candidate to test the reverse direction. The default static path requires no SDK, device, SDB, QEMU, root or network. For input coverage, tooling and optional extraction see the [bundled image guide](.agents/skills/tizen-image-compatibility/references/image_preparation.md). An `UNKNOWN` finding reflects insufficient evidence. CI exit 0 only means that the configured gate passed.
 
 The verified SR headless static run produced **903,377 findings**, including **11,490 INCOMPATIBLE** and **860,294 Linking UNKNOWN**. Two real matching ARMv7 SDKs and representative GCC/Clang compile/link operations were verified. On LLVM headed, four frozen basic probes passed **12/12** runs and the exact binding recheck passed **1/1**. These are scoped results. The [known limitations](KNOWN_LIMITATIONS.md) cover the unverified VD/headless Runtime, supervisor, full-size SQLite and product certification boundaries. Historical evidence is retained under [docs](docs/).
+
+For a guided offline job use the [configuration-driven workflow](.agents/skills/tizen-image-compatibility/references/workflow.md). It writes a compact `run-summary.json` for an agent or developer. The [production readiness review](docs/production-readiness/PRODUCTION_READINESS.md) records the actual validation and remaining release gates.
 
 ## Compare two RPM repositories
 

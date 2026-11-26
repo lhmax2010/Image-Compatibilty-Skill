@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.5.2
+
+- Added a configuration-driven offline controller and bounded Agent handoff.
+- Retained RPM variant symbol evidence and enabled scoped repository manifest replay.
+- Hardened output ownership, tool capture, cache evidence, TAR budgets and image isolation.
+- Added real ARMv7 RPM fixture validation and a repeatable synthetic HQ demo.
+
 ## v1.5.1 — RPM payload and EROFS
 
 - Analyze ELF imports, exports, versions and ABI attributes directly from an offline RPM repository. Keep package scopes independent.

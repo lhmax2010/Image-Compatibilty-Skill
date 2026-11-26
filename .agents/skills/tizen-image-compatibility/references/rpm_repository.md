@@ -16,6 +16,10 @@ The payload parser bounds decompression, archive and ELF output, entry count, sc
 
 Packages are never merged. ELF file pairing uses package identity and an internal path, with a unique, compatible SONAME identity only as a fallback. Read the GNU version, type, binding, visibility, data size, code size and import/export metadata in the CSVs. Code size is an observation. ASAN entries are dependency or import observations; they are not used to dismiss missing interfaces. Archive metadata and payloads do not establish product installation, runtime binding, Loader policy or a complete type-layout ABI.
 
+Unpaired ELF from ambiguous package versions remains available as individual archive observations. When either object's dynamic symbol inventory is incomplete, unmatched records are labeled `BASELINE_OBSERVED` or `CANDIDATE_OBSERVED`. A pure default lookup change has its own `DEFAULT_LOOKUP_CHANGED` detail.
+
+`rpm-repository.json` separates raw observed export/import entries, unique base names within an input, qualified lookup identities summed per ELF, and comparison rows split by role and change. A default version exports both a qualified version lookup and an unversioned lookup. These totals have different denominators. An import delta does not establish that the installed loader would choose a particular Provider.
+
 | File | Contents |
 | --- | --- |
 | `index.html`, `summary.md`, `results.json` | Scope, archive counts, ELF and symbol collection coverage, package relationships and Finding evidence |

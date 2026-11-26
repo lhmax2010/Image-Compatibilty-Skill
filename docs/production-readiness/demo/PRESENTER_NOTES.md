@@ -1,0 +1,12 @@
+# Presenter notes
+
+1. **Ask a precise question.** Compare baseline consumers with candidate exports. GCC and LLVM are the intended migration framing. This synthetic fixture was built by the host toolchain.
+2. **Show the automation boundary.** The engine dispatches all collectors, writes coverage and computes findings. The AI presents results. On real reports, avoid opening complete multi-gigabyte JSON. Start with the generated machine summary.
+3. **Show the manifest.** Each input is a recursive local directory with independent package identity, bytes, ELF and evidence. The provider ABI capability changes across versions. Output records only the observed payload state.
+4. **Tell the binary contract story.** `legacy_export@@DEMO_1` is absent, a new `added_export@@DEMO_1` appears, and `version_contract` moves from `DEMO_2` to `DEMO_3`. The data object grows from 4 to 8 bytes on the demonstrated platform. Function code size is compiler-generated implementation data and is shown separately. The C++ mangled export is a positive control.
+5. **Trace potential impact.** A consumer import has one versioned provider name from the ELF requirements. Use `findings.csv` for original IDs and the Evidence links for independent verification. In this archive comparison the potential impact is scoped to the available packages.
+6. **A successful test can find a break.** Show objective COMPLETE and compatibility INCOMPATIBLE at once. Coverage is scoped to the enabled stage. Explain each UNKNOWN using the missing installation/loader/runtime evidence.
+7. **Separate the device result.** The Raspberry Pi provided earlier actual LLVM headed observations. The live synthetic checkout proves that this analysis can run locally. Formal dual-image compatibility remains unverified.
+8. **Finish with a repeatable instruction.** Each run gets new output and retains its reports. An alternate install is set with `--skill`. The tiny report is intentionally reproducible without network, SDK or device access.
+
+If an audience member asks whether both dynamic symbol tables are exhaustive, point to each side's ELF export-inventory status and collected-object counts. If they ask for total differences, quote the CSV row count with the row role, such as seven exports per side and nine union/pairing rows including one import. A GNU symbol version may give multiple independently meaningful findings even when represented by one display row.

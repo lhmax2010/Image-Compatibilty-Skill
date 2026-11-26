@@ -1,0 +1,8 @@
+{
+  "baseline": "inputs/gcc",
+  "candidate": "inputs/llvm",
+  "output": "reports/job",
+  "objective": "EXPORT_SYMBOLS",
+  "rpm_mode": "payload",
+  "mode": "static"
+}

@@ -100,12 +100,11 @@ def build_results(a: dict[str, Any], b: dict[str, Any], findings: list[dict[str,
             'Header comments and token-separating whitespace are normalized; macro values and conditionals are retained.']}
 
 
-def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[str, Any], config: dict[str, Any]) -> None:
+def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[str, Any], config: dict[str, Any],
+             *, objective=None, reused=False) -> None:
     write_json(output / 'baseline-manifest.json', a)
     write_json(output / 'candidate-manifest.json', b)
     report = config['report']
-    if report['json']:
-        write_json(output / 'results.json', results)
     if report['csv']:
         columns = ['id', 'dimension', 'component', 'interface', 'baseline', 'candidate', 'status', 'severity',
                    'confidence', 'evidence', 'detection_method', 'potential_impact', 'recommended_action']
@@ -138,18 +137,36 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
         if results.get('repository'):
             from .repository import export_repository
             export_repository(output, a, b, results)
+        elif objective == 'EXPORT_SYMBOLS':
+            from .rootfs_symbols import export_rootfs_symbols
+            export_rootfs_symbols(output, a, b, results)
+    elif results.get('repository'):
+        from .repository import count_symbol_differences
+        count_symbol_differences(a, b, results)
+    if results.get('scope'):
+        from .run_summary import make_summary
+        results['run_summary'] = make_summary(a, b, results, config, objective, reused)
+    if report['json']:
+        write_json(output / 'results.json', results)
     def esc(value: Any) -> str:
         return html.escape(value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, sort_keys=True))
     def table(rows: list[list[Any]], headers: list[str]) -> str:
         return '<table><thead><tr>' + ''.join('<th>' + esc(x) + '</th>' for x in headers) + '</tr></thead><tbody>' + ''.join(
             '<tr>' + ''.join('<td><pre>' + esc(x) + '</pre></td>' for x in row) + '</tr>' for row in rows) + '</tbody></table>'
     summary = results['summary']
+    handoff = results.get('run_summary', {})
+    headline = [('Input scope','scope'), ('Requested objective','requested_objective'),
+                ('Objective completion','objective_completion'), ('Execution status','execution_status'),
+                ('Compatibility status','compatibility_status'), ('Coverage status','coverage_status')]
     if report['markdown']:
         lines = ['# Tizen image compatibility', '', f"**Result: {results['status']}** — baseline consumers on candidate.", '',
             f"Baseline: {esc(a['image']['name'])}; candidate: {esc(b['image']['name'])}.", '',
             f"Tests: {summary['total_tests']}; passed: {summary['passed_tests']}; failed: {summary['failed_tests']}; unknown: {summary['unknown_tests']}.",
             f"Findings: {summary['findings']}; incompatible: {summary['by_status']['INCOMPATIBLE']}; unknown: {summary['by_status']['UNKNOWN']}.", '',
-            'Static findings are not executable test counts. No runtime execution means no runtime pass.', '', '## Risks', '']
+            'Static findings are not executable test counts. No runtime execution means no runtime pass.', '']
+        if handoff:
+            lines += [f'- **{label}** {esc(handoff[key])}' for label, key in headline] + ['']
+            lines += ['See `run-summary.json` for the compact machine-readable handoff.', '']
         lines += ['## Collector execution', '', '**' + results['execution']['status'] + '**', '']
         for side, collectors in results['execution']['collectors'].items():
             for tool, entry in collectors.items():
@@ -186,6 +203,11 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
     if report['html']:
         content = '<h1>Tizen image compatibility</h1><h2>Executive summary</h2>'
         content += '<p class="status">' + esc(results['status']) + '</p>'
+        if handoff:
+            content += table([[label,handoff[key]] for label,key in headline], ['Status field','Value'])
+            content += '<p><a href="run-summary.json">Download the compact run summary</a></p>'
+        if results.get('rootfs_symbol_detail'):
+            content += '<p>Exact-path ELF detail: <a href="elf-symbol-summary.csv">libraries</a> · <a href="symbol-differences.csv">symbols</a>.</p>'
         content += table([[a['image'], b['image'], summary]], ['Baseline image', 'Candidate image', 'Tests and findings'])
         content += '<p>Direction: baseline consumers on candidate. UNKNOWN is not a pass. Static findings and executable tests are counted separately.</p>'
         content += '<h2>Collector execution</h2><p>' + esc(results['execution']['status']) + '</p>' + table(
@@ -223,7 +245,9 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
             preview = {k: v[:100] if isinstance(v, list) else v for k, v in preview.items()}
             content += table([[k, v] for k, v in preview.items()], ['Detail (bounded preview)', 'Value']) + '</details>'
         content += '<h3>Candidate-only inventory (first 1000)</h3>' + table([[p['package']['name'], p['package']['version'], p['reason']] for p in inventory['candidate_additions'][:1000]], ['Package', 'Version', 'Assessment boundary'])
-        content += '<p>Finding integrity: ' + esc(results['finding_integrity']) + '</p>'
+        integrity = results['finding_integrity']
+        content += '<p>Finding integrity: ' + esc({k:v for k,v in integrity.items() if k!='deduplicated'} |
+                                                {'deduplicated_ids':len(integrity['deduplicated'])}) + '</p>'
         content += '<h2>Detailed differences</h2><input id="filter" aria-label="Filter findings" placeholder="Filter findings…">'
         content += '<p>First 1000 findings shown; complete details are in results.json and findings.csv.</p>'
         for item in results['findings'][:1000]:

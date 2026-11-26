@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Offline report enhancement; never collects, analyzes or executes image contents."""
 import argparse
+import errno
 from pathlib import Path
+import sys
 from compat.report_enhance import build
 from compat.report_browser import serve
 
@@ -25,8 +27,16 @@ def main():
         else:
             build(args.input, args.output)
     else:
-        serve(args.report, args.port, args.impact, args.history)
+        try:
+            serve(args.report, args.port, args.impact, args.history)
+        except OSError as error:
+            if error.errno != errno.EADDRINUSE:
+                raise
+            print(f'Report port {args.port} is already in use. Use --port 0 to allocate a free loopback port.',
+                  file=sys.stderr)
+            return 2
+    return 0
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())

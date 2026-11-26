@@ -388,6 +388,17 @@ class BoundedProcessTests(unittest.TestCase):
                 size = sum((self.root / result[f'{name}_evidence']).stat().st_size for name in ('stdout', 'stderr'))
                 self.assertEqual(size, 4096)
 
+    def test_default_capture_and_timeout_reap_host_tool_group(self):
+        for tail, error in (('os.write(1, b"x" * 100000); time.sleep(30)', 'adapter output limit exceeded'),
+                            ('print("pending", flush=True); time.sleep(30)', 'timeout')):
+            with self.subTest(error=error), patch('compat.core.DEFAULT_CAPTURE_BYTES', 4096):
+                result = self.tools.run(self.start_child_then(tail), timeout=0.5)
+                self.assert_reaped(int(self.marker.read_text()))
+                self.assertEqual(result['error'], error)
+                self.assertEqual(result['local_process_group_status'], 'VERIFIED')
+                captured = (self.root / result['stdout_evidence']).read_bytes()
+                self.assertEqual(captured, b'x' * 4096 if error != 'timeout' else b'pending\n')
+
     def test_interrupt_before_popen_returns_still_reaps_new_process(self):
         popen = subprocess.Popen
         processes = []
@@ -419,3 +430,21 @@ class BoundedProcessTests(unittest.TestCase):
         self.assertEqual(result['error'], 'interrupted')
         self.assertEqual(result['stdout'], 'reap\n')
         self.assertEqual(result['local_process_group_status'], 'VERIFIED')
+
+    def test_interrupt_between_pipe_read_and_evidence_write_preserves_output(self):
+        read = os.read
+        marker = b'interrupt capture boundary'
+
+        def interrupt_after_read(fd, size):
+            chunk = read(fd, size)
+            if chunk == marker:
+                os.kill(os.getpid(), signal.SIGINT)
+            return chunk
+
+        with patch('compat.core.os.read', side_effect=interrupt_after_read):
+            result = self.tools.run(self.start_child_then(f'os.write(1, {marker!r}); time.sleep(30)'),
+                                    max_capture_bytes=4096, timeout=4, keep_interrupt=True)
+        self.assert_reaped(int(self.marker.read_text()))
+        self.assertEqual(result['error'], 'interrupted')
+        self.assertEqual(result['local_process_group_status'], 'VERIFIED')
+        self.assertEqual((self.root / result['stdout_evidence']).read_bytes(), marker)

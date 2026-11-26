@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import copy
 import hashlib
 import io
@@ -12,10 +13,11 @@ import sys
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 
 SKILL = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SKILL / 'scripts'))
-from compat.core import DEFAULTS, InputError, Tools, finding, load_config, read_manifest, validate_config
+from compat.core import DEFAULTS, InfrastructureError, InputError, Tools, finding, load_config, read_manifest, validate_config
 from compat.collect import collect, parse_dbus
 from compat.compare import compare_api, compare_elf, compare_packages, dependency_checks, finalize
 from compat.elf import collect_elf
@@ -100,6 +102,27 @@ class ImageTests(Environment):
         self.assertEqual(image.resolve('/absolute').read_text(), 'inside')
         self.assertIsNone(image.resolve('/escape'))
 
+    def test_prepared_metadata_cannot_change_observed_file_type(self):
+        root = self.base / 'image'
+        (root / 'etc').mkdir(parents=True)
+        destination = self.base / 'fixture'
+        destination.write_text('outside image')
+        (root / 'etc/test').symlink_to(destination)
+        image = Image(root, self.workspace, self.tools, 'image')
+        image.metadata['/etc/test'] = {'type': 'file', 'path': '/etc/test'}
+        with self.assertRaisesRegex(InputError, 'metadata type'):
+            list(image.walk())
+
+    def test_prepared_metadata_only_exposes_deliberate_special_files(self):
+        root = self.base / 'image'
+        (root / 'etc').mkdir(parents=True)
+        image = Image(root, self.workspace, self.tools, 'image')
+        image.metadata = {'/etc/missing': {'type': 'file', 'path': '/etc/missing'},
+                          '/etc/device': {'type': 'char', 'path': '/etc/device'}}
+        paths = {name for name, _, _ in image.walk()}
+        self.assertIn('/etc/device', paths)
+        self.assertNotIn('/etc/missing', paths)
+
     def test_safe_tar_preserves_metadata(self):
         archive = self.base / 'root.tar'
         with tarfile.open(archive, 'w') as out:
@@ -110,6 +133,38 @@ class ImageTests(Environment):
         self.assertEqual(image.resolve('/etc/link').read_text(), 'value')
         self.assertEqual(image.metadata['/etc/file']['uid'], 123)
         self.assertEqual(image.metadata['/etc/file']['mode'], '0o640')
+
+    def test_tar_materialized_hardlinks_count_against_extraction_budget(self):
+        archive = self.base / 'root.tar'
+        payload = b'a' * 32
+        with tarfile.open(archive, 'w') as out:
+            entry = tarfile.TarInfo('etc/file')
+            entry.size = len(payload)
+            out.addfile(entry, io.BytesIO(payload))
+            alias = tarfile.TarInfo('etc/alias')
+            alias.type = tarfile.LNKTYPE
+            alias.linkname = 'etc/file'
+            out.addfile(alias)
+        self.config['analysis']['max_extract_bytes'] = 64
+        self.assertEqual(Image(archive, self.workspace, self.tools, 'within').resolve('/etc/alias').read_bytes(),
+                         payload)
+        self.config['analysis']['max_extract_bytes'] = 48
+        with self.assertRaisesRegex(InputError, 'extraction limit'):
+            Image(archive, self.workspace, self.tools, 'over-budget')
+
+    def test_tar_low_disk_stops_before_materializing_file(self):
+        archive = self.base / 'root.tar'
+        with tarfile.open(archive, 'w') as out:
+            entry = tarfile.TarInfo('etc/file')
+            entry.size = 1
+            out.addfile(entry, io.BytesIO(b'x'))
+        original = archive.read_bytes()
+        disk_usage = shutil.disk_usage(self.workspace)._replace(free=0)
+        with patch('compat.images.shutil.disk_usage', return_value=disk_usage):
+            with self.assertRaisesRegex(InfrastructureError, 'Insufficient scratch storage'):
+                Image(archive, self.workspace, self.tools, 'low-disk')
+        self.assertFalse((self.workspace / 'low-disk/etc/file').exists())
+        self.assertEqual(archive.read_bytes(), original)
 
     def test_reject_tar_escape(self):
         archive = self.base / 'bad.tar'
@@ -269,6 +324,48 @@ class EndToEndTests(Environment):
         n = collect(image, 'synthetic', 'baseline', 'static', self.tools, self.workspace, self.base / 'cache')
         self.assertEqual(m, n)
         self.assertEqual(count, len(self.tools.records))
+
+    def test_cache_rejects_wrong_or_symlinked_evidence_and_recollects(self):
+        image = Image(self.images / 'baseline', self.workspace, self.tools, 'baseline')
+        cache = self.base / 'cache'
+        original = collect(image, 'synthetic', 'baseline', 'static', self.tools, self.workspace, cache)
+        evidence = original['elf_objects'][0]['evidence'][0]
+        digest = Path(evidence).stem
+        cached = cache / Path(evidence).name
+        expected = (self.output / evidence).read_bytes()
+        self.assertEqual(hashlib.sha256(expected).hexdigest(), digest)
+        external = self.base / 'outside-cache'
+        external.write_bytes(expected)
+        for wrong in ('bytes', 'symlink'):
+            with self.subTest(wrong=wrong):
+                if wrong == 'bytes':
+                    cached.write_bytes(b'damaged cache record')
+                else:
+                    cached.unlink()
+                    cached.symlink_to(external)
+                count = len(self.tools.records)
+                current = collect(image, 'synthetic', 'baseline', 'static', self.tools, self.workspace, cache)
+                self.assertEqual(current, original)
+                self.assertGreater(len(self.tools.records), count)
+                self.assertFalse(cached.is_symlink())
+                self.assertEqual(cached.read_bytes(), expected)
+                self.assertEqual(external.read_bytes(), expected)
+
+    def test_concurrent_cache_publish_is_complete_without_cross_output(self):
+        cache = self.base / 'cache'
+        image = Image(self.images / 'baseline', self.workspace, self.tools, 'baseline')
+        def collect_into(label):
+            tools = Tools(self.base / label, self.config)
+            report = collect(image, 'synthetic', 'baseline', 'static', tools, self.workspace, cache)
+            for obj in report['elf_objects']:
+                for ref in obj['evidence']:
+                    self.assertEqual(hashlib.sha256((tools.output / ref).read_bytes()).hexdigest(), Path(ref).stem)
+            return report
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first, second = pool.map(collect_into, ('output-one', 'output-two'))
+        self.assertEqual(first, second)
+        self.assertEqual(collect_into('later-reader'), first)
 
     def test_full_offline_cli_and_reuse(self):
         snapshot = self.snapshot()

@@ -3,7 +3,7 @@ from pathlib import Path
 from uuid import uuid4
 import os
 
-from .core import InputError, hash_file
+from .core import InputError, defer_console_interrupt, hash_file
 
 
 GUEST_ENTRY = '''
@@ -81,9 +81,15 @@ def podman_run(spec, source, target, is_artifact, arguments, tools, *, forbidden
             if any(c in str(local) for c in ',\n\r'):
                 raise InputError('Probe path is unsuitable for a Podman mount')
             command.extend(['--mount', f'type=bind,source={local},target={guest},ro'])
-    runtime = execute([*command, spec['image'], '-ceu', GUEST_ENTRY, 'compat', target, expected, marker, peer, peer_hash,
-                       *arguments], timeout + 5)
-    cleanup = execute(['rm', '--force', '--time=0', name], 10)
+    try:
+        runtime = execute([*command, spec['image'], '-ceu', GUEST_ENTRY, 'compat', target, expected, marker, peer, peer_hash,
+                           *arguments], timeout + 5)
+    finally:
+        # Reap the exact named container even when the local CLI was interrupted.
+        with defer_console_interrupt() as interrupted:
+            cleanup = execute(['rm', '--force', '--time=0', name], 10)
+        if interrupted():
+            raise KeyboardInterrupt
     result.update(runtime_environment={'backend': 'podman-rootless', 'image_id': spec['image'], 'id': spec['id'],
                                        'isolation': 'container-with-host-kernel'},
                   expected_artifact_sha256=expected, stdout_evidence=runtime['stdout_evidence'], stderr_evidence=runtime['stderr_evidence'])

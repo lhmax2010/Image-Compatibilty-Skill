@@ -87,6 +87,28 @@ def replacements(left,right):
                    for cap in p['package'][kind] if cap['name'] in names and cap['name'] != p['package']['name']})
 
 
+def preferred_archive(rows):
+    if rows:
+        return min(rows, key=lambda row: (row['extraction_status'] != 'COMPLETE', row['id']))
+    return None
+
+
+def package_objects(groups, representatives, dictionaries, pairable):
+    if pairable:
+        yield from ((matching, old, new, '') for matching,old,new in object_pairs(*[
+            [objects[key] for key in archive['objects']]
+            for archive,objects in zip(representatives,dictionaries)]))
+    for side, group, representative, objects in zip(('baseline','candidate'),groups,representatives,dictionaries):
+        for archive in group:
+            if pairable and archive is representative:
+                continue
+            for key in archive['objects']:
+                obj = objects[key]
+                identity = '' if len(group) == 1 and not (groups[0] and groups[1]) else f'/{side}{key}'
+                yield ('UNPAIRED_ARCHIVE_OBSERVATION', obj if side=='baseline' else None,
+                       obj if side=='candidate' else None, identity)
+
+
 def compare_repository(a,b,config):
     repos = (a['repository'],b['repository'])
     return_scope = ('RPM_REPOSITORY_PAYLOAD' if all(r['scope']=='RPM_REPOSITORY_PAYLOAD' for r in repos)
@@ -103,7 +125,7 @@ def compare_repository(a,b,config):
                 candidate_caps[name].append(p)
     for name in sorted(names):
         for state,left,right in group_matches(grouped[0].get(name,{}),grouped[1].get(name,{}),complete):
-            pkg_a,pkg_b = (g[0] if g else None for g in (left,right))
+            pkg_a,pkg_b = (preferred_archive(g) for g in (left,right))
             pairable = state in ('COMMON','VERSION_CHANGED')
             package_id = 'RP-'+digest(canonical([name,[nevra(x) for x in left],[nevra(x) for x in right]]).encode())[:24]
             refs = sorted({e for row in left+right for e in row['evidence']})
@@ -131,11 +153,9 @@ def compare_repository(a,b,config):
                         findings.append(finding('packages','/@repository/'+package_id,field,
                             diff['removed'],diff['added'],'UNKNOWN','INFO','RPM metadata contract delta',refs))
             safe_pair = pairable and all(p['extraction_status']=='COMPLETE' for p in (pkg_a,pkg_b))
-            for matching,o,p in object_pairs(*[
-                    [dictionaries[i][obj] for obj in pkg['objects']] if pkg and (pairable or len(g)==1) else []
-                    for i,(pkg,g) in enumerate(zip((pkg_a,pkg_b),(left,right)))]):
+            for matching,o,p,archive_identity in package_objects((left,right),(pkg_a,pkg_b),dictionaries,pairable):
                 identity = (o or p)['package_path']
-                component = '/@repository/'+package_id+identity
+                component = '/@repository/'+package_id+(archive_identity or identity)
                 elf_status = 'NOT_VERIFIED'
                 comparisons = []
                 if o and p and safe_pair:
@@ -161,7 +181,8 @@ def compare_repository(a,b,config):
                                'UNKNOWN','HIGH','repository collection',error['evidence']))
     out.append(finding('linking','repository','Installed loader coverage',None,None,'UNKNOWN','INFO',
                        impact='Repository comparisons establish ELF contracts only; the installed loader and provider set are unverified.'))
-    return {'scope':return_scope,'baseline':repos[0]['counts'],'candidate':repos[1]['counts'],
+    stats = [r['counts'] | symbol_counts(m['elf_objects']) for m,r in zip((a,b),repos)]
+    return {'scope':return_scope,'baseline':stats[0],'candidate':stats[1],
             'packages':packages,'elf_pairs':pairs,'inventory_states':dict(Counter(p['inventory_status'] for p in packages)),
             'errors':[{'side':side,**e} for side,r in zip(('baseline','candidate'),repos) for e in r['errors']]},finalize(out,config)
 
@@ -171,18 +192,47 @@ def symbols(obj, role):
     return {(s['name'],s.get('version_file') if role=='IMPORT' else None):s for s in entries}
 
 
+def symbol_counts(objects):
+    """Count base names per scope and qualified lookup identities per ELF."""
+    stats = {}
+    for role in ('EXPORT','IMPORT'):
+        names, lookup_count = set(), 0
+        for obj in objects:
+            lookup = set()
+            for (name,provider) in symbols(obj,role):
+                identity = symbol_identity(name)
+                base,version = identity['base_name'],identity['version']
+                names.add(base)
+                lookup.add((base,version,provider))
+                if role=='EXPORT' and identity['default_version']:
+                    lookup.add((base,None,None))
+            lookup_count += len(lookup)
+        stats[role.lower()+'_unique_symbol_names'] = len(names)
+        stats[role.lower()+'_lookup_identities'] = lookup_count
+    return stats
+
+
 def symbol_rows(pair,o,p,findings):
     for role in ('EXPORT','IMPORT'):
         old,new = symbols(o,role),symbols(p,role)
-        ready = all(obj.get('export_inventory_complete') for obj in (o,p))
-        base = [{key:symbol_identity(s['name'])['base_name'] for key,s in group.items()} for group in (old,new)]
-        unmatched_old,unmatched_new = defaultdict(list),defaultdict(list)
-        for k in old.keys()-new.keys():
-            unmatched_old[base[0][k]].append(k)
-        for k in new.keys()-old.keys():
-            unmatched_new[base[1][k]].append(k)
-        version_pairs = {keys[0]:unmatched_new[name][0] for name,keys in unmatched_old.items()
-                         if len(keys)==len(unmatched_new[name])==1}
+        ready = all(obj.get('export_inventory_complete') is True for obj in (o,p))
+        def unmatched(keys, qualified):
+            grouped = defaultdict(list)
+            for key in keys:
+                identity = symbol_identity(key[0])
+                group = (identity['base_name'],identity['version'],key[1]) if qualified else identity['base_name']
+                grouped[group].append(key)
+            return grouped
+
+        def unique_pairs(old_keys,new_keys,qualified):
+            lhs,rhs = unmatched(old_keys,qualified),unmatched(new_keys,qualified)
+            return {keys[0]:rhs[name][0] for name,keys in lhs.items() if len(keys)==len(rhs[name])==1}
+
+        version_pairs = {}
+        if ready:
+            removed,added = old.keys()-new.keys(),new.keys()-old.keys()
+            version_pairs = unique_pairs(removed,added,True)
+            version_pairs.update(unique_pairs(removed-version_pairs.keys(),added-set(version_pairs.values()),False))
         consumed = set(version_pairs.values())
         for key in sorted(old.keys() | new.keys(),key=canonical):
             x,y = old.get(key),new.get(key)
@@ -191,7 +241,13 @@ def symbol_rows(pair,o,p,findings):
             changed = []
             if key in version_pairs:
                 y = new[version_pairs[key]]
-                changed.append('VERSION_CHANGED' if x['name'] != y['name'] else 'REQUIRED_PROVIDER_CHANGED')
+                before,after = (symbol_identity(s['name']) for s in (x,y))
+                if before['version'] != after['version']:
+                    changed.append('VERSION_CHANGED')
+                if before['default_version'] != after['default_version']:
+                    changed.append('DEFAULT_LOOKUP_CHANGED')
+                if role=='IMPORT' and x.get('version_file') != y.get('version_file'):
+                    changed.append('REQUIRED_PROVIDER_CHANGED')
             if x and y:
                 for attr in ('type','binding','visibility'):
                     if x.get(attr)!=y.get(attr):
@@ -203,9 +259,18 @@ def symbol_rows(pair,o,p,findings):
             else:
                 change = ('MISSING' if x else 'ADDED') if ready else ('BASELINE_OBSERVED' if x else 'CANDIDATE_OBSERVED')
             names = {s['name'] for s in (x,y) if s}
+            if role=='EXPORT':
+                for name in tuple(names):
+                    identity = symbol_identity(name)
+                    if identity['default_version']:
+                        names.add(identity['base_name']+':default lookup')
+                    if identity['version'] is None:
+                        names.add(identity['base_name']+':default symbol version')
             matches = [f for name in names for f in findings.get(name,[])] if role=='EXPORT' else []
+            statuses = {f['status'] for f in matches}
             yield {'package_id':pair['package_id'],'component':pair['component'],'role':role,'change':change,
-                   'details':changed,'status':'INCOMPATIBLE' if any(f['status']=='INCOMPATIBLE' for f in matches) else 'UNKNOWN',
+                   'details':changed,'status':('INCOMPATIBLE' if 'INCOMPATIBLE' in statuses else
+                                              'COMPATIBLE' if statuses=={'COMPATIBLE'} else 'UNKNOWN'),
                    'baseline':x,'candidate':y,'finding_ids':sorted({f['id'] for f in matches}),
                    'baseline_sha256':o.get('sha256'),'candidate_sha256':p.get('sha256'),
                    'evidence':sorted(set(o.get('evidence',[])+p.get('evidence',[])))}
@@ -216,20 +281,43 @@ PACKAGE_COLUMNS = ('id','name','arch','scope','inventory_status','status','basel
     'candidate_payload_status','provides','requires','replacement_hints','finding_ids','evidence')
 
 
-def export_repository(output,a,b,results):
-    repo = results['repository']
-    objects = [{o['path']:o for o in m['elf_objects']} for m in (a,b)]
-    archives = [{r['id']:r for r in m['repository']['archives'] if 'id' in r} for m in (a,b)]
+def symbol_differences(results, objects):
     by_component = defaultdict(lambda:defaultdict(list))
     for f in results['findings']:
         if f['dimension']=='abi':
             label = f['interface']
-            for suffix in (':size',':type',':visibility',':binding',':default lookup',':default symbol version'):
-                if label.endswith(suffix):
-                    label=label[:-len(suffix)]
-                    break
+            symbol_record = any(isinstance(f.get(side), dict) and f[side].get('name')==label
+                                for side in ('baseline','candidate'))
+            if not symbol_record:
+                for suffix in (':size',':type',':visibility',':binding'):
+                    if label.endswith(suffix):
+                        label=label[:-len(suffix)]
+                        break
             by_component[f['component']][label].append(f)
+    changes = Counter()
+    roles = {'EXPORT':Counter(),'IMPORT':Counter()}
+    for pair in results['repository']['elf_pairs']:
+        o,p = (objects[i].get(pair[side+'_object'],{}) for i,side in enumerate(('baseline','candidate')))
+        for row in symbol_rows(pair,o,p,by_component[pair['component']]):
+            changes[row['change']] += 1
+            roles[row['role']][row['change']] += 1
+            yield row
+    results['repository']['symbol_differences'] = {
+        'rows':sum(changes.values()),'by_change':dict(sorted(changes.items())),
+        'by_role':{role:{'rows':sum(counts.values()),'by_change':dict(sorted(counts.items()))}
+                   for role,counts in roles.items()}}
 
+
+def count_symbol_differences(a,b,results):
+    objects = [{o['path']:o for o in m['elf_objects']} for m in (a,b)]
+    for _ in symbol_differences(results,objects):
+        pass
+
+
+def export_repository(output,a,b,results):
+    repo = results['repository']
+    objects = [{o['path']:o for o in m['elf_objects']} for m in (a,b)]
+    archives = [{r['id']:r for r in m['repository']['archives'] if 'id' in r} for m in (a,b)]
     csv_rows(output/'packages.csv',PACKAGE_COLUMNS,repo['packages'])
     def package_stats():
         for p in repo['packages']:
@@ -241,10 +329,13 @@ def export_repository(output,a,b,results):
                             side+'_export_complete':sum(objects[i][k].get('export_inventory_complete') is True for k in found),
                             side+'_exports':sum(len(symbols(objects[i][k],'EXPORT')) for k in found),
                             side+'_imports':sum(len(symbols(objects[i][k],'IMPORT')) for k in found)})
+                row.update({side+'_'+key:value for key,value in symbol_counts([objects[i][k] for k in found]).items()})
             yield row
     csv_rows(output/'package-symbol-summary.csv',('id','name','arch','inventory_status','baseline_nevra','candidate_nevra',
         'baseline_elf','candidate_elf','baseline_export_complete','candidate_export_complete',
-        'baseline_exports','candidate_exports','baseline_imports','candidate_imports'),package_stats())
+        'baseline_exports','candidate_exports','baseline_imports','candidate_imports')+
+        tuple(side+'_'+role+'_'+unit for side in ('baseline','candidate') for role in ('export','import')
+              for unit in ('unique_symbol_names','lookup_identities')),package_stats())
     def elf_stats():
         for pair in repo['elf_pairs']:
             row = dict(pair)
@@ -258,15 +349,13 @@ def export_repository(output,a,b,results):
                                 side+'_asan': [x for x in o.get('needed',[]) if 'asan' in x.lower()] +
                                               sorted({x['name'] for x in o.get('imports',[]) if x['name'].startswith('__asan_')}),
                                 side+'_evidence':o.get('evidence',[])})
+                    row.update({side+'_'+key:value for key,value in symbol_counts([o]).items()})
             yield row
     csv_rows(output/'elf-symbol-summary.csv',('package_id','component','match','status')+
              tuple(side+'_'+f for side in ('baseline','candidate') for f in
-                   ('path','sha256','soname','needed','exports','imports','export_status','arm_abi','asan','evidence')),elf_stats())
-    def differences():
-        for pair in repo['elf_pairs']:
-            o,p = (objects[i].get(pair[side+'_object'],{}) for i,side in enumerate(('baseline','candidate')))
-            yield from symbol_rows(pair,o,p,by_component[pair['component']])
+                   ('path','sha256','soname','needed','exports','imports','export_status','arm_abi','asan','evidence',
+                    'export_unique_symbol_names','export_lookup_identities','import_unique_symbol_names','import_lookup_identities')),elf_stats())
     csv_rows(output/'symbol-differences.csv',('package_id','component','role','change','details','status',
-             'baseline','candidate','finding_ids','baseline_sha256','candidate_sha256','evidence'),differences())
+             'baseline','candidate','finding_ids','baseline_sha256','candidate_sha256','evidence'),symbol_differences(results,objects))
     csv_rows(output/'extraction-errors.csv',('side','archive','stage','path','reason','evidence'),repo['errors'])
-    write_json(output/'rpm-repository.json',{k:repo[k] for k in ('scope','baseline','candidate','inventory_states')})
+    write_json(output/'rpm-repository.json',{k:repo[k] for k in ('scope','baseline','candidate','inventory_states','symbol_differences')})

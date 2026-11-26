@@ -227,6 +227,32 @@ class FinalReleaseTests(unittest.TestCase):
         self.assertEqual(len(result['stdout']),1024)
         self.assertIn('limit',result['error'])
 
+    def test_rootless_adapter_cleans_its_exact_container_when_interrupted(self):
+        self.config['runtime']['authorized'] = True
+        storage, run_root, forbidden = (self.root / name for name in ('storage', 'run', 'image'))
+        for path in (storage, run_root, forbidden):
+            path.mkdir()
+        probe = self.root / 'probe'
+        probe.write_bytes(b'controlled input')
+        image_id = 'sha256:' + 'a' * 64
+        spec = dict(id='dedicated-test', podman=sys.executable, storage_root=str(storage),
+                    run_root=str(run_root), image=image_id)
+        calls = []
+
+        def execute(argv, *, timeout, max_capture_bytes):
+            calls.append(argv)
+            op = argv[6]
+            if op == 'run':
+                raise KeyboardInterrupt
+            stdout = {'info': 'true\n', 'image': image_id + '\n', 'rm': ''}[op]
+            return {'returncode': 0, 'stdout': stdout, 'stdout_evidence': 'a', 'stderr_evidence': 'b'}
+
+        with patch.object(self.tools, 'run', side_effect=execute), self.assertRaises(KeyboardInterrupt):
+            podman_run(spec, probe, 'unused', True, [], self.tools, forbidden_root=forbidden)
+        self.assertEqual([argv[6] for argv in calls], ['info', 'image', 'run', 'rm'])
+        name = calls[2][calls[2].index('--name') + 1]
+        self.assertEqual(calls[3][7:], ['--force', '--time=0', name])
+
     def test_validated_target_signal_is_distinct_from_transport_failure(self):
         roots = []
         for side in ('baseline','candidate'):

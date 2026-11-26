@@ -18,6 +18,7 @@ from compat.images import Image
 from compat.flash import PreparationError
 from compat.preparation import identity, prepared_input
 from compat.report import build_results, generate
+from compat.run_summary import OBJECTIVES, blocked_summary, save
 from compat.testing import run_matrix
 from compat.matrix_manifest import reconcile
 
@@ -41,6 +42,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument('--candidate-manifest', type=Path, help='Reuse collected candidate JSON')
     p.add_argument('--mode', choices=('quick', 'static', 'runtime', 'full'), default='static')
     p.add_argument('--rpm-mode', choices=('payload','metadata'), help='RPM payload analysis (default) or archive metadata only')
+    p.add_argument('--objective', choices=OBJECTIVES, help='Objective to track in the compact run summary')
     p.add_argument('--baseline-rpm-fallback', type=Path, help='Baseline RPM input if EROFS preparation fails')
     p.add_argument('--candidate-rpm-fallback', type=Path, help='Candidate RPM input if EROFS preparation fails')
     p.add_argument('--output', type=Path, default=Path('compat-report'))
@@ -62,6 +64,9 @@ def parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = parser().parse_args(argv)
     tools = None
+    claimed = False
+    finalized = False
+    failure = None
     try:
         config = load_config(args.config)
         if args.rpm_mode:
@@ -88,6 +93,8 @@ def main(argv: list[str] | None = None) -> int:
                                       *fallback) if p]
         paths += [Path(p).resolve() for p in config['cross_compilation']['sysroots'].values()]
         paths += [Path(p).resolve() for roots in config['debuginfo']['roots'].values() for p in roots]
+        if args.output.is_symlink():
+            raise InputError('Output directory must not be a symbolic link')
         output = args.output.resolve()
         for writable in [output] + ([args.cache.resolve()] if args.cache else []):
             for source in paths:
@@ -104,10 +111,19 @@ def main(argv: list[str] | None = None) -> int:
         if output.exists() and any(output.iterdir()):
             raise InputError('Output directory must be empty; use a new report directory (cache can be reused).')
         output.mkdir(parents=True, exist_ok=True)
+        try:
+            with (output/'.compat-run').open('x', encoding='utf-8') as stream:
+                stream.write('Tizen compatibility report output reservation\n')
+        except FileExistsError as exc:
+            raise InputError('Output directory was claimed by another run; choose a new directory') from exc
+        claimed = True
+        save(output, blocked_summary(args.objective, 'RUNNING', 'Analysis is in progress; no completion receipt yet.'))
         tools = Tools(output, config)
         tools.discover()
         if args.list_tools:
             print(json.dumps(tools.versions, indent=2))
+            save(output, blocked_summary(None, 'NOT_EXECUTED', 'Tool discovery only.'))
+            finalized = True
             return 0
         sdk_sources = {}
         for side, path in config['cross_compilation']['sysroots'].items():
@@ -210,7 +226,9 @@ def main(argv: list[str] | None = None) -> int:
             result['scope'] = repo['scope'] if repo else 'RUNTIME_ROOTFS'
             if repo:
                 result['repository'] = repo
-            generate(output, a, b, result, config)
+            generate(output, a, b, result, config, objective=args.objective, reused=bool(args.baseline_manifest))
+            save(output, result['run_summary'])
+            finalized = True
             print(f"{result['status']}: {len(findings)} findings; execution {result['execution']['status']}; quality gate {result['quality_gate']['status']} (compatibility={result['quality_gate']['compatibility_status']}, coverage={result['quality_gate']['coverage_status']}, execution={result['quality_gate']['execution_status']}); report {output / 'index.html'}")
             if result['quality_gate']['execution_status'] == 'FAIL':
                 return 3
@@ -220,14 +238,26 @@ def main(argv: list[str] | None = None) -> int:
             fail |= result['quality_gate']['status'] == 'FAIL'
             return 1 if fail else 0
     except (InputError, ValueError, tarfile.TarError) as exc:
+        failure = ('FAILED', exc)
         print(f'Input error: {exc}', file=sys.stderr)
         return 2
     except (OSError, InfrastructureError) as exc:
+        failure = ('FAILED', exc)
         print(f'Infrastructure error: {exc}', file=sys.stderr)
         return 3
+    except KeyboardInterrupt:
+        failure = ('INTERRUPTED', 'Analysis interrupted by operator.')
+        print('Analysis interrupted.', file=sys.stderr)
+        return 130
     finally:
         if tools:
             tools.flush()
+        if claimed and not finalized:
+            phase, reason = failure or ('FAILED', 'Analysis ended without a completion receipt.')
+            try:
+                save(output, blocked_summary(args.objective, phase, reason))
+            except OSError as exc:
+                print(f'Could not persist the failure summary: {exc}', file=sys.stderr)
 
 
 if __name__ == '__main__':

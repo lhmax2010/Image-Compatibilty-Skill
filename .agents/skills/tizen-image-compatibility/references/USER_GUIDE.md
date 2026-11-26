@@ -1,8 +1,8 @@
-# Tizen Image Compatibility v1.5.1 User Guide
+# Tizen Image Compatibility v1.5.2 User Guide
 
 ## Install for Cline or use the CLI
 
-Download the archive and `SHA256SUMS` from the internal v1.5.1 distribution. Verify the archive digest with `sha256sum` before extracting. Keep the complete extracted directory with its original name. For independent CLI use, follow the [Quick Start](QUICK_START.md) and point `SKILL` to that directory. There is no dependency on an agent API.
+Download the archive and `SHA256SUMS` from the internal v1.5.2 distribution. Verify the archive digest with `sha256sum` before extracting. Keep the complete extracted directory with its original name. For independent CLI use, follow the [Quick Start](QUICK_START.md) and point `SKILL` to that directory. There is no dependency on an agent API.
 
 For Cline, copy the complete directory into one of these locations in Cline's execution environment.
 
