@@ -70,3 +70,11 @@ python3 "$SKILL/scripts/prepare_image.py" "$IMAGE" \
 ```
 
 RPM 替代输入使用 `rpm-repository`，支持包清单和归属范围内的证据。它不会给出完整已安装清单或运行时根文件系统覆盖。Rootstrap 使用 `rootstrap`，将准备目录传给 `--baseline-sysroot` 或 `--candidate-sysroot`。它只用于 SDK 环境。`full` 和 `runtime` 模式会核对准备后的 Rootstrap 所绑定的原始镜像身份与对应侧运行时输入一致。已预提取的运行时目录也可通过同源准备凭据建立这项关联。构建 ID 与两侧内容身份均须与记录匹配。
+
+## EROFS
+
+The inspection receipt records the EROFS superblock offset and block size, raw feature masks, recognized compression algorithms and the declared extra device count. Standard extraction needs host `fsck.erofs` with `--extract` and `--no-preserve`, Bubblewrap with size-limited tmpfs, and host `tar`. The image remains read-only. The extractor operates in a private bounded scratch directory, records version and stderr evidence, and the output is revalidated by the existing safe TAR path. It does not re-establish original ownership, modes, xattrs, capabilities or complete multi-partition product coverage.
+
+`EROFS_EXTRACTOR_UNAVAILABLE` identifies missing tools. `EROFS_FEATURE_UNSUPPORTED` retains unrecognized feature or compression bits. `EROFS_EXTRA_DEVICES_REQUIRED` identifies an unbound external-device requirement. A trusted `preparation.erofs_adapter` can use the same argument structure as the VDFS adapter, with receipt schema `tizen-erofs-receipt/1`. It declares integer `supported_compat_mask`, `supported_incompat_mask` and `supported_compression_mask` fields covering the detected bits. The receipt binds the input and TAR SHA256 and attests scope and any excluded GPT partitions. For multiple external devices, supply a verified same-build replacement or use the corresponding RPMs.
+
+Samsung KantSU2e vendor features need a matching trusted extractor for that build and any required companion data, or a verified same-build rootfs. Standard and vendor EROFS actual extraction remain unverified on the v1.5.1 development host. See the [RPM fallback](rpm_repository.md#when-erofs-extraction-is-blocked).

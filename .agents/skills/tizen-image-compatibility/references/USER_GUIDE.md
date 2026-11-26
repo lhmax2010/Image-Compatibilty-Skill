@@ -1,8 +1,8 @@
-# Tizen Image Compatibility v1.5.0 User Guide
+# Tizen Image Compatibility v1.5.1 User Guide
 
 ## Install for Cline or use the CLI
 
-Download the archive and `SHA256SUMS` from the internal v1.5.0 distribution. Verify the archive digest with `sha256sum` before extracting. Keep the complete extracted directory with its original name. For independent CLI use, follow the [Quick Start](QUICK_START.md) and point `SKILL` to that directory. There is no dependency on an agent API.
+Download the archive and `SHA256SUMS` from the internal v1.5.1 distribution. Verify the archive digest with `sha256sum` before extracting. Keep the complete extracted directory with its original name. For independent CLI use, follow the [Quick Start](QUICK_START.md) and point `SKILL` to that directory. There is no dependency on an agent API.
 
 For Cline, copy the complete directory into one of these locations in Cline's execution environment.
 
@@ -29,7 +29,7 @@ To update, verify and extract the new archive to a staging area, then move the o
 
 ## Inputs and configuration
 
-Start with a root filesystem directory, a rootfs TAR/TAR.GZ, a supported SquashFS image, an exported merged OCI rootfs or a local RPM archive collection. RPM collections describe available packages, while an image's installed RPM database supplies installed inventory and ownership. Use independently collected same-build SDK/sysroot inputs where required. For a flashing container, inspect before preparing it. Unsupported filesystem or incomplete preparation is an explicit coverage gap. See [image preparation](image_preparation.md) for EXT4, GPT/XZ, VDFS adapters and alternative inputs.
+Start with a root filesystem directory, a rootfs TAR/TAR.GZ, a supported SquashFS image, an exported merged OCI rootfs or a local RPM archive collection. RPM collections report available archive and payload contracts, while an image's installed RPM database supplies installed inventory and ownership. Follow the [RPM repository guide](rpm_repository.md) for scoped analysis and the optional repository browser. Use independently collected same-build SDK/sysroot inputs where required. For a flashing container, inspect before preparing it. Unsupported filesystem or incomplete preparation is an explicit coverage gap. See [image preparation](image_preparation.md) for EXT4, GPT/XZ, VDFS adapters and alternative inputs.
 
 ```bash
 python3 "$SKILL/scripts/prepare_image.py" /path/to/flash-package.tar.gz \

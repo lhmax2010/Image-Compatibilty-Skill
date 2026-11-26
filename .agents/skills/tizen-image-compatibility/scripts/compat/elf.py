@@ -182,7 +182,7 @@ def parse_readelf(text: str) -> dict[str, Any]:
     return obj
 
 
-def collect_elf(path: Path, virtual: str, tools: Tools, mode: str) -> dict[str, Any]:
+def collect_elf(path: Path, virtual: str, tools: Tools, mode: str, *, bounded=False) -> dict[str, Any]:
     obj: dict[str, Any] = {'path': virtual, 'size': path.stat().st_size, 'complete': False, 'resolution_metadata_complete': False,
                            'export_inventory_complete': False, 'export_inventory_status': 'UNKNOWN', 'elf_runtime_role': 'UNKNOWN'}
     tool = tools.path('readelf')
@@ -190,7 +190,7 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str) -> dict[str, 
         flags = ['-W', '-h', '-l', '-d', '--dyn-syms', '-V', '-S', '-A', '-n']
         if mode != 'quick':
             flags += ['-r']
-        result = tools.run([tool, *flags, str(path)])
+        result = tools.run([tool, *flags, str(path)], **({'max_capture_bytes':16*1024**2} if bounded else {}))
         obj.update(parse_readelf(result['stdout']))
         obj['evidence'] = [result['stdout_evidence'], result['stderr_evidence']]
         obj['complete'] = result['returncode'] == 0 and not result['stdout_truncated'] and 'machine' in obj
@@ -255,7 +255,7 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str) -> dict[str, 
                         'osabi_id': header[7], 'abi_version': str(header[8])})
         nm = tools.path('nm')
         if nm:
-            result = tools.run([nm, '-D', '-P', str(path)])
+            result = tools.run([nm, '-D', '-P', str(path)], **({'max_capture_bytes':16*1024**2} if bounded else {}))
             obj['evidence'] = [result['stdout_evidence'], result['stderr_evidence']]
             obj['nm_symbols_raw'] = result['stdout']
     return obj

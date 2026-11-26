@@ -19,7 +19,11 @@ def main():
     browse.add_argument('--history', type=Path, help='Mount a completed historical regression report')
     args = parser.parse_args()
     if args.command == 'build':
-        build(args.input, args.output)
+        if (args.input/'rpm-repository.json').is_file():
+            from compat.repository_browser import build as build_repository
+            build_repository(args.input,args.output)
+        else:
+            build(args.input, args.output)
     else:
         serve(args.report, args.port, args.impact, args.history)
 

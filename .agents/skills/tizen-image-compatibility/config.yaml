@@ -16,11 +16,20 @@ analysis:
   max_extract_files: 2000000
   input_scope: {} # Example: {baseline: {ramdisk: false, xattrs: false, hardlinks: false}}
 tools: {} # Example: {readelf: /opt/bin/aarch64-linux-gnu-readelf, abidiff: false}
+rpm_payload:
+  mode: payload # metadata omits decompression and ELF collection.
+  max_bytes: 1073741824
+  max_elf_bytes: 268435456
+  max_files: 100000
+  max_packages: 100000
+  timeout_seconds: 300
 preparation:
   platform_partition: pltf_t.img
   xz_memory_mib: 256
   adapter_timeout_seconds: 1800
   vdfs_adapter: {} # Optional trusted host adapter. See references/image_preparation.md.
+  erofs_adapter: {} # Optional trusted vendor extractor.
+  erofs_scratch_mib: 1024 # Private tmpfs cap for standard fsck.erofs.
 loader:
   environments: {} # Unknown by default; see references/correctness.md before asserting completeness.
 debuginfo:

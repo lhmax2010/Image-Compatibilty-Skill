@@ -1,6 +1,6 @@
 # Quick Start
 
-Install the complete `tizen-image-compatibility` directory from the internal v1.5.0 archive. Keep its name and set `SKILL` to its absolute path. Run Python 3.10+ on Linux, including WSL or a remote Linux terminal. Use `readelf` (GNU binutils) for ELF analysis and `rpm` when RPM inventory matters. The default static CLI needs no Python packages, network, SDK, SDB, QEMU or root. A host C compiler is only needed to generate the synthetic example.
+Install the complete `tizen-image-compatibility` directory from the internal v1.5.1 archive. Keep its name and set `SKILL` to its absolute path. Run Python 3.10+ on Linux, including WSL or a remote Linux terminal. Use `readelf` (GNU binutils) for ELF analysis and `rpm` when RPM inventory matters. The default static CLI needs no Python packages, network, SDK, SDB, QEMU or root. A host C compiler is only needed to generate the synthetic example.
 
 ## Compare two images
 
@@ -30,3 +30,13 @@ python3 "$SKILL/scripts/tizen_compat.py" \
 Exit 1 is expected. The reports show an intentionally removed symbol, header and command differences, and missing evidence for checks the fixture cannot establish. Do not run the fixture's target files.
 
 See the [User Guide](USER_GUIDE.md) for Cline installation, image preparation, report queries, SDK and Runtime.
+
+## Compare two local RPM inputs
+
+```bash
+python3 "$SKILL/scripts/tizen_compat.py" \
+  --baseline /path/to/vd-gcc-rpms --candidate /path/to/vd-llvm-asan-rpms \
+  --rpm-mode payload --output ./rpm-comparison
+```
+
+This needs host `rpm`, `rpm2cpio` and `readelf`. Inputs can be individual RPMs or recursive directories. View `index.html`, `elf-symbol-summary.csv`, `symbol-differences.csv` and `extraction-errors.csv`. The scope is `RPM_REPOSITORY_PAYLOAD`. Use `--rpm-mode metadata` for an inventory-only run.

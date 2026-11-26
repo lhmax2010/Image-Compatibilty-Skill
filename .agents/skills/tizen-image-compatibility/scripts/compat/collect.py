@@ -81,6 +81,10 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
     collectors = expected_collectors(tools.config)
     input_scope = image.evidence_scope(tools.config['analysis'].get('input_scope', {}).get(label))
     m['image']['input_evidence_scope'] = input_scope
+    if image.format == 'rpm-collection':
+        from .rpm_payload import collect_repository
+        return collect_repository(image, m, tools, workspace, mode, collectors)
+    m['image']['scope'] = 'RUNTIME_ROOTFS'
     elf_jobs = []
     header_failures = []
     max_bytes = tools.config['analysis']['max_text_bytes']
@@ -102,8 +106,6 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
         limitation('runtime', 'Built-in probes cover a representative subset. UTF-8 locales, futex/epoll, hardware and target-specific Tizen APIs need configured probes.')]
     if image.format in ('tar', 'squashfs'):
         m['limitations'].append(limitation('security', 'Archive extraction cannot recover all xattrs, ACLs and original ownership (TAR uid/gid/mode are retained separately).'))
-    if image.format == 'rpm-collection':
-        m['limitations'].append(limitation('filesystem', 'RPM collection inventories packages only; payloads are not installed or expanded. Supply an extracted rootfs for ELF/API analysis.'))
     for virtual, path, metadata in image.walk():
         if not tools.config['analysis']['ignore_timestamps'] and path.exists():
             metadata['mtime_ns'] = path.lstat().st_mtime_ns

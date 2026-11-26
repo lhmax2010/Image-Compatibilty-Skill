@@ -3,7 +3,7 @@ name: tizen-image-compatibility
 description: Compare GCC and LLVM Tizen images or SDKs for external-interface compatibility, audit ABI/API and missing libraries or symbols, identify potentially affected applications and packages from existing reports, and run explicitly configured cross-compiler probes.
 ---
 
-# Tizen Image Compatibility v1.5.0
+# Tizen Image Compatibility v1.5.1
 
 Start with the bundled [Quick Start](references/QUICK_START.md). Resolve every script and reference relative to this SKILL.md.
 
@@ -29,7 +29,7 @@ python3 "$SKILL/scripts/tizen_compat.py" \
   --mode static --output ./reports/gcc-vs-llvm
 ```
 
-TAR/TAR.GZ and SquashFS are accepted. An exported, merged OCI rootfs is a normal rootfs input. EXT4 and layered OCI layouts require prior offline extraction; the CLI gives instructions. RPM collections support package metadata analysis without installation or payload execution.
+TAR/TAR.GZ and SquashFS are accepted. An exported, merged OCI rootfs is a normal rootfs input. EXT4 and layered OCI layouts require prior offline extraction; the CLI gives instructions. A single RPM or recursive local RPM repository uses isolated payload ELF analysis by default. Use `--rpm-mode metadata` for archive inventory only. Read the [repository guide](references/rpm_repository.md) for reports and EROFS fallback.
 
 For a Tizen flashing bundle, first run `python3 "$SKILL/scripts/prepare_image.py" IMAGE --inspect --output NEW_DIRECTORY`. Use the recorded TAR members, GPT geometry, XZ integrity and filesystem signature to decide the next step. `VDFS_EXTRACTOR_UNAVAILABLE` means the identified payload needs a trusted adapter. A `READY` preparation can be passed as an image input. Keep `PARTIAL`, `FAILED` and SDK-only outputs out of runtime compatibility judgments. [Image preparation and replacement inputs](references/image_preparation.md)
 

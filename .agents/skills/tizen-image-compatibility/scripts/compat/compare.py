@@ -230,6 +230,9 @@ def compare_packages(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any
 
 
 def compare_static(a: dict[str, Any], b: dict[str, Any], config: dict[str, Any]) -> list[dict[str, Any]]:
+    if 'repository' in a and 'repository' in b:
+        from .repository import compare_repository
+        return compare_repository(a,b,config)[1]
     out = compare_elf(a, b) + compare_api(a, b) + compare_packages(a, b)
     if not config['analysis']['ignore_build_ids']:
         other = index(b['elf_objects'])

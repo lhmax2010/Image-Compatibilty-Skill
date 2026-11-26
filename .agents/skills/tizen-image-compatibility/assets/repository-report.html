@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>RPM Repository Comparison</title>
+<h1>RPM repository comparison</h1>
+<p id="scope"></p>
+<label>Table <select id="table"><option value="packages">Packages</option><option value="package-symbols">Package symbols</option><option value="elf">ELF objects</option><option value="symbols">Symbol differences</option><option value="errors">Extraction errors</option></select></label>
+<label>Exact package ID <input id="package"></label>
+<button id="search">Search</button> <button id="next" disabled>Next page</button>
+<p id="status" role="status"></p>
+<table><thead id="heading"></thead><tbody id="rows"></tbody></table>
+<script src="/enhanced-report.js" defer></script>
+</html>

@@ -19,7 +19,10 @@ def collector_execution(a, b, config):
     for side, manifest in (('baseline', a), ('candidate', b)):
         recorded = manifest.get('collector_execution', {})
         records = collectors[side] = {}
-        for tool in expected_collectors(config):
+        expected = expected_collectors(config)
+        if manifest.get('repository'):
+            expected = sorted(set(expected) | {'rpm','rpm2cpio'})
+        for tool in expected:
             entry = recorded.get(tool)
             if entry is None:
                 entry = {'status': 'UNKNOWN', 'recorded': False, 'reason_code': 'MISSING_RECEIPT',
@@ -42,14 +45,24 @@ def collector_execution(a, b, config):
 
 
 def build_results(a: dict[str, Any], b: dict[str, Any], findings: list[dict[str, Any]],
-                  tests: list[dict[str, Any]], matrix: list[dict[str, Any]], config: dict[str, Any]) -> dict[str, Any]:
+                  tests: list[dict[str, Any]], matrix: list[dict[str, Any]], config: dict[str, Any], *,
+                  repository=None) -> dict[str, Any]:
     if len({f['id'] for f in findings}) != len(findings):
         raise ValueError('Duplicate finding IDs: finalize findings before report aggregation')
     counts = Counter(f['status'] for f in findings)
     test_counts = Counter(t['status'] for t in tests)
     expected = a.get('expected_tests', []) + b.get('expected_tests', [])
     status = 'INCOMPATIBLE' if counts['INCOMPATIBLE'] else 'UNKNOWN' if counts['UNKNOWN'] else 'COMPATIBLE' if findings else 'UNKNOWN'
-    coverage, gate = coverage_report(a, b, findings, tests, matrix, config)
+    views = [a,b]
+    if repository:
+        # Use the reconciled package-scoped pairs for coverage only. Source
+        # manifests retain their original archive identities and paths.
+        views = []
+        for side, manifest in zip(('baseline','candidate'),(a,b)):
+            names = {p[side+'_object']:p['component'] for p in repository['elf_pairs'] if p[side+'_object']}
+            views.append(manifest | {'elf_objects':[obj | {'path':names.get(obj['path'],obj['path'])}
+                                                     for obj in manifest['elf_objects']]})
+    coverage, gate = coverage_report(*views, findings, tests, matrix, config)
     execution = collector_execution(a, b, config)
     execution_gate = 'FAIL' if execution['status'] == 'FAILED' and execution['fail_on_collector_failure'] else 'PASS'
     gate['execution_status'] = execution_gate
@@ -122,6 +135,9 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
                 row['coverage_percent'] = package['coverage']['coverage_percent']
                 row = {k: canonical(v) if isinstance(v, (list, dict)) else str(v) for k, v in row.items()}
                 writer.writerow({k: "'" + v if v.startswith(('=', '+', '-', '@', '\t', '\r')) else v for k, v in row.items()})
+        if results.get('repository'):
+            from .repository import export_repository
+            export_repository(output, a, b, results)
     def esc(value: Any) -> str:
         return html.escape(value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, sort_keys=True))
     def table(rows: list[list[Any]], headers: list[str]) -> str:
@@ -137,7 +153,7 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
         lines += ['## Collector execution', '', '**' + results['execution']['status'] + '**', '']
         for side, collectors in results['execution']['collectors'].items():
             for tool, entry in collectors.items():
-                reasons = [e['path'] + ' (' + e['reason'] + ')' for e in entry.get('errors', [])]
+                reasons = [e.get('path',e.get('archive','*')) + ' (' + e['reason'] + ')' for e in entry.get('errors', [])]
                 lines.append('- ' + esc(side + ' ' + tool + ' ' + entry['status'] + ' ' +
                                         (entry.get('reason') or ', '.join(reasons[:10]))))
         lines += ['', '## Coverage', '', '| Dimension | Applicable | Complete | Partial | Unexecuted | Compatible | Incompatible | Unknown | Complete coverage % | Compatible / applicable % |', '|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
@@ -152,6 +168,12 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
         for package in results['package_results'][:200]:
             lines.append('| ' + ' | '.join(esc(v) for v in [package['scope'] + ':' + package['name'], package['baseline_version'], package['candidate_version'], package['abi']['status'], package['api']['status'], package['linking']['status'], package['coverage']['coverage_percent'], package['overall']]) + ' |')
         lines += ['', 'First 200 packages shown; full records, ownership, findings and gaps are in results.json and packages.csv.']
+        if repo := results.get('repository'):
+            lines += ['', '## '+repo['scope'], '',
+                      'Available RPMs and their payloads are separate from installed product inventories.',
+                      'Baseline: '+canonical(repo['baseline']), 'Candidate: '+canonical(repo['candidate']),
+                      'Package changes: '+canonical(repo['inventory_states']),
+                      'See packages.csv, package-symbol-summary.csv, elf-symbol-summary.csv, symbol-differences.csv and extraction-errors.csv.']
         lines += ['', '## Cross-compatibility matrix', '', '| Compiler | Image | Compile | Link | Deploy | Execute | Behavior | Overall |', '|---|---|---|---|---|---|---|---|']
         for cell in results['matrix']:
             lines.append('| ' + ' | '.join(esc(cell.get(k, 'UNKNOWN')) for k in ('compiler', 'image', 'compile_status', 'link_status',
@@ -179,6 +201,15 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
         content += table([[t.get(k, '') for k in ('id', 'name', 'compiler', 'image', 'status', 'compile_status', 'link_status', 'deployment_status', 'execution_status', 'behavior_status', 'runtime_reason', 'evidence')]
                           for t in results['tests'][:100]], ['ID', 'Test', 'Compiler', 'Image', 'Overall', 'Compile', 'Link', 'Deploy', 'Execute', 'Behavior', 'Reason', 'Evidence'])
         inventory = results['package_inventory']
+        if repo := results.get('repository'):
+            content += '<h2>'+esc(repo['scope'])+'</h2><p>Available RPM packages. Loaded product state and provider selection are unverified.</p>'
+            content += table([[side,repo[side]] for side in ('baseline','candidate')],['Image','RPM, ELF, symbol and coverage counts'])
+            content += '<p>Package relationships: '+esc(repo['inventory_states'])+'</p>'
+            content += '<p>Full tables: '+ ' · '.join('<a href="'+name+'">'+name+'</a>' for name in (
+                'packages.csv','package-symbol-summary.csv','elf-symbol-summary.csv','symbol-differences.csv','extraction-errors.csv'))+'</p>'
+            content += table([[p[k] for k in ('name','arch','inventory_status','baseline_nevra','candidate_nevra','status')]
+                               for p in repo['packages'][:200]],['Package','Arch','Inventory','Baseline','Candidate','ABI result'])
+            content += '<p>Package rows: '+str(len(repo['packages']))+'; preview: '+str(min(200,len(repo['packages'])))+'.</p>'
         content += '<h2>Package compatibility</h2><p>Installed package counts: baseline=' + esc(inventory['baseline_package_count']) + '; candidate=' + esc(inventory['candidate_package_count']) + '. null means UNKNOWN. First 1000 packages shown; full records in JSON/CSV.</p>'
         content += '<input id="package-filter" aria-label="Filter packages" placeholder="Filter packages…">'
         for package in results['package_results'][:1000]:

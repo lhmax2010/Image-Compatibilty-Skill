@@ -32,8 +32,11 @@ DEFAULTS: dict[str, Any] = {
                  'workers': 4, 'timeout_seconds': 60, 'max_text_bytes': 4194304,
                  'max_extract_bytes': 107374182400, 'max_extract_files': 2000000, 'input_scope': {}},
     'tools': {},
+    'rpm_payload': {'mode': 'payload', 'max_bytes': 1073741824, 'max_elf_bytes': 268435456,
+                    'max_files': 100000, 'max_packages': 100000, 'timeout_seconds': 300},
     'preparation': {'platform_partition': 'pltf_t.img', 'xz_memory_mib': 256,
-                    'adapter_timeout_seconds': 1800, 'vdfs_adapter': {}},
+                    'adapter_timeout_seconds': 1800, 'vdfs_adapter': {}, 'erofs_adapter': {},
+                    'erofs_scratch_mib': 1024},
     'loader': {'environments': {}},
     'debuginfo': {'roots': {}},
     'runtime': {'enabled': False, 'authorized': False, 'timeout_seconds': 60,
@@ -131,12 +134,21 @@ def validate_config(c: dict[str, Any]) -> None:
     require(all(k in DIMENSIONS and v in SEVERITIES for k, v in c['severity_overrides'].items()),
             'severity_overrides must map dimension to severity')
     require(all(isinstance(v, str) or v is False for v in c['tools'].values()), 'Tool must be path or false')
+    rpm_payload = c['rpm_payload']
+    require(rpm_payload['mode'] in ('payload','metadata'), 'Invalid RPM payload mode')
+    for key, maximum in {'max_bytes': 16*1024**3, 'max_elf_bytes': 1024**3, 'max_files': 2000000,
+                         'max_packages': 250000, 'timeout_seconds': 7200}.items():
+        require(type(rpm_payload[key]) is int and 1 <= rpm_payload[key] <= maximum, 'Invalid RPM payload limit: '+key)
     prep = c['preparation']
     require(type(prep['xz_memory_mib']) is int and 1 <= prep['xz_memory_mib'] <= 1024, 'Invalid XZ memory cap')
     require(type(prep['adapter_timeout_seconds']) is int and 1 <= prep['adapter_timeout_seconds'] <= 7200,
             'Invalid VDFS adapter timeout')
-    adapter = prep['vdfs_adapter']
-    if adapter:
+    require(type(prep['erofs_scratch_mib']) is int and 16 <= prep['erofs_scratch_mib'] <= 16384,
+            'Invalid EROFS scratch memory cap')
+    for filesystem in ('vdfs', 'erofs'):
+        adapter = prep[filesystem+'_adapter']
+        if not adapter:
+            continue
         command = adapter.get('command')
         version = adapter.get('version_args', ['--version'])
         require(set(adapter) <= {'command', 'version_args'} and isinstance(command, list) and command
@@ -144,7 +156,7 @@ def validate_config(c: dict[str, Any]) -> None:
                 and Path(command[0]).is_absolute() and all(command[1:].count(p) == 1 for p in ('{input}', '{output}', '{receipt}'))
                 and Path(command[0]).name not in ('sudo', 'doas', 'pkexec', 'mount', 'losetup', 'chroot')
                 and isinstance(version, list) and all(isinstance(v, str) and '\0' not in v for v in version),
-                'VDFS adapter needs an absolute host executable and separate {input}, {output}, {receipt} arguments')
+                filesystem.upper()+' adapter needs an absolute host executable and separate {input}, {output}, {receipt} arguments')
     cc = c['cross_compilation']
     require(set(cc['sysroots']) <= {'baseline', 'candidate'}, 'Unknown sysroot image key')
     require(all(isinstance(v, str) for v in cc['sysroots'].values()), 'Sysroots must be paths')
@@ -426,7 +438,7 @@ class Tools:
 
     def discover(self) -> dict[str, Any]:
         for name in ('readelf', 'nm', 'objdump', 'abidiff', 'abi-dumper', 'abi-compliance-checker',
-                     'pahole', 'rpm', 'unsquashfs', 'debugfs', 'clang', 'gcc'):
+                     'pahole', 'rpm', 'rpm2cpio', 'fsck.erofs', 'mkfs.erofs', 'unsquashfs', 'debugfs', 'clang', 'gcc'):
             path = self.path(name)
             record: dict[str, Any] = {'available': bool(path), 'path': path}
             if path:

@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.1 — RPM payload and EROFS
+
+- Analyze ELF imports, exports, versions and ABI attributes directly from an offline RPM repository. Keep package scopes independent.
+- Compare available package inventory, versions and Provides/Requires. Produce complete repository detail CSVs before any SQLite index build.
+- Inspect EROFS feature bits and optional devices, support read-only extraction with capable host tools, and allow explicit paired RPM fallback.
+
 ## v1.5.0 — Internal Developer Release
 
 - Ship a reproducible standalone Skill archive with English Quick Start, Cline installation and optional SDK/Runtime guides.

@@ -15,10 +15,22 @@ from compat.compare import advanced_abi, compare_static, finalize
 from compat.core import (DIMENSIONS, SEVERITIES, InfrastructureError, InputError, Tools,
                          finding, load_config, read_manifest)
 from compat.images import Image
+from compat.flash import PreparationError
 from compat.preparation import identity, prepared_input
 from compat.report import build_results, generate
 from compat.testing import run_matrix
 from compat.matrix_manifest import reconcile
+
+
+def erofs_preparation_failed(error, output):
+    if error.code.startswith('EROFS_'):
+        return True
+    if error.code == 'ROOTFS_INCOMPLETE':
+        for side in ('baseline','candidate'):
+            marker = output/(side+'-extraction-manifest.json')
+            if marker.is_file() and any(layer['format']=='erofs' for layer in json.loads(marker.read_text())['layers']):
+                return True
+    return False
 
 
 def parser() -> argparse.ArgumentParser:
@@ -28,6 +40,9 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument('--baseline-manifest', type=Path, help='Reuse collected baseline JSON')
     p.add_argument('--candidate-manifest', type=Path, help='Reuse collected candidate JSON')
     p.add_argument('--mode', choices=('quick', 'static', 'runtime', 'full'), default='static')
+    p.add_argument('--rpm-mode', choices=('payload','metadata'), help='RPM payload analysis (default) or archive metadata only')
+    p.add_argument('--baseline-rpm-fallback', type=Path, help='Baseline RPM input if EROFS preparation fails')
+    p.add_argument('--candidate-rpm-fallback', type=Path, help='Candidate RPM input if EROFS preparation fails')
     p.add_argument('--output', type=Path, default=Path('compat-report'))
     p.add_argument('--config', type=Path)
     p.add_argument('--cache', type=Path, help='Optional incremental ELF cache outside source images')
@@ -49,6 +64,8 @@ def main(argv: list[str] | None = None) -> int:
     tools = None
     try:
         config = load_config(args.config)
+        if args.rpm_mode:
+            config['rpm_payload']['mode'] = args.rpm_mode
         excluded = {x.strip() for x in args.exclude.split(',') if x.strip()}
         if excluded - set(DIMENSIONS):
             raise InputError('Unknown excluded dimensions: ' + ','.join(sorted(excluded - set(DIMENSIONS))))
@@ -64,7 +81,11 @@ def main(argv: list[str] | None = None) -> int:
             path = getattr(args, flag)
             if path:
                 config['cross_compilation']['compilers'].setdefault(family, {})[language] = str(path.resolve())
-        paths = [p.resolve() for p in (args.baseline, args.candidate, args.baseline_sysroot, args.candidate_sysroot) if p]
+        fallback = (args.baseline_rpm_fallback,args.candidate_rpm_fallback)
+        if any(fallback) and (not all(fallback) or not args.baseline or not args.candidate):
+            raise InputError('EROFS fallback requires both RPM inputs and both original images')
+        paths = [p.resolve() for p in (args.baseline, args.candidate, args.baseline_sysroot, args.candidate_sysroot,
+                                      *fallback) if p]
         paths += [Path(p).resolve() for p in config['cross_compilation']['sysroots'].values()]
         paths += [Path(p).resolve() for roots in config['debuginfo']['roots'].values() for p in roots]
         output = args.output.resolve()
@@ -115,7 +136,17 @@ def main(argv: list[str] | None = None) -> int:
                             shutil.copyfile(original_receipt, output / name)
                             manifest['image']['extraction_manifest'] = name
             else:
-                roots = (Image(args.baseline, workspace, tools, 'baseline'), Image(args.candidate, workspace, tools, 'candidate'))
+                fallback_reason = None
+                try:
+                    roots = (Image(args.baseline, workspace, tools, 'baseline'), Image(args.candidate, workspace, tools, 'candidate'))
+                except PreparationError as error:
+                    if not all(fallback) or not erofs_preparation_failed(error,output):
+                        raise
+                    fallback_reason = str(error)
+                    roots = tuple(Image(path,workspace,tools,label+'-rpm-fallback') for path,label in
+                                  zip(fallback,('baseline','candidate')))
+                    if any(image.format!='rpm-collection' for image in roots):
+                        raise InputError('EROFS fallback inputs must both be RPM collections or archives')
                 for image, label in zip(roots, ('baseline', 'candidate')):
                     if image.extraction_manifest and image.extraction_manifest.parent != output:
                         shutil.copyfile(image.extraction_manifest, output / (label + '-extraction-manifest.json'))
@@ -128,10 +159,25 @@ def main(argv: list[str] | None = None) -> int:
                             raise InputError(f'ROOTSTRAP_SOURCE_MISMATCH: {label} Rootstrap belongs to a different source image')
                 a, b = (collect(image, config['comparison'][label + '_name'], label, args.mode, tools, workspace, args.cache)
                         for image, label in zip(roots, ('baseline', 'candidate')))
-            findings = compare_static(a, b, config)
-            if roots and args.mode != 'quick' and 'abi' in config['analysis']['modes']:
+                if fallback_reason:
+                    for manifest in (a,b):
+                        manifest['image']['fallback_reason'] = fallback_reason
+            repo = None
+            repo_inputs = [manifest.get('repository') for manifest in (a,b)]
+            if any(manifest['image'].get('format') == 'rpm-collection' and not manifest.get('repository') for manifest in (a,b)):
+                raise InputError('Legacy RPM manifests lack repository scope; compare the original archives again')
+            if any(repo_inputs) and not all(repo_inputs):
+                raise InputError('Compare two RPM repositories or two runtime Rootfs inputs; their scopes differ')
+            if all(repo_inputs):
+                from compat.repository import compare_repository
+                repo,findings = compare_repository(a,b,config)
+            else:
+                findings = compare_static(a, b, config)
+            if repo is None and roots and args.mode != 'quick' and 'abi' in config['analysis']['modes']:
                 findings += advanced_abi(a, b, roots, tools)
-            if not roots:
+            if repo is not None:
+                tests,matrix = [],[]
+            elif not roots:
                 # Preserve earlier executable results; do not claim to rerun target tests.
                 tests = a['test_results'] + b['test_results']
                 matrix = a.get('cross_matrix') or [{'compiler': compiler, 'image': image, 'header_status': 'UNKNOWN', 'runtime_status': 'UNKNOWN',
@@ -160,7 +206,10 @@ def main(argv: list[str] | None = None) -> int:
                         cell.get('runtime_reason', cell.get('reason', 'Incomplete matrix')), 'UNKNOWN', 'INFO'))
             findings = finalize(findings, config)
             a['cross_matrix'] = b['cross_matrix'] = matrix
-            result = build_results(a, b, findings, tests, matrix, config)
+            result = build_results(a, b, findings, tests, matrix, config, repository=repo)
+            result['scope'] = repo['scope'] if repo else 'RUNTIME_ROOTFS'
+            if repo:
+                result['repository'] = repo
             generate(output, a, b, result, config)
             print(f"{result['status']}: {len(findings)} findings; execution {result['execution']['status']}; quality gate {result['quality_gate']['status']} (compatibility={result['quality_gate']['compatibility_status']}, coverage={result['quality_gate']['coverage_status']}, execution={result['quality_gate']['execution_status']}); report {output / 'index.html'}")
             if result['quality_gate']['execution_status'] == 'FAIL':

@@ -1,11 +1,11 @@
-# Tizen Image Compatibility Skill v1.5.0
+# Tizen Image Compatibility Skill v1.5.1
 
-**Internal Developer Release**
+**Internal Developer Release — native RPM payload and EROFS**
 
-Use the standalone Skill as a Linux CLI or install its entire directory in Cline. Start with [Quick Start](QUICK_START.md) and see the [User Guide](USER_GUIDE.md) for optional workflows. Verify the downloadable archive with the accompanying `SHA256SUMS`.
+Compare two local recursive RPM repositories with the normal `tizen_compat.py` entry. The default RPM payload mode detects real ELF via magic and reuses the existing ABI, symbol version and ARM collectors. Package identity, archive SHA256 and package paths stay distinct from installed product inventory. The full package, ELF, symbol and extraction CSVs do not require SQLite. Metadata-only mode remains available.
 
-The release includes image inspection and preparation, static ELF/ABI/API and dynamic linking analysis, RPM and package relationships, raw evidence and coverage, configurable CI, Impact, History and optional enhanced reporting. Enhanced indexes preserve unknown installed RPM totals and reconcile observed package assessments separately. Authorized users can build frozen SDK probes, plan and reconcile Runtime observations, and inspect actual Loader bindings. The package ships source-only examples.
+EROFS preparation now records the superblock, feature bits, compression, extra devices, extractor version and stderr. Standard extraction uses a trusted host `fsck.erofs` inside bounded read-only isolation. A vendor adapter must account for detected feature bits and bind input and output digests. When EROFS is blocked, supply two opted-in RPM inputs or a verified same-build rootfs replacement.
 
-The real headless SR static comparison retained 903,377 findings, 11,490 INCOMPATIBLE, and 860,294 Linking UNKNOWN. Two real ARMv7 SDKs were exercised, with 21 additional compile/link records in the Phase 8K workflow. LLVM headed verification recorded 12/12 basic successes, 19 specialized executions (12 successes, 6 expected failures, 1 environment policy mismatch), 1 optional libc++ skip and an independent 1/1 exact binding recheck. The original 32 planned slots and 44 historical attempts were reconciled. The LLVM headed functional verdict remains CONDITIONAL PASS.
+Synthetic RPMs built with real ELF verify symbol add/remove, GNU versions, TLS/IFUNC, C++ mangling, code/data size and ASAN observations. Repository tests cover independent package paths, multiple versions and architectures, a damaged archive, and controlled unsafe CPIO. Standard EROFS and Samsung KantSU2e extraction still require real tool and input validation. No internal VD data was accessed.
 
-See the [Release Acceptance](RELEASE_ACCEPTANCE.md) for final clean-package, report and regression results. Real full-size SR SQLite, VD headed, formal headless Runtime, trusted target supervision and product certification remain separate. See [Known Limitations](KNOWN_LIMITATIONS.md).
+Start with [Quick Start](QUICK_START.md), see the [RPM repository guide](.agents/skills/tizen-image-compatibility/references/rpm_repository.md), and verify [SHA256SUMS](SHA256SUMS). The v1.5.0 archive, commit and tag are retained. Prior image Runtime and certification limits are unchanged.

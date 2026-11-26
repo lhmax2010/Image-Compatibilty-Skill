@@ -219,7 +219,13 @@ class ReportBrowser:
 
 
 def serve(output, port=8765, impact=None, history=None):
-    browser = ReportBrowser(output, impact, history)
+    if (Path(output)/'repository-index.sqlite').is_file():
+        from .repository_browser import RepositoryBrowser
+        if impact is not None or history is not None:
+            raise ValueError('RPM repository indexes do not accept installed-image Impact or History sidecars')
+        browser = RepositoryBrowser(output)
+    else:
+        browser = ReportBrowser(output, impact, history)
     server = ThreadingHTTPServer(('127.0.0.1', port), browser.handler())
     print('Read-only report: http://127.0.0.1:' + str(server.server_port) + '/', flush=True)
     if impact is not None:

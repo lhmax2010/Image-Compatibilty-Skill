@@ -1,6 +1,7 @@
 """Read-only image access; archive links are resolved in the image namespace."""
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path, PurePosixPath
 import shutil
@@ -10,7 +11,7 @@ from typing import Any, Iterator
 
 from .core import InputError, InfrastructureError, Tools
 from .flash import PROBE_BYTES, PreparationError, identify
-from .preparation import MANIFEST, _stamp, prepare, prepared_input, tar_payload
+from .preparation import MANIFEST, _stamp, is_tar_container, looks_like_root, prepare, prepared_input, tar_payload
 
 
 class Image:
@@ -31,7 +32,7 @@ class Image:
                 self.root, self.metadata, self.format, self.extraction_manifest = prepared
         elif not self.source.is_file():
             raise InputError('Image input must be a directory or regular file')
-        elif tarfile.is_tarfile(self.source):
+        elif is_tar_container(self.source):
             self.format = 'tar'
             self.root = workspace / label
             self.root.mkdir()
@@ -56,17 +57,14 @@ class Image:
                 result = tools.run([binary, '-no-progress', '-no-xattrs', '-d', str(self.root), str(self.source)])
                 if result['returncode']:
                     raise InfrastructureError(f'SquashFS extraction failed: {result["stderr"]}')
-            elif prepare_input and identify(prefix) in ('gpt', 'xz', 'vdfs'):
+            elif prepare_input and identify(prefix) in ('gpt', 'xz', 'vdfs', 'erofs'):
                 self._prepare(workspace, tools, label)
-            elif prefix.startswith(b'\xed\xab\xee\xdb'):
+            elif prefix.startswith(b'\xed\xab\xee\xdb') or self.source.suffix.lower() == '.rpm':
                 self.format = 'rpm-collection'
-                self.root = workspace / label
-                self.root.mkdir()
-                name = self.source.name if self.source.suffix == '.rpm' else self.source.name + '.rpm'
-                shutil.copyfile(self.source, self.root / name)
             else:
                 raise InputError(f'Unsupported image format: {source}. For EXT4 use an isolated guest or read-only userspace extractor; for OCI export a merged rootfs. Supply the extracted directory or a rootfs TAR. No privileged mount is performed.')
-        if self.root.is_dir() and any(self.root.glob('*.rpm')) and not (self.root / 'etc').exists():
+        if self.format in ('directory','tar') and not looks_like_root(self.root) and any(
+                p.is_file() and not p.is_symlink() for p in self.root.rglob('*.rpm')):
             self.format = 'rpm-collection'
         tools.aliases[str(self.root)] = f'<{label}-rootfs>'
 
@@ -83,6 +81,11 @@ class Image:
             fields['special_files'] = 'ARCHIVE_METADATA' if self.format == 'tar' else 'UNKNOWN'
         if self.format == 'rpm-collection':
             fields = dict.fromkeys(fields, 'NOT_APPLICABLE')
+        if self.extraction_manifest:
+            observed = json.loads(self.extraction_manifest.read_text()).get('coverage',{}).get('evidence_scope',{})
+            for key in fields:
+                if observed.get(key) in ('UNKNOWN','NOT_RESTORED'):
+                    fields[key] = observed[key]
         for key, value in (declared or {}).items():
             fields[key] = 'INCLUDED_DECLARED' if value else 'NOT_RESTORED'
         return fields

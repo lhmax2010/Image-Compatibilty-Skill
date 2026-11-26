@@ -28,6 +28,16 @@ def file_format(path):
         return identify(source.read(PROBE_BYTES))
 
 
+def is_tar_container(path):
+    # tarfile accepts an all-zero initial block as an empty TAR. Raw flash
+    # files can legitimately have a zeroed prefix before their superblock.
+    try:
+        with tarfile.open(path) as archive:
+            return archive.next() is not None or file_format(path) is None
+    except (OSError, EOFError, tarfile.TarError):
+        return False
+
+
 def looks_like_root(path):
     def directory(name):
         item = path / name
@@ -127,25 +137,26 @@ def _set_coverage(record, scope, complete):
     record['coverage'] = {'scope': scope, 'complete': complete}
 
 
-def _extract_vdfs(source, work, tools, record):
-    spec = tools.config['preparation']['vdfs_adapter']
+def _extract_adapter(source, work, tools, record, kind='vdfs', erofs_info=None):
+    name = kind.upper()
+    spec = tools.config['preparation'][kind+'_adapter']
     command = spec.get('command', [])
     executable = Path(command[0]).resolve() if command else None
     if not executable or not executable.is_file() or not os.access(executable, os.X_OK):
-        raise PreparationError('VDFS_EXTRACTOR_UNAVAILABLE', 'Configure an explicitly trusted host VDFS extractor for this layout')
+        raise PreparationError(name+'_EXTRACTOR_UNAVAILABLE', 'Configure an explicitly trusted host '+name+' extractor for this layout')
     origin = Path(record['source']['path'])
     if executable == origin or executable.is_relative_to(work.parent) or (origin.is_dir() and executable.is_relative_to(origin)):
-        raise PreparationError('VDFS_ADAPTER_INVALID', 'Extractor executable must be independent of image inputs and scratch output')
+        raise PreparationError(name+'_ADAPTER_INVALID', 'Extractor executable must be independent of image inputs and scratch output')
     if source == origin:
-        copied = work / 'input.vdfs'
+        copied = work / ('input.'+kind)
         copy_partition(source, copied, {'offset': 0, 'length': source.stat().st_size}, tools.config['analysis']['max_extract_bytes'])
         source = copied
     version = tools.run([str(executable), *spec.get('version_args', ['--version'])], cwd=work, max_capture_bytes=1024**2)
     if version['returncode'] != 0 or not version['stdout'].strip() or version.get('error'):
-        raise PreparationError('VDFS_ADAPTER_VERSION_FAILED', 'Extractor did not report a version')
+        raise PreparationError(name+'_ADAPTER_VERSION_FAILED', 'Extractor did not report a version')
     record['extractor'] = {'path': str(executable), 'sha256': hash_file(executable),
                            'version': version['stdout'].strip()[:4096], 'command_template': command}
-    archive, receipt_file = work / 'vdfs-rootfs.tar', work / 'vdfs-receipt.json'
+    archive, receipt_file = work / (kind+'-rootfs.tar'), work / (kind+'-receipt.json')
     input_sha = hash_file(source)
     values = {'{input}': str(source), '{output}': str(archive), '{receipt}': str(receipt_file)}
     result = tools.run([str(executable), *(values.get(arg, arg) for arg in command[1:])],
@@ -153,13 +164,20 @@ def _extract_vdfs(source, work, tools, record):
     record['extractor'].update(exit_code=result['returncode'], evidence=[result['stdout_evidence'], result['stderr_evidence']])
     if (result['returncode'] != 0 or result.get('error') or archive.is_symlink() or not archive.is_file()
             or archive.stat().st_size > tools.config['analysis']['max_extract_bytes'] or hash_file(source) != input_sha):
-        raise PreparationError('VDFS_EXTRACTION_FAILED', 'Extractor failed, mutated the input copy, or returned an invalid TAR')
+        raise PreparationError(name+'_EXTRACTION_FAILED', 'Extractor failed, mutated the input copy, or returned an invalid TAR')
     if not tarfile.is_tarfile(archive):
-        raise PreparationError('VDFS_EXTRACTION_FAILED', 'Extractor output lacks TAR structure')
+        raise PreparationError(name+'_EXTRACTION_FAILED', 'Extractor output lacks TAR structure')
     receipt = _json(receipt_file)
-    if (receipt.get('schema') != 'tizen-vdfs-receipt/1' or receipt.get('input_sha256') != input_sha
+    if (receipt.get('schema') != 'tizen-'+kind+'-receipt/1' or receipt.get('input_sha256') != input_sha
             or receipt.get('output_tar_sha256') != hash_file(archive)):
-        raise PreparationError('VDFS_RECEIPT_MISMATCH', 'Extractor receipt does not bind its input and output bytes')
+        raise PreparationError(name+'_RECEIPT_MISMATCH', 'Extractor receipt does not bind its input and output bytes')
+    if erofs_info:
+        for key, field in (('compat','feature_compat'),('incompat','feature_incompat'),
+                           ('compression','compression_bitmap')):
+            mask = receipt.get('supported_'+key+'_mask')
+            flags = erofs_info[field] or 0
+            if type(mask) is not int or not 0 <= mask <= 0xffffffff or flags & ~mask:
+                raise PreparationError('EROFS_ADAPTER_FEATURE_UNVERIFIED','Adapter receipt does not account for detected '+key+' flags')
     record['extractor']['receipt'] = receipt
     record['layers'].append({'format': 'tar', 'role': 'adapter-output', 'sha256': receipt['output_tar_sha256']})
     rest = {part['guid'] for layer in record['layers'] if layer['format'] == 'gpt'
@@ -199,7 +217,23 @@ def _unpack_payload(path, kind, work, tools, record, inspect_only):
             if not spec or not (Path(spec[0]).is_file() and os.access(spec[0], os.X_OK)):
                 record['blocker'] = 'VDFS_EXTRACTOR_UNAVAILABLE'
             return None
-        return _extract_vdfs(path, work, tools, record)
+        return _extract_adapter(path, work, tools, record)
+    if kind == 'erofs':
+        from .erofs import blocker, extract, superblock
+        layer = superblock(path)
+        record['layers'].append(layer)
+        spec = tools.config['preparation']['erofs_adapter'].get('command')
+        refused = blocker(layer,tools)
+        if inspect_only:
+            if refused:
+                record['blocker'] = refused
+            layer['external_adapter_configured'] = bool(spec)
+            return None
+        if spec and not layer['extra_devices']:
+            return _extract_adapter(path,work,tools,record,'erofs',layer)
+        archive = extract(path,work,tools,record,layer)
+        _set_coverage(record,'runtime-rootfs',all(len(layer['partitions'])==1 for layer in record['layers'] if layer['format']=='gpt'))
+        return archive
     record['layers'].append({'format': kind or 'unknown'})
     if not inspect_only:
         raise PreparationError('FLASH_FILESYSTEM_UNSUPPORTED', 'Supply a verified extracted Rootfs or same-build replacement for the identified payload')
@@ -251,7 +285,7 @@ def prepare(source, output, tools, *, inspect_only=False, staged=None, replaceme
                 if kind == 'squashfs':
                     kind = None  # Standalone SquashFS remains on the existing path.
                 payload = (source, kind) if kind in FLASH_FORMATS else None
-                if staged is not None or (source.is_file() and tarfile.is_tarfile(source)):
+                if staged is not None or (source.is_file() and is_tar_container(source)):
                     legacy = staged or Image(source, work, tools, 'tar', prepare_input=False)
                     with source.open('rb') as stream:
                         outer = stream.read(6)
@@ -284,7 +318,8 @@ def prepare(source, output, tools, *, inspect_only=False, staged=None, replaceme
             else:
                 scope = record['coverage']['scope']
                 if scope == 'package-inventory':
-                    rpm = [p for p in legacy.root.rglob('*.rpm') if p.is_file() and not p.is_symlink()]
+                    rpm = [legacy.root] if legacy.root.is_file() else [
+                        p for p in legacy.root.rglob('*.rpm') if p.is_file() and not p.is_symlink()]
                     if not rpm or looks_like_root(legacy.root) or any(not _is_rpm(p) for p in rpm):
                         raise PreparationError('RPM_REPLACEMENT_INVALID', 'Expected a collection of raw RPM archives')
                 if scope == 'runtime-rootfs' and ('extractor' in record or replacement) and not looks_like_root(legacy.root):
@@ -293,7 +328,12 @@ def prepare(source, output, tools, *, inspect_only=False, staged=None, replaceme
                                               for x in tools.config['cross_compilation']['include_dirs']):
                     record['coverage']['complete'] = False
                 root = output / ROOTS[scope]
-                if legacy.root.is_relative_to(work):
+                if scope == 'package-inventory' and legacy.root.is_file():
+                    if legacy.root.stat().st_size > tools.config['analysis']['max_extract_bytes']:
+                        raise PreparationError('TREE_LIMIT','RPM exceeds the preparation byte limit')
+                    root.mkdir()
+                    shutil.copyfile(legacy.root,root/'input.rpm')
+                elif legacy.root.is_relative_to(work):
                     legacy.root.rename(root)
                 else:
                     # A pre-extracted input is copied; never move or edit its files.
@@ -304,6 +344,8 @@ def prepare(source, output, tools, *, inspect_only=False, staged=None, replaceme
                         legacy.format = 'tar'  # A copied tree cannot independently re-establish original security metadata.
                 write_json(output / METADATA, legacy.metadata)
                 record['coverage']['evidence_scope'] = legacy.evidence_scope()
+                if record.get('extractor', {}).get('implementation') == 'fsck.erofs':
+                    record['coverage']['evidence_scope']['uid_gid_mode'] = 'NOT_RESTORED'
                 record['output'] = {'root': ROOTS[scope], 'identity': identity(root, tools.config),
                                     'metadata_sha256': hash_file(output / METADATA), 'image_format': legacy.format}
                 if replacement and identity(replacement[0], tools.config) != record['replacement']['identity']:

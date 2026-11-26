@@ -55,7 +55,8 @@ def parse_rpm_evidence(path: Path) -> list[dict[str, Any]]:
 
 def collect_package_inventory(image: Image, tools: Tools, workspace: Path):
     rpm = tools.path('rpm')
-    archives = sorted(p for p in image.root.rglob('*.rpm') if not p.is_symlink() and p.is_file())
+    archives = ([image.root] if image.format == 'rpm-collection' and image.root.is_file() else
+                sorted(p for p in image.root.rglob('*.rpm') if not p.is_symlink() and p.is_file()))
     db = next((image.resolve(v) for v in ('/usr/lib/sysimage/rpm', '/var/lib/rpm')
                if image.resolve(v) and image.resolve(v).is_dir()), None)
     inventory = {'status': 'UNKNOWN', 'installed_count': None, 'source_kind': 'installed_rpmdb',
