@@ -3,7 +3,9 @@ name: tizen-image-compatibility
 description: Compare GCC and LLVM Tizen images or SDKs for external-interface compatibility, audit ABI/API and missing libraries or symbols, identify potentially affected applications and packages from existing reports, and run explicitly configured cross-compiler probes.
 ---
 
-# Tizen Image Compatibility
+# Tizen Image Compatibility v1.5.0
+
+Start with the bundled [Quick Start](references/QUICK_START.md). Resolve every script and reference relative to this SKILL.md.
 
 Use the executable Python framework in this directory. Compare **baseline consumers on the candidate**; reverse the inputs for the other direction. Never describe a synthetic fixture report as a real Tizen result.
 
@@ -18,10 +20,10 @@ Use the executable Python framework in this directory. Compare **baseline consum
 
 ## Commands
 
-Run from the repository root; elsewhere replace `SKILL` with this skill's absolute directory.
+Set `SKILL` to the absolute directory containing this SKILL.md. Run the command from any working directory and resolve input and output paths there.
 
 ```bash
-SKILL=.agents/skills/tizen-image-compatibility
+SKILL=/path/to/tizen-image-compatibility
 python3 "$SKILL/scripts/tizen_compat.py" \
   --baseline ./images/tizen-gcc --candidate ./images/tizen-llvm \
   --mode static --output ./reports/gcc-vs-llvm
@@ -53,9 +55,9 @@ Review the Collector execution section alongside compatibility and coverage. A f
 
 Run static analysis with the regular CLI or reuse an existing report. Use `scripts/runtime_workflow.py build` to compile reviewed recipes with pinned SDKs and freeze the output. Review the new manifest and enroll its digest and selected artifact hashes for the exact SDB target. `runtime_workflow.py run` defaults to a local plan, `--admit` reads device identity, and `--execute` requires explicit authorization. The run command emits JSON, HTML and Markdown with per-stage evidence, even when a runtime observation fails. `runtime_workflow.py report` can combine previously collected observations. Existing Phase 8E manifests remain supported by `scripts/sdb_runtime.py`.
 
-Inspect `runtime-expected-plan.json` and the report's `expected_runtime` section. Each planned repetition has its own Test ID. Keep missing, blocked and skipped tests visible. Imported receipts require an independent review ledger for observation credit. For exact bindings, use `binding_contracts` with Consumer, Provider, Symbol, Version and Provider SHA256. An observed version check alone cannot verify a binding. [Expected tests and import contract](../../../docs/reviews/phase8k-final/EXPECTED_TEST_RECONCILIATION.md)
+Inspect `runtime-expected-plan.json` and the report's `expected_runtime` section. Each planned repetition has its own Test ID. Keep missing, blocked and skipped tests visible. Imported receipts require an independent review ledger for observation credit. For exact bindings, use `binding_contracts` with Consumer, Provider, Symbol, Version and Provider SHA256. An observed version check alone cannot verify a binding. [Expected tests and import contract](references/USER_GUIDE.md)
 
-Keep headless static findings separate from `SR_HEADED_RUNTIME` observations. Actual exit, expected behavior, Loader evidence and cleanup are separate fields. The SDB observation cannot satisfy the formal headless or cross-image classification on its own. See the [integrated workflow guide](../../../docs/reviews/phase8k-llvm-full-validation/USER_GUIDE.md).
+Keep headless static findings separate from `SR_HEADED_RUNTIME` observations. Actual exit, expected behavior, Loader evidence and cleanup are separate fields. The SDB observation cannot satisfy the formal headless or cross-image classification on its own. See the [integrated workflow guide](references/USER_GUIDE.md).
 
 ## Validation and synthetic example
 
@@ -68,7 +70,7 @@ python3 "$SKILL/scripts/tizen_compat.py" \
   --output ./synthetic-report
 ```
 
-The last command deliberately returns **1** because the fixture removes a versioned export, changes a data symbol and removes a command. A pre-generated example is in [examples/synthetic-report/index.html](examples/synthetic-report/index.html).
+The last command deliberately returns **1** because the fixture removes a versioned export, changes a data symbol and removes a command. The source-only [examples](examples/README.md) explain how to generate fresh reports.
 
 For supported tools/dependencies read [tool_requirements.md](references/tool_requirements.md). For implementation, raw evidence, caching and normalization read [detection_methods.md](references/detection_methods.md). For consumers of JSON/CSV read [report_schema.md](references/report_schema.md). The detailed delivery/validation record is [implementation.md](references/implementation.md).
 
@@ -92,7 +94,7 @@ Schema 1.0/1.1 successful observations require 1.2 revalidation. Preserve failur
 
 Check `count_reconciliation`, candidate assessments and unverified package records before reporting package totals. Review `provider_consumers`, `interface_findings`, and global unassigned finding IDs. Shared-file rename/split hints are UNKNOWN, not proof of lineage. Complete data-only applicability yields NOT_APPLICABLE, not an automatic compatibility pass. `finding_integrity` makes exact duplicate occurrences visible; distinct root-consumer failures must remain distinct. A recorded failure without complete test metadata stays incompatible and partial.
 
-For a small reproducible package report see [examples/package-report](examples/package-report/README.md). The stress tool in `tests/review/benchmark_v12.py` validates serialized IDs/relationships and enforces time/memory budgets; do not describe a successful process exit without those checks as scale validation. Before product acceptance, require actual RPM inventories, matching SDK/debuginfo/ABI evidence, declared loader context, a complete expected probe list, and an authorized isolated adapter. Full prerequisites and capability categories are in the repository's `V1_2_CORRECTNESS_REMEDIATION.md`.
+For a small reproducible report see [examples](examples/README.md). The stress tool in `tests/review/benchmark_v12.py` validates serialized IDs/relationships and enforces time/memory budgets; do not describe a successful process exit without those checks as scale validation. Before product acceptance, require actual RPM inventories, matching SDK/debuginfo/ABI evidence, declared loader context, a complete expected probe list, and an authorized isolated adapter. See the [correctness guide](references/correctness.md) for prerequisites and capability boundaries.
 
 For the v1.2 release candidate, distinguish ARM calling-convention conflicts from unequal CPU architecture tags; differing tags require ISA/hardware evidence and stay UNKNOWN. Missing symbol-resolution completeness must never be assumed true. Explicit source probes are independent of built-in language toggles, but still require all normal compiler/SDK/authorization prerequisites. Candidate-only packages are inventory additions with unverified compatibility.
 
@@ -107,7 +109,7 @@ Run `python3 scripts/enhance_report.py serve --report NEW_DIRECTORY` for the loc
 When asked which applications or packages may be affected, use the impact engine. If a validated v1.3 enhanced report already exists, reuse it. For an original schema 1.2 report, first run `enhance_report.py build` into a separate directory. If there is no report, run the authorized static workflow; retain its report and Evidence.
 
 ```bash
-SKILL=.agents/skills/tizen-image-compatibility
+SKILL=/path/to/tizen-image-compatibility
 python3 "$SKILL/scripts/impact_report.py" build \
   --input ./reports/enhanced --output ./reports/impact-rc1
 python3 "$SKILL/scripts/impact_report.py" serve \
@@ -117,10 +119,10 @@ python3 "$SKILL/scripts/impact_report.py" serve \
 
 Start with confirmed static contract impacts, then report possible impacts and unassessed observations with their reason counts. Follow each group through the recorded consumer, package role, original Finding and Evidence. Preserve the original Finding status. A Provider or root package role does not establish that package's compatibility or that all its components are affected.
 
-Historical input without a baseline binding supports inferred associations only. With the corresponding Phase 7A manifests and recorded loader settings, repeat `--replay-root /exact/baseline/executable` for targeted checks. The engine uses both manifests through the existing resolver and requires a matching original candidate Finding. This mode performs no target execution. Evidence or runtime gaps lead to proposed verification, not agent-generated verdicts. An incomplete or changed source needs a new bounded build in a separate directory. See the repository's [release architecture](../../../docs/release-v1.4/01_ARCHITECTURE_AND_FEATURES.md).
+Historical input without a baseline binding supports inferred associations only. With the corresponding Phase 7A manifests and recorded loader settings, repeat `--replay-root /exact/baseline/executable` for targeted checks. The engine uses both manifests through the existing resolver and requires a matching original candidate Finding. This mode performs no target execution. Evidence or runtime gaps lead to proposed verification, not agent-generated verdicts. An incomplete or changed source needs a new bounded build in a separate directory. See the [user guide](references/USER_GUIDE.md).
 
 ## Historical regression and final validation
 
 Use `python3 scripts/history_report.py build --before OLDER_INDEX --after NEWER_INDEX --scope 'RECORDED PRODUCT LINEAGE AND DIRECTION' --output NEW_DIRECTORY` for two comparable, validated reports. `query` reads the result in bounded pages. Mount it through `enhance_report.py serve --report NEWER_INDEX --history NEW_DIRECTORY` at `/history`. An unpaired or disappeared observation is unresolved. A changed original ID requires a unique matching startup Linking context plus the same original requirement and detector before assigning a fixed or introduced risk. Keep before/after Finding IDs and coverage visible.
 
-For target work, provide both SDKs and compiler paths, native references and an authorized adapter. `cross_compilation.extended_runtime_probes: true` adds C++ cross-DSO and cancellation checks. `runtime.repetitions` checks reproducibility and runtime probe `requires` records capability gaps. Use the built-in rootless Podman backend with two preloaded, digest-pinned local images for userspace experiments, or a trusted adapter for a disposable VM/device. Container results do not establish Tizen kernel or hardware equivalence. Details and sample configuration are in [execution.md](references/execution.md) and the [final user guide](../../../docs/final-release/USER_GUIDE.md).
+For target work, provide both SDKs and compiler paths, native references and an authorized adapter. `cross_compilation.extended_runtime_probes: true` adds C++ cross-DSO and cancellation checks. `runtime.repetitions` checks reproducibility and runtime probe `requires` records capability gaps. Use the built-in rootless Podman backend with two preloaded, digest-pinned local images for userspace experiments, or a trusted adapter for a disposable VM/device. Container results do not establish Tizen kernel or hardware equivalence. Details and sample configuration are in [execution.md](references/execution.md) and the [final user guide](references/USER_GUIDE.md).

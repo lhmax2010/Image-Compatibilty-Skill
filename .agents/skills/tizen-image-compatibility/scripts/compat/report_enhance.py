@@ -88,9 +88,16 @@ def validate(store, row_counts):
         require('original_csv_all_fields_and_payloads', next(indexed, None) is None and n == store.finding_count)
     require('status_histogram', dict(db.execute('SELECT status,count(*) FROM findings GROUP BY status')) == dict(store.histogram))
     inv = store.metadata['package_inventory']
-    for side in ('baseline', 'candidate'):
-        expected = inv.get(side + '_package_count')
-        require(side + '_package_count', expected is not None and expected == db.execute('SELECT count(*) FROM packages WHERE side=?', (side,)).fetchone()[0])
+    assessment_counts = {'baseline': store.metadata['package_results']['record_count'],
+                         'candidate': inv['candidate_assessments']['record_count']}
+    for side, assessed in assessment_counts.items():
+        installed = inv[side + '_package_count']
+        rows = dict(db.execute('SELECT scope,count(*) FROM packages WHERE side=? GROUP BY scope', (side,)))
+        require(side + '_package_assessments', assessed == sum(rows.values()))
+        # The installed inventory is a runtime total; source assessments may be
+        # partial or include SDK records. Keep a null installed total as unknown.
+        require(side + '_package_count', installed is None or
+                type(installed) is int and installed == rows.get('runtime', 0))
     with (store.source / 'packages.csv').open(newline='') as stream:
         seen = set()
         for row in csv.DictReader(stream):
@@ -106,7 +113,7 @@ def validate(store, row_counts):
                 if summary[key] != original.get(key):
                     raise ValueError('Changed original package field ' + key)
             check()
-        require('all_original_package_statuses', len(seen) == inv['baseline_package_count'])
+        require('all_original_package_statuses', len(seen) == assessment_counts['baseline'])
     for package in db.execute('SELECT * FROM packages'):
         summary = json.loads(package['summary'])
         totals = Counter({k: 0 for k in COUNTS})
@@ -138,7 +145,7 @@ def validate(store, row_counts):
             == row_counts['linking-group-members.csv'])
     require('no_non_linking_group_members', not db.execute("SELECT id FROM findings WHERE (dimension='linking') != (group_id IS NOT NULL)").fetchone())
     require('finding_index_complete', row_counts['finding-index.csv'] == n)
-    require('required_package_csv_complete', row_counts['package-symbol-summary.csv'] == inv['baseline_package_count'] + inv['candidate_package_count'])
+    require('required_package_csv_complete', row_counts['package-symbol-summary.csv'] == sum(assessment_counts.values()))
     # Read back every generated CSV, including all symbol/group records.
     for filename, expected in row_counts.items():
         count = 0

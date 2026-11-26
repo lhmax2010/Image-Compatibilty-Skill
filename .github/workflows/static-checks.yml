@@ -1,0 +1,17 @@
+name: Static checks
+on: [push, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  offline-regression:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and run the host regression suite
+        run: |
+          python3 -m compileall -q .agents/skills/tizen-image-compatibility/scripts .agents/skills/tizen-image-compatibility/tests
+          python3 -m unittest discover -s .agents/skills/tizen-image-compatibility/tests -v
+      - name: Check whitespace and assemble the standalone package
+        run: |
+          git diff --check
+          python3 tools/package_skill.py --output ./build/skill-package

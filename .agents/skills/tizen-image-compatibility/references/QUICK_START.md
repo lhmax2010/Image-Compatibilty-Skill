@@ -1,0 +1,32 @@
+# Quick Start
+
+Install the complete `tizen-image-compatibility` directory from the internal v1.5.0 archive. Keep its name and set `SKILL` to its absolute path. Run Python 3.10+ on Linux, including WSL or a remote Linux terminal. Use `readelf` (GNU binutils) for ELF analysis and `rpm` when RPM inventory matters. The default static CLI needs no Python packages, network, SDK, SDB, QEMU or root. A host C compiler is only needed to generate the synthetic example.
+
+## Compare two images
+
+Run these commands from a writable analysis directory. Set `SKILL` after installing the directory.
+
+```bash
+SKILL=/path/to/tizen-image-compatibility
+python3 "$SKILL/scripts/tizen_compat.py" --list-tools --output ./tools-check
+python3 "$SKILL/scripts/tizen_compat.py" \
+  --baseline /path/to/baseline-rootfs --candidate /path/to/candidate-rootfs \
+  --mode static --output ./comparison
+```
+
+Use a new or empty output location outside your input images. Baseline is the old consumer contract and candidate is the replacement environment. Open `comparison/index.html` or `summary.md`. Keep `results.json`, `findings.csv`, any package CSV and the `evidence/` directory together for review.
+
+The static CLI returns 0 when the configured gate passes, 1 when compatibility or a strict gate fails, 2 for invalid input/configuration and 3 for critical collection/infrastructure failure. Inspect the report on exit 1 or 3. An `UNKNOWN` row has insufficient evidence. Coverage measures verification completeness independently of reported compatibility.
+
+## Try it without product images
+
+```bash
+python3 "$SKILL/scripts/make_synthetic_fixture.py" ./synthetic-images
+python3 "$SKILL/scripts/tizen_compat.py" \
+  --baseline ./synthetic-images/baseline --candidate ./synthetic-images/candidate \
+  --mode static --output ./synthetic-report
+```
+
+Exit 1 is expected. The reports show an intentionally removed symbol, header and command differences, and missing evidence for checks the fixture cannot establish. Do not run the fixture's target files.
+
+See the [User Guide](USER_GUIDE.md) for Cline installation, image preparation, report queries, SDK and Runtime.

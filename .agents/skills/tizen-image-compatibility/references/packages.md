@@ -54,7 +54,7 @@ Count reconciliation is explicit for runtime and SDK inventories. Every reliable
 
 The version-2 stress fixture includes 2000 package pairs, 20000 export-removal findings, 2000 cross-package linking findings, 200 API gaps and one unowned finding (22201 total). Its verifier reads JSON/CSV back and compares exact ID multisets, statuses, ownership and dependency edges, plus exact HTML previews and Markdown package rows. It checks no finding is lost between package associations and global unassigned records. Default budgets are 30 seconds and 768 MiB including serialization/readback; configure these for the runner. `--reference previous/benchmark.json --max-regression-factor 2` rejects significant measured regression at the same fixture version/scale. Reference validation is not a proof of asymptotic complexity or actual Tizen performance.
 
-A small generated report is available in [examples/package-report](../examples/package-report/README.md). Full regression mapping, measured results and production prerequisites are linked from the repository README.
+Generate a small report using the bundled [examples](../examples/README.md). See the [user guide](USER_GUIDE.md) for report navigation and prerequisites.
 
 ## Report-only export accounting (v1.3)
 

@@ -104,6 +104,35 @@ class EnhancementTests(unittest.TestCase):
         self.assertIsNone(package['owned_elf_count'])
         self.assertEqual(package['observed_counts']['exports'], 12)
 
+    def test_unknown_install_count_preserves_observed_assessments(self):
+        for has_records in (False, True):
+            with self.subTest(has_records=has_records), tempfile.TemporaryDirectory() as directory:
+                source = Path(directory)/'source'
+                source.mkdir()
+                output = Path(directory)/'enhanced'
+                a, b, fs, config = fixture()
+                a['package_inventory'].update(status='PARTIAL' if has_records else 'UNKNOWN', installed_count=None)
+                if not has_records:
+                    a['packages'] = []
+                result = build_results(a, b, fs, [], [], config)
+                generate(source, a, b, result, config)
+                self.assertEqual(build(source, output, FixtureGuard)['status'], 'PASS')
+                overview = ReportBrowser(output).query('overview', {})
+                self.assertIsNone(overview['images']['baseline']['inventory']['installed_count'])
+                self.assertEqual(overview['images']['baseline']['package_rows'], 2 if has_records else 0)
+                self.assertEqual(overview['finding_count'], len(fs))
+
+    def test_contradictory_known_install_count_still_fails_reconciliation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)/'source'
+            source.mkdir()
+            a, b, fs, config = fixture()
+            result = build_results(a, b, fs, [], [], config)
+            result['package_inventory']['baseline_package_count'] += 1
+            generate(source, a, b, result, config)
+            with self.assertRaisesRegex(ValueError, 'baseline_package_count'):
+                build(source, Path(directory)/'enhanced', FixtureGuard)
+
     def test_export_types_and_version_counts(self):
         row = self.db.execute("SELECT counts FROM elf WHERE side='baseline' AND path='/usr/lib/libsynthetic0.so'").fetchone()
         counts = json.loads(row[0])

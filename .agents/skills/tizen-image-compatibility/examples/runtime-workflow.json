@@ -1,0 +1,13 @@
+{
+  "runs": [
+    {
+      "manifest": "/path/to/reviewed/probe-manifest.json",
+      "manifest_sha256": "<independently-fixed-sha256>",
+      "bundle": "/path/to/frozen/bundle",
+      "enrollment": "/path/to/local/enrollment.json",
+      "artifacts": [
+        {"artifact_id": "version-present", "repetitions": 1, "required": true}
+      ]
+    }
+  ]
+}

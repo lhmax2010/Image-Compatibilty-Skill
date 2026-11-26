@@ -92,7 +92,7 @@ ARM example triples/float flags must match your product's SDK; do not assume all
 
 ## SR headed SDB observations
 
-The single-device SDB entry can plan, admit, or run one allowed Phase 8E artifact in an existing authorized nonroot user scope. The observation report keeps this workflow separate from the formal headless matrix and records independent process and directory observations. See the [SDB adapter protocol](../../../../docs/reviews/phase8j/ADAPTER_PROTOCOL.md).
+The single-device SDB entry can plan, admit, or run an approved Phase 8E artifact or a reviewed probe bundle in an existing authorized nonroot user scope. The observation report keeps this workflow separate from the formal headless matrix and records independent process and directory observations. See the [SDB adapter protocol](USER_GUIDE.md#optional-sdk-and-runtime).
 
 ## Expected tests and complete verification (1.2)
 
@@ -104,7 +104,7 @@ Build tests require target ABI, compilation and linking. Header tests require ta
 
 ## ARMv7 primary ABI and supporting runtime objects
 
-The rootless Podman backend is configured separately from the external `runner` example. It requires a preloaded pinned image ID, a trusted local controller, and dedicated storage outside both input images and SDKs. Set `runtime.repetitions` from 1 to 5 and use each custom probe's `requires` tags to declare prerequisites. The built-in C++ cross-DSO probe is opt-in with `cross_compilation.extended_runtime_probes`. A matching external adapter can deploy `{companion}` alongside `{binary}` and must return the deployed `companion_sha256`. See the [final user guide](../../../../docs/final-release/USER_GUIDE.md) for configuration and limits.
+The rootless Podman backend is configured separately from the external `runner` example. It requires a preloaded pinned image ID, a trusted local controller, and dedicated storage outside both input images and SDKs. Set `runtime.repetitions` from 1 to 5 and use each custom probe's `requires` tags to declare prerequisites. The built-in C++ cross-DSO probe is opt-in with `cross_compilation.extended_runtime_probes`. A matching external adapter can deploy `{companion}` alongside `{binary}` and must return the deployed `companion_sha256`. See the [final user guide](USER_GUIDE.md#optional-sdk-and-runtime) for configuration and limits.
 
 Configure the actual SDK ABI with provenance. The following values are examples, **not defaults for all Tizen products**:
 
