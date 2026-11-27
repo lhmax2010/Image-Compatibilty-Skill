@@ -186,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise InputError('Compare two RPM repositories or two runtime Rootfs inputs; their scopes differ')
             if all(repo_inputs):
                 from compat.repository import compare_repository
-                repo,findings = compare_repository(a,b,config)
+                repo,findings = compare_repository(a,b,config,output)
             else:
                 findings = compare_static(a, b, config)
             if repo is None and roots and args.mode != 'quick' and 'abi' in config['analysis']['modes']:
@@ -226,6 +226,7 @@ def main(argv: list[str] | None = None) -> int:
             result['scope'] = repo['scope'] if repo else 'RUNTIME_ROOTFS'
             if repo:
                 result['repository'] = repo
+                result.update(comparison_validity=repo['comparison_validity'],confounders=repo['confounders'])
             generate(output, a, b, result, config, objective=args.objective, reused=bool(args.baseline_manifest))
             save(output, result['run_summary'])
             finalized = True

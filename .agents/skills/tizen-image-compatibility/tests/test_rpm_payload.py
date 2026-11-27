@@ -259,7 +259,10 @@ touch "{cls.root}/SCRIPTLET-RAN"
             rows = list(csv.DictReader(stream))
         findings = [f for f in self.results['findings'] if f['status']=='INCOMPATIBLE']
         self.assertTrue(any(f['interface'].startswith('removed_symbol') for f in findings))
-        self.assertTrue(any(f['interface'].startswith('data_contract') and f['interface'].endswith(':size') for f in findings))
+        (size,) = [f for f in self.results['findings'] if f['interface'].startswith('data_contract')
+                   and f['interface'].endswith(':size')]
+        self.assertEqual((size['status'],size['reason_code']),('UNKNOWN','INSTRUMENTATION_MISMATCH') if self.asan_available
+                         else ('INCOMPATIBLE','DATA_SIZE_INCREASED'))
         self.assertFalse(any(f['interface'].startswith('stable_code') and f['interface'].endswith(':size') for f in findings))
         self.assertTrue(any('CODE_SIZE_CHANGED' in row['details'] for row in rows))
         self.assertTrue(any('DATA_SIZE_CHANGED' in row['details'] for row in rows))
@@ -274,6 +277,9 @@ touch "{cls.root}/SCRIPTLET-RAN"
         if self.asan_available:
             self.assertIn('libasan.so',(self.output/'elf-symbol-summary.csv').read_text())
         stats = self.results['repository']['symbol_differences']
+        self.assertEqual(stats['exports_baseline_unsatisfied'],2)
+        self.assertEqual({json.loads(row['baseline'])['name'] for row in rows if row['baseline_identity_satisfied']=='false'},
+                         {'removed_symbol@@NEXT_1','version_switch@@NEXT_1'})
         changes = dict(Counter(r['change'] for r in rows))
         self.assertEqual(stats['by_change'],changes)
         for role,summary in stats['by_role'].items():

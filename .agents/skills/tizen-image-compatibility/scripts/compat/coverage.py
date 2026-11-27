@@ -90,6 +90,10 @@ def coverage_report(a, b, findings, tests, matrix, config):
             peer = right.get(SECTIONS.get(dim), {}).get(obj.get('path', obj.get('name')))
             if dim == 'abi':
                 layout = [f for f in fs if f['interface'] == 'DWARF type/layout ABI']
+                if obj.get('elf_runtime_role') == 'DEBUG_ONLY':
+                    units.append(obligation(path + ':exports', [check('export inventory', 'NOT_APPLICABLE')]))
+                    units.append(obligation(path + ':type-layout', [finding_check('DWARF type/layout ABI', layout)], layout))
+                    continue
                 surface = [f for f in fs if f not in layout]
                 complete = bool(peer and obj.get('complete') and peer.get('complete')
                                 and obj.get('export_inventory_complete') is True and peer.get('export_inventory_complete') is True)

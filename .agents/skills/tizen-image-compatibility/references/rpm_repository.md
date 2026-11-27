@@ -6,7 +6,7 @@ Provide two single RPMs or two directories of local archives. Directory discover
 SKILL=/path/to/tizen-image-compatibility
 python3 "$SKILL/scripts/tizen_compat.py" \
   --baseline /path/to/vd-gcc-rpms \
-  --candidate /path/to/vd-llvm-asan-rpms \
+  --candidate /path/to/vd-llvm-rpms \
   --rpm-mode payload --output ./vd-rpm-report
 ```
 
@@ -43,8 +43,22 @@ Use a reviewed same-build replacement with the [preparation receipt](image_prepa
 python3 "$SKILL/scripts/tizen_compat.py" \
   --baseline ./gcc-flash.tar.gz --candidate ./llvm-flash.tar.gz \
   --baseline-rpm-fallback /path/to/vd-gcc-rpms \
-  --candidate-rpm-fallback /path/to/vd-llvm-asan-rpms \
+  --candidate-rpm-fallback /path/to/vd-llvm-rpms \
   --output ./vd-report
 ```
 
 An EROFS preparation error retains the extraction manifest and switches the entire comparison to the supplied RPM inputs. The result scope is `RPM_REPOSITORY_PAYLOAD` (or `RPM_REPOSITORY_METADATA` when selected). The association between the image and manually supplied RPMs is operator-declared. A verified same-build replacement can bind original and replacement hashes explicitly.
+
+## Repository-wide ELF and requirement checks
+
+When a package-local pair is unavailable, a unique cross-package path or SONAME match can continue symbol comparison. ELF summary rows retain both package IDs. Reused or ambiguous providers remain unresolved. A SONAME removal becomes a confirmed repository-scope break once both payload inventories are complete.
+
+`AVAILABLE_SET` checks baseline dynamic requirements against both repositories. The baseline control prevents an already-unsatisfied requirement from being reported as a candidate break. The candidate check evaluates SONAME availability, GNU version definitions and qualified imports. It uses a cycle-safe transitive SONAME closure with a depth limit of 32 for unqualified imports. Missing unqualified imports remain UNKNOWN. Distinct providers that disagree produce ambiguity. The counts describe the available payloads. Loader choice, installed products and runtime binding require separate evidence.
+
+`requirement-findings.csv` lists every failed and unknown requirement when CSV is enabled. The JSON Findings retain up to 1,000 examples per reason, while repository statistics and run-summary retain full counts by requirement kind and reason. The ordinary findings totals reflect the visible Findings. See the available-set totals for cases above the example cap.
+
+`baseline_identity_satisfied` in symbol-differences.csv describes observed lookup support for each baseline export row. A row labelled CHANGED can still fail the baseline's original version. `exports_baseline_unsatisfied` counts those false cells. Split debug objects have no applicable export coverage and remain eligible for type/layout analysis.
+
+## Instrumentation
+
+Prefer matching instrumentation on both sides. A GCC plain → LLVM ASan run records the mismatch and emits a confounded banner when the observed shares cross its policy thresholds (20% or more versus 2% or less). Individual mismatched pairs downgrade affected data-size findings even below those run-level thresholds. Instrumentation exports are INFO, and ordinary symbol removals, kind changes and version changes retain their classification. Inspect the banner and counts together with payload coverage before using the result as release evidence.

@@ -50,8 +50,10 @@ See the [User Guide](USER_GUIDE.md) for Cline installation, image preparation, r
 
 ```bash
 python3 "$SKILL/scripts/tizen_compat.py" \
-  --baseline /path/to/vd-gcc-rpms --candidate /path/to/vd-llvm-asan-rpms \
+  --baseline /path/to/vd-gcc-rpms --candidate /path/to/vd-llvm-rpms \
   --rpm-mode payload --output ./rpm-comparison
 ```
 
 This needs host `rpm`, `rpm2cpio` and `readelf`. Inputs can be individual RPMs or recursive directories. View `index.html`, `elf-symbol-summary.csv`, `symbol-differences.csv` and `extraction-errors.csv`. The scope is `RPM_REPOSITORY_PAYLOAD`. Use `--rpm-mode metadata` for an inventory-only run.
+
+Match instrumentation for a GCC-to-LLVM compatibility decision. A GCC plain to LLVM ASan run can still report missing libraries and symbols. It displays instrumentation confounds and downgrades affected data-size findings. Treat the run as an instrumentation-mismatched comparison in review.

@@ -4,8 +4,10 @@ from collections import Counter, defaultdict
 from .compare import compare_elf, finalize
 from .core import canonical, digest, finding, write_json
 from .elf import duplicate_dynsym_names, dynamic_exports, symbol_identity, symbol_multimap
+from .profile import comparison_profile, runtime_object
 from .report_io import csv_rows
 from .report_symbols import size_difference
+from .repository_pairing import reconcile
 from .rpm_payload import FIELDS
 
 
@@ -109,7 +111,31 @@ def package_objects(groups, representatives, dictionaries, pairable):
                        obj if side=='candidate' else None, identity)
 
 
-def compare_repository(a,b,config):
+def complete_payload(repo, objects):
+    return (repo['inventory_complete'] and all(row['extraction_status']=='COMPLETE' for row in repo['archives'])
+            and repo['counts']['elf_observed']==len(objects)
+            and all(obj.get('complete') and (obj.get('elf_runtime_role')=='DEBUG_ONLY'
+                    or obj.get('export_inventory_status')=='NOT_APPLICABLE'
+                    or obj.get('export_inventory_complete') is True) for obj in objects))
+
+
+def unpaired_finding(obj, component, complete, alternatives, scope):
+    if alternatives:
+        code,status,severity = 'PROVIDER_AMBIGUOUS','UNKNOWN','MEDIUM'
+    elif obj.get('type','').startswith('EXEC') or obj.get('interpreter'):
+        code,status,severity = 'EXECUTABLE_NOT_FOUND','UNKNOWN','LOW'
+    elif runtime_object(obj) and obj.get('soname'):
+        code,status,severity = (('LIBRARY_REMOVED','INCOMPATIBLE','HIGH') if complete else
+                                ('LIBRARY_NOT_FOUND_INCOMPLETE_INVENTORY','UNKNOWN','MEDIUM'))
+    else:
+        code,status,severity = 'OBJECT_UNPAIRED','UNKNOWN','INFO'
+    return finding('abi',component,'Repository ELF path availability',obj['package_path'],alternatives or None,
+                   status,severity,'repository-wide payload matching',obj.get('evidence'),
+                   'Available RPM payload scope. A unique candidate object is required to continue the comparison.',
+                   reason_code=code) | {'scope':scope}
+
+
+def compare_repository(a,b,config,output=None):
     repos = (a['repository'],b['repository'])
     return_scope = ('RPM_REPOSITORY_PAYLOAD' if all(r['scope']=='RPM_REPOSITORY_PAYLOAD' for r in repos)
                     else 'RPM_REPOSITORY_METADATA')
@@ -118,6 +144,8 @@ def compare_repository(a,b,config):
     names = set(grouped[0]) | set(grouped[1])
     complete = [r['inventory_complete'] for r in repos]
     out, packages, pairs = [], [], []
+    package_findings = defaultdict(list)
+    owners = [{}, {}]
     candidate_caps = defaultdict(list)
     for p in repos[1]['archives']:
         if p['metadata_status']=='COMPLETE':
@@ -153,37 +181,71 @@ def compare_repository(a,b,config):
                         findings.append(finding('packages','/@repository/'+package_id,field,
                             diff['removed'],diff['added'],'UNKNOWN','INFO','RPM metadata contract delta',refs))
             safe_pair = pairable and all(p['extraction_status']=='COMPLETE' for p in (pkg_a,pkg_b))
+            for side, group in enumerate((left, right)):
+                for archive in group:
+                    for path in archive['objects']:
+                        owners[side][path] = (package_id, nevra(archive))
             for matching,o,p,archive_identity in package_objects((left,right),(pkg_a,pkg_b),dictionaries,pairable):
                 identity = (o or p)['package_path']
                 component = '/@repository/'+package_id+(archive_identity or identity)
-                elf_status = 'NOT_VERIFIED'
-                comparisons = []
-                if o and p and safe_pair:
-                    comparisons = compare_elf({'elf_objects':[o | {'path':component}]},
-                                              {'elf_objects':[p | {'path':component}]})
-                    elf_status = ('INCOMPATIBLE' if any(x['status']=='INCOMPATIBLE' for x in comparisons) else
-                                  'OBSERVED' if o.get('complete') and p.get('complete') else 'NOT_VERIFIED')
-                elif o:
-                    comparisons = [finding('abi',component,'Repository ELF path availability',identity,None,
-                                   'UNKNOWN','INFO','scoped RPM payload matching',o.get('evidence'),
-                                   'No unique verified ELF pair establishes interface continuity.')]
-                findings.extend(comparisons)
-                pairs.append({'package_id':package_id,'component':component,'match':matching,'status':elf_status,
+                pairs.append({'package_id':package_id,'component':component,'match':matching,'safe_pair':safe_pair,
+                              'baseline_package_id':package_id if o else None,'candidate_package_id':package_id if p else None,
                               'baseline_object':o['path'] if o else None,'candidate_object':p['path'] if p else None})
-            active = finalize(findings,config)
-            row['finding_ids'] = [f['id'] for f in active]
-            row['status'] = 'INCOMPATIBLE' if any(f['status']=='INCOMPATIBLE' for f in active) else 'UNKNOWN'
+            package_findings[package_id].extend(findings)
             packages.append(row)
-            out.extend(active)
+    payload_complete = [complete_payload(repo, list(objects.values())) for repo,objects in zip(repos,dictionaries)]
+    pairs, ambiguous = reconcile(pairs,dictionaries)
+    downgrades = Counter()
+    components = {}
+    for pair in pairs:
+        o,p = (dictionaries[i].get(pair[side+'_object']) for i,side in enumerate(('baseline','candidate')))
+        component = pair['component']
+        if o:
+            components[o['path']] = component
+        comparisons = []
+        safe_pair = pair.pop('safe_pair')
+        if o and ((p and safe_pair) or o.get('elf_runtime_role')=='DEBUG_ONLY'):
+            comparisons = compare_elf({'elf_objects':[o | {'path':component}]},
+                                      {'elf_objects':[p | {'path':component}] if p else []}, repository=True)
+        elif o:
+            comparisons = [unpaired_finding(o,component,all(payload_complete) and p is None and o.get('complete'),
+                                            ambiguous.get(o['path'],[]),return_scope)]
+            pair['availability_reason'] = comparisons[0]['reason_code']
+        pair['status'] = ('INCOMPATIBLE' if any(f['status']=='INCOMPATIBLE' for f in comparisons) else
+                          'OBSERVED' if o and p and safe_pair and o.get('complete') and p.get('complete') else 'NOT_VERIFIED')
+        for f in comparisons:
+            if f['dimension'] in config['analysis']['modes'] and f.get('reason_code') in ('INSTRUMENTATION_MISMATCH','INSTRUMENTATION_SYMBOL'):
+                downgrades[f['reason_code']] += 1
+        for owner in {pair['baseline_package_id'],pair['candidate_package_id']} - {None}:
+            package_findings[owner].extend(comparisons)
+    for row in packages:
+        active = finalize(package_findings[row['id']],config)
+        row['finding_ids'] = [f['id'] for f in active]
+        row['status'] = 'INCOMPATIBLE' if any(f['status']=='INCOMPATIBLE' for f in active) else 'UNKNOWN'
+    seen = {}
+    for findings in package_findings.values():
+        for f in findings:
+            seen[f['id']] = f
+    out.extend(seen.values())
     for side,repo in zip(('baseline','candidate'),repos):
         for error in repo['errors']:
             out.append(finding('packages',side+':'+error['archive'],'RPM '+error['stage']+' coverage',None,error['reason'],
                                'UNKNOWN','HIGH','repository collection',error['evidence']))
     out.append(finding('linking','repository','Installed loader coverage',None,None,'UNKNOWN','INFO',
                        impact='Repository comparisons establish ELF contracts only; the installed loader and provider set are unverified.'))
+    requirements = None
+    if return_scope=='RPM_REPOSITORY_PAYLOAD' and 'linking' in config['analysis']['modes']:
+        from .requirements import check_available_set
+        requirements, examples = check_available_set(dictionaries, owners[0], components, payload_complete,
+                                                      output if config['report']['csv'] else None)
+        out.extend(examples)
     stats = [r['counts'] | symbol_counts(m['elf_objects']) for m,r in zip((a,b),repos)]
+    for counts, complete in zip(stats,payload_complete):
+        counts['payload_inventory_complete'] = complete
     return {'scope':return_scope,'baseline':stats[0],'candidate':stats[1],
             'packages':packages,'elf_pairs':pairs,'inventory_states':dict(Counter(p['inventory_status'] for p in packages)),
+            **comparison_profile(a['elf_objects'],b['elf_objects']),
+            'instrumentation_downgrades':dict(downgrades), 'requirements':requirements,
             'errors':[{'side':side,**e} for side,r in zip(('baseline','candidate'),repos) for e in r['errors']]},finalize(out,config)
 
 
@@ -214,7 +276,26 @@ def symbol_counts(objects):
 
 
 def symbol_rows(pair,o,p,findings):
-    duplicates = duplicate_dynsym_names(o) | duplicate_dynsym_names(p)
+    if (o or p).get('elf_runtime_role')=='DEBUG_ONLY':
+        return
+    candidate_duplicates = duplicate_dynsym_names(p)
+    duplicates = duplicate_dynsym_names(o) | candidate_duplicates
+    candidate_ids = [symbol_identity(s['name']) for s in dynamic_exports(p)]
+    qualified = {(s['base_name'],s['version']) for s in candidate_ids}
+    defaults = {s['base_name'] for s in candidate_ids if s['default_version'] or not s['version']}
+
+    def satisfaction(symbol):
+        if not symbol:
+            return None
+        if pair.get('availability_reason')=='LIBRARY_REMOVED':
+            return 'false'
+        identity = symbol_identity(symbol['name'])
+        if symbol['name'] in duplicates or candidate_duplicates or p.get('export_inventory_complete') is not True:
+            return 'unknown'
+        found = ((identity['base_name'],identity['version']) in qualified if identity['version']
+                 else identity['base_name'] in defaults)
+        return 'true' if found else 'false'
+
     for role in ('EXPORT','IMPORT'):
         groups = [symbols(obj,role) for obj in (o,p)]
         ready = not duplicates and all(obj.get('export_inventory_complete') is True for obj in (o,p))
@@ -225,6 +306,7 @@ def symbol_rows(pair,o,p,findings):
                 for row in sorted(records,key=canonical):
                     yield {'package_id':pair['package_id'],'component':pair['component'],'role':role,
                            'change':side.upper()+'_OBSERVED','details':['DUPLICATE_DYNSYM_IDENTITY'],'status':'UNKNOWN',
+                           'baseline_identity_satisfied':'unknown' if role=='EXPORT' and i==0 else None,
                            'baseline':row if i==0 else None,'candidate':row if i==1 else None,'finding_ids':[],
                            'baseline_sha256':o.get('sha256'),'candidate_sha256':p.get('sha256'),
                            'evidence':sorted(set(o.get('evidence',[])+p.get('evidence',[])))}
@@ -282,6 +364,7 @@ def symbol_rows(pair,o,p,findings):
             matches = [f for name in names for f in findings.get(name,[])] if role=='EXPORT' else []
             statuses = {f['status'] for f in matches}
             yield {'package_id':pair['package_id'],'component':pair['component'],'role':role,'change':change,
+                   'baseline_identity_satisfied':satisfaction(x) if role=='EXPORT' else None,
                    'details':changed,'status':('INCOMPATIBLE' if 'INCOMPATIBLE' in statuses else
                                               'COMPATIBLE' if statuses=={'COMPATIBLE'} else 'UNKNOWN'),
                    'baseline':x,'candidate':y,'finding_ids':sorted({f['id'] for f in matches}),
@@ -309,14 +392,17 @@ def symbol_differences(results, objects):
             by_component[f['component']][label].append(f)
     changes = Counter()
     roles = {'EXPORT':Counter(),'IMPORT':Counter()}
+    unsatisfied = 0
     for pair in results['repository']['elf_pairs']:
         o,p = (objects[i].get(pair[side+'_object'],{}) for i,side in enumerate(('baseline','candidate')))
         for row in symbol_rows(pair,o,p,by_component[pair['component']]):
             changes[row['change']] += 1
             roles[row['role']][row['change']] += 1
+            unsatisfied += row.get('baseline_identity_satisfied')=='false'
             yield row
     results['repository']['symbol_differences'] = {
         'rows':sum(changes.values()),'by_change':dict(sorted(changes.items())),
+        'exports_baseline_unsatisfied':unsatisfied,
         'by_role':{role:{'rows':sum(counts.values()),'by_change':dict(sorted(counts.items()))}
                    for role,counts in roles.items()}}
 
@@ -367,8 +453,10 @@ def export_repository(output,a,b,results):
     csv_rows(output/'elf-symbol-summary.csv',('package_id','component','match','status')+
              tuple(side+'_'+f for side in ('baseline','candidate') for f in
                    ('path','sha256','soname','needed','exports','imports','export_status','arm_abi','asan','evidence',
-                    'export_unique_symbol_names','export_lookup_identities','import_unique_symbol_names','import_lookup_identities')),elf_stats())
+                    'export_unique_symbol_names','export_lookup_identities','import_unique_symbol_names','import_lookup_identities'))
+             + ('baseline_package_id','candidate_package_id'),elf_stats())
     csv_rows(output/'symbol-differences.csv',('package_id','component','role','change','details','status',
-             'baseline','candidate','finding_ids','baseline_sha256','candidate_sha256','evidence'),symbol_differences(results,objects))
+             'baseline','candidate','finding_ids','baseline_sha256','candidate_sha256','evidence',
+             'baseline_identity_satisfied'),symbol_differences(results,objects))
     csv_rows(output/'extraction-errors.csv',('side','archive','stage','path','reason','evidence'),repo['errors'])
     write_json(output/'rpm-repository.json',{k:repo[k] for k in ('scope','baseline','candidate','inventory_states','symbol_differences')})

@@ -155,6 +155,11 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
             '<tr>' + ''.join('<td><pre>' + esc(x) + '</pre></td>' for x in row) + '</tr>' for row in rows) + '</tbody></table>'
     summary = results['summary']
     handoff = results.get('run_summary', {})
+    banner = ''
+    if results.get('comparison_validity') == 'CONFOUNDED':
+        shares = ', '.join(f"{c['kind']} (baseline {c['baseline_share']:.1%}, candidate {c['candidate_share']:.1%})"
+                           for c in results['confounders'])
+        banner = f'Comparison confounded by instrumentation difference: {shares}. Size findings are downgraded.'
     headline = [('Input scope','scope'), ('Requested objective','requested_objective'),
                 ('Objective completion','objective_completion'), ('Execution status','execution_status'),
                 ('Compatibility status','compatibility_status'), ('Coverage status','coverage_status')]
@@ -164,6 +169,8 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
             f"Tests: {summary['total_tests']}; passed: {summary['passed_tests']}; failed: {summary['failed_tests']}; unknown: {summary['unknown_tests']}.",
             f"Findings: {summary['findings']}; incompatible: {summary['by_status']['INCOMPATIBLE']}; unknown: {summary['by_status']['UNKNOWN']}.", '',
             'Static findings are not executable test counts. No runtime execution means no runtime pass.', '']
+        if banner:
+            lines[:0] = [banner, '']
         if handoff:
             lines += [f'- **{label}** {esc(handoff[key])}' for label, key in headline] + ['']
             lines += ['See `run-summary.json` for the compact machine-readable handoff.', '']
@@ -191,6 +198,9 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
                       'Baseline: '+canonical(repo['baseline']), 'Candidate: '+canonical(repo['candidate']),
                       'Package changes: '+canonical(repo['inventory_states']),
                       'See packages.csv, package-symbol-summary.csv, elf-symbol-summary.csv, symbol-differences.csv and extraction-errors.csv.']
+            if repo.get('requirements'):
+                lines += ['Available-set requirements: '+canonical(repo['requirements']),
+                          'See requirement-findings.csv for all failed and unknown requirements when CSV is enabled.']
         lines += ['', '## Cross-compatibility matrix', '', '| Compiler | Image | Compile | Link | Deploy | Execute | Behavior | Overall |', '|---|---|---|---|---|---|---|---|']
         for cell in results['matrix']:
             lines.append('| ' + ' | '.join(esc(cell.get(k, 'UNKNOWN')) for k in ('compiler', 'image', 'compile_status', 'link_status',
@@ -201,7 +211,8 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
         lines += ['', 'Excluded dimensions: ' + ', '.join(results['excluded_dimensions']), '', 'See index.html, results.json and evidence/ for details.']
         (output / 'summary.md').write_text('\n'.join(lines) + '\n')
     if report['html']:
-        content = '<h1>Tizen image compatibility</h1><h2>Executive summary</h2>'
+        content = ('<p class="status">'+esc(banner)+'</p>' if banner else '')
+        content += '<h1>Tizen image compatibility</h1><h2>Executive summary</h2>'
         content += '<p class="status">' + esc(results['status']) + '</p>'
         if handoff:
             content += table([[label,handoff[key]] for label,key in headline], ['Status field','Value'])
@@ -227,6 +238,10 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
             content += '<h2>'+esc(repo['scope'])+'</h2><p>Available RPM packages. Loaded product state and provider selection are unverified.</p>'
             content += table([[side,repo[side]] for side in ('baseline','candidate')],['Image','RPM, ELF, symbol and coverage counts'])
             content += '<p>Package relationships: '+esc(repo['inventory_states'])+'</p>'
+            if repo.get('requirements'):
+                content += '<p>Available-set requirements: '+esc(repo['requirements'])+'</p>'
+                if report['csv']:
+                    content += '<p><a href="requirement-findings.csv">Full available-set requirement findings</a></p>'
             content += '<p>Full tables: '+ ' · '.join('<a href="'+name+'">'+name+'</a>' for name in (
                 'packages.csv','package-symbol-summary.csv','elf-symbol-summary.csv','symbol-differences.csv','extraction-errors.csv'))+'</p>'
             content += table([[p[k] for k in ('name','arch','inventory_status','baseline_nevra','candidate_nevra','status')]

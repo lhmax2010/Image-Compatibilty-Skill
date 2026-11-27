@@ -32,3 +32,9 @@ Collector execution is reported independently of image compatibility and verific
 | Other binding or visibility changes | UNKNOWN | HIGH | SYMBOL_BINDING_CHANGED or SYMBOL_VISIBILITY_CHANGED |
 
 Indirect function transitions need resolver and target evidence. Clang does not emit GCC's STB_GNU_UNIQUE binding; a GLOBAL replacement can change identity and lifetime with RTLD_LOCAL and dlclose. The observed binding change does not establish a runtime failure. Duplicate decorated identities are UNKNOWN with `DUPLICATE_DYNSYM_IDENTITY`. Incomplete candidate inventories keep symbol absence unconfirmed.
+
+## WP-2 repository severity
+
+A SONAME removed from a fully covered repository is HIGH INCOMPATIBLE. Incomplete evidence or competing providers leave a MEDIUM UNKNOWN. Unpaired executables are LOW UNKNOWN. Available-set requirement failures use the baseline control and candidate disclosure before they can be HIGH INCOMPATIBLE. A weak versioned reference or a need already unsatisfied on the baseline is LOW UNKNOWN. An unversioned import outside the observed closure is MEDIUM UNKNOWN.
+
+Only repository payload comparisons downgrade OBJECT/TLS size changes across mismatched instrumentation profiles to MEDIUM UNKNOWN. The original sizes remain evidence. Instrumentation symbol additions carry INFO and an explicit reason code. A split debug pair's export surface is INFO NOT_APPLICABLE.

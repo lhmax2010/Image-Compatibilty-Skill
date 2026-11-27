@@ -7,6 +7,7 @@ from typing import Any
 from .core import DIMENSIONS, SEVERITIES, Tools, canonical, digest, finding
 from .elf import duplicate_dynsym_names, dynamic_exports, symbol_identity, symbol_multimap, target_abi_matches, arm_abi, version_nodes
 from .linker import dependency_checks
+from .profile import INSTRUMENTATION_EXPORTS, instrumentation
 from .debuginfo import advanced_abi
 from .source import declaration_reachability, header_inventory_complete
 from .symbol_rules import classify_symbol_change
@@ -47,15 +48,19 @@ def runtime_requirements(obj):
             'unwind_sections': obj.get('unwind_sections', [])}
 
 
-def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
+def compare_elf(a: dict[str, Any], b: dict[str, Any], *, repository=False) -> list[dict[str, Any]]:
     findings = []
     old, new = index(a['elf_objects']), index(b['elf_objects'])
     for path, obj in old.items():
         other = new.get(path)
-        debug_only = obj.get('elf_runtime_role') == 'DEBUG_ONLY'
-        if not debug_only and other and other.get('elf_runtime_role') == 'DEBUG_ONLY':
+        if obj.get('elf_runtime_role') == 'DEBUG_ONLY':
+            findings.append(finding('abi',path,'dynamic export applicability',None,None,'NOT_APPLICABLE','INFO',
+                                    evidence=obj.get('evidence',[]),
+                                    impact='Split debug ELF remains eligible for type/layout analysis.'))
+            continue
+        if other and other.get('elf_runtime_role') == 'DEBUG_ONLY':
             other = None
-        if not other and not debug_only and obj.get('soname'):
+        if not other and obj.get('soname'):
             matches = [x for x in new.values() if x.get('soname') == obj['soname'] and x.get('elf_runtime_role') != 'DEBUG_ONLY']
             if len(matches) == 1:
                 other = matches[0]
@@ -68,8 +73,6 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
             findings.append(finding('abi', path, 'collection coverage', obj.get('complete'), other.get('complete'), evidence=ev))
             continue
         for key in ('class', 'endianness', 'machine', 'osabi', 'abi_version', 'type', 'soname', 'interpreter', 'rpath', 'runpath'):
-            if debug_only and key == 'soname':
-                continue
             if obj.get(key) != other.get(key):
                 incompatible = key in ('class', 'endianness', 'machine')
                 findings.append(finding('elf' if key != 'soname' else 'linking', path, key, obj.get(key), other.get(key),
@@ -92,6 +95,7 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
             {k: other.get(k) for k in ('class', 'machine', 'endianness', 'arm_abi')},
             'COMPATIBLE' if target_abi_matches(obj, other) else 'UNKNOWN', 'INFO', 'ELF target ABI metadata only', ev))
         duplicates = [duplicate_dynsym_names(item) for item in (obj,other)]
+        instrumented = repository and instrumentation(obj) != instrumentation(other)
         ambiguous = duplicates[0] | duplicates[1]
         left, right = ({name:entries[0] for name,entries in exports(item).items() if name not in ambiguous}
                        for item in (obj,other))
@@ -150,12 +154,16 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
                         status,severity,reason = classify_symbol_change(key,before,after)
                         impact = ('GNU unique binding changes process-wide identity and may affect RTLD_LOCAL and dlclose.'
                                   if reason=='GNU_UNIQUE_DROPPED' else '')
+                        if key=='size' and instrumented:
+                            status,severity,reason = 'UNKNOWN','MEDIUM','INSTRUMENTATION_MISMATCH'
+                            impact = 'Instrumentation differs across the pair and can pad data independently of its source ABI.'
                         findings.append(finding('abi',path,name+':'+key,before,after,status,severity,evidence=ev,
                                                 impact=impact,reason_code=reason))
         for name in sorted(set(right) - set(left)):
+            reason = 'INSTRUMENTATION_SYMBOL' if repository and name.startswith(INSTRUMENTATION_EXPORTS) else None
             findings.append(finding('abi', path, name, None, right[name], 'COMPATIBLE' if old_exports_complete and not ambiguous else 'UNKNOWN', 'INFO', evidence=ev,
-                                    impact='Additional exported interface; existing exports are compared separately.'))
-        if not debug_only and obj.get('needed') != other.get('needed'):
+                                    impact='Additional exported interface; existing exports are compared separately.',reason_code=reason))
+        if obj.get('needed') != other.get('needed'):
             findings.append(finding('linking', path, 'DT_NEEDED', obj.get('needed'), other.get('needed'), 'UNKNOWN', 'MEDIUM', evidence=ev,
                 impact='Runtime implementation/dependency changed; dependency availability is checked separately.'))
         before_runtime, after_runtime = runtime_requirements(obj), runtime_requirements(other)

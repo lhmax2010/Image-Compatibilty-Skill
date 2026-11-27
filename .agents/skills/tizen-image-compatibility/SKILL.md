@@ -3,7 +3,7 @@ name: tizen-image-compatibility
 description: Compare two local Tizen root filesystems, flashing images, RPM repositories or existing manifests for ELF exports, ABI changes and package risks. Summarize evidence and verification gaps without running image binaries.
 ---
 
-# Tizen Image Compatibility v1.5.2
+# Tizen Image Compatibility v1.5.3-dev
 
 Resolve scripts relative to this file. The baseline is the existing build and the candidate is the proposed build. Ask only for missing input locations or the direction if unclear.
 

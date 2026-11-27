@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from typing import Any
 from .core import Tools
+from .profile import instrumentation
 
 HEADER_KEYS = {'Class': 'class', 'Data': 'endianness', 'OS/ABI': 'osabi',
                'ABI Version': 'abi_version', 'Type': 'type', 'Machine': 'machine', 'Flags': 'flags'}
@@ -197,6 +198,7 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str, *, bounded=Fa
         cap = tools.config['analysis']['max_readelf_bytes']
         result = tools.run([tool, *flags, str(path)], max_capture_bytes=cap, full_output=True)
         obj.update(parse_readelf(result['stdout']))
+        obj['instrumentation'] = instrumentation(obj)
         obj['evidence'] = [result['stdout_evidence'], result['stderr_evidence']]
         obj['complete'] = result['returncode'] == 0 and not result.get('error') and not result['stdout_truncated'] and 'machine' in obj
         if obj['complete'] and not result.get('error') and not result.get('stderr_truncated'):
@@ -250,6 +252,9 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str, *, bounded=Fa
                        export_inventory_reason_code='DUPLICATE_DYNSYM_IDENTITY', duplicate_dynsym_identities=sorted(duplicates))
         elif result.get('reason_code'):
             obj['export_inventory_reason_code'] = result['reason_code']
+        if obj['elf_runtime_role'] == 'DEBUG_ONLY':
+            obj.update(export_inventory_complete=False, export_inventory_status='NOT_APPLICABLE',
+                       export_inventory_reason='Split debug ELF has no applicable runtime exports.')
         obj['resolution_metadata_complete'] = bool(obj['export_inventory_complete']
             and all(obj.get(k) for k in ('class', 'endianness', 'type'))
             and 'Dynamic section at offset' in result['stdout'])

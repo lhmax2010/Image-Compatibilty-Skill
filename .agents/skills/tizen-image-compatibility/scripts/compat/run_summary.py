@@ -51,7 +51,8 @@ def make_summary(a, b, result, config, objective=None, reused=False):
         if a['image'].get('fallback_reason') or b['image'].get('fallback_reason'):
             errors.append({'reason': 'Used explicitly supplied RPM fallback for blocked EROFS preparation.'})
         verified = sum(s['export_inventories_complete'] for s in stats.values())
-        ready = all(s.get('export_analysis_status') == 'COMPLETE' if repo else
+        ready = all((s.get('export_analysis_status') == 'COMPLETE' or
+                     (verified > 0 and s.get('payload_inventory_complete'))) if repo else
                     s['path_inventory_complete'] and s['export_inventories_complete'] > 0
                     and s['export_inventories_complete'] == s['export_objects_applicable'] for s in stats.values())
         if 'abi' not in config['analysis']['modes']:
@@ -84,6 +85,9 @@ def make_summary(a, b, result, config, objective=None, reused=False):
         errors.append({'reason': 'One or more applicable static checks lack complete evidence.'})
     if repo and repo.get('symbol_differences') is not None:
         stats['symbol_differences'] = repo['symbol_differences']
+        if repo.get('requirements') is not None:
+            stats['requirements'] = repo['requirements']
+        stats['instrumentation_downgrades'] = repo['instrumentation_downgrades']
     if detail := result.get('rootfs_symbol_detail'):
         for side in ('baseline','candidate'):
             stats[side].update(detail[side])
@@ -95,10 +99,12 @@ def make_summary(a, b, result, config, objective=None, reused=False):
     if repo and config['report']['csv']:
         paths.update({name: name for name in ('package-symbol-summary.csv','elf-symbol-summary.csv',
                                                'symbol-differences.csv','extraction-errors.csv')})
+        if repo.get('requirements') is not None:
+            paths['requirement-findings.csv'] = 'requirement-findings.csv'
     if detail:
         paths.update({name:name for name in ('elf-symbol-summary.csv','symbol-differences.csv')})
     paths.update({'run-summary.json':'run-summary.json','evidence':'evidence/'})
-    return {'schema':SCHEMA, 'scope':scope, 'requested_objective':objective, 'objective_completion':completion,
+    summary = {'schema':SCHEMA, 'scope':scope, 'requested_objective':objective, 'objective_completion':completion,
             'execution_status':execution, 'compatibility_status':result['status'], 'coverage_status':coverage,
             'ci_gate_status':result['quality_gate']['status'], 'source_evidence': 'MANIFEST_REUSE' if reused else 'COLLECTED',
             'statistics':stats, 'finding_counts':result['summary']['by_status'], 'errors':errors,
@@ -106,6 +112,9 @@ def make_summary(a, b, result, config, objective=None, reused=False):
                                   for f in high], 'report_paths':paths,
             'next_step': ('Review symbol or Finding evidence for the requested objective.' if completion == 'COMPLETE' else
                           'Review the recorded collection gaps, then repeat with complete inputs and tools.')}
+    if repo:
+        summary.update(comparison_validity=repo['comparison_validity'],confounders=repo['confounders'])
+    return summary
 
 
 def blocked_summary(objective, phase, reason):

@@ -23,3 +23,9 @@ For advanced stages configure SDK and target identities through [execution.md](e
 Status dimensions are independent. An `INCOMPATIBLE` result can accompany a `COMPLETE` export objective and overall `PARTIAL` coverage. A metadata-only objective can complete while export collection is intentionally unexecuted. Rootfs detail CSVs match exact paths and emit unmatched paths as observations. Existing ABI Findings retain the engine's verified or unresolved replacement semantics.
 
 A workflow exit 0 requires both the requested objective and configured CI gate to complete. Exit 1 indicates the engine's compatibility or strict/coverage gate failed with a completed objective. Exit 2 is input/configuration failure. Exit 3 is an incomplete required objective or infrastructure failure. Exit 130 denotes interruption of the main collection. The compact summary records optional-index failures independently. The original CLI retains its existing CI gate behavior.
+
+## RPM payload status additions
+
+`comparison_validity` describes observed instrumentation comparability, and `confounders` lists the qualifying kinds and their baseline/candidate shares. Compatibility, coverage, and objective status remain independent. The statistics include instrumentation adjustments, available-set requirement counts, and unsatisfied baseline export identity counts.
+
+A confirmed missing library under complete inventories can finish the export objective with incompatibility and exit 1. An ambiguous or incompletely inventoried match can leave the objective partial and produce the controller's existing exit 3. A defect in a pre-existing baseline requirement remains UNKNOWN. The full available-set failure and uncertainty rows are in requirement-findings.csv with CSV reporting enabled.
