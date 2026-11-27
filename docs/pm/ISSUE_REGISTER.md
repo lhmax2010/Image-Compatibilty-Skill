@@ -27,14 +27,14 @@ Owner: technical PM (Claude). Maintained by Codex from PM decisions. Baseline co
 | K-03 | Kimi K-F03 | P1 | CONFIRMED-exec | preparation.py L31-38 | All-zero file accepted as an empty TAR; UNKNOWN with gate PASS, exit 0 | Accept | Reject zero-member TAR without a recognized payload; exit 2 | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
 | K-06 | Kimi K-F06 | P1 | CONFIRMED-static | core.py L305-318 | Unbounded stdout/stderr written to disk | Accept | Bounded capture for all tools; OUTPUT_LIMIT reason | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
 | K-09 | Kimi K-F09 | P1 | CONFIRMED-static | report_io.py L111 | /proc/pressure/memory read unconditionally | Accept | NOT_AVAILABLE + meminfo/cgroup fallback | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
-| VD-1 | Handover | P0 | NOT_EXECUTED | VD workstation | Real VD sample measurement (v1.5.1) | Accept | ClineSR prompt docs/pm/clinesr/VD-1_PROMPT.md | VD-1 | Open |
-| VD-2 | Handover | P0 | NOT_EXECUTED | VD workstation | Real VD full acceptance | Accept | With v1.5.2-rc1 and the confound flag | VD-2 | Blocked on WP-4 RPT-SIZE-3 |
+| VD-1 | Handover | P0 | NOT_EXECUTED | VD workstation | Real VD sample measurement (v1.5.1) | Accept | ClineSR prompt docs/pm/clinesr/VD-1_PROMPT.md | VD-1 | Verified on the VD-1 and VD-1b samples |
+| VD-2 | Handover | P0 | NOT_EXECUTED | VD workstation | Real VD full acceptance | Accept | Use v1.5.3-rc1 on the fixed VD repositories | VD-2 | Blocked on native RC sample and report budget review |
 
 ## Important, scheduled
 
 | Issue | Source | Sev | Evidence | Module / location | Root cause (short) | PM decision | Selected solution | WP | Status |
 |---|---|---|---|---|---|---|---|---|---|
-| F-08 + K-05 | Claude + Kimi K-F05 | P1 | LIKELY / CONFIRMED-static | erofs.py L54-56, L82-96 | Whole tree must fit a 1 GiB RAM tmpfs; unknown compat bits refused; bwrap ro-binds host `/`, `/dev`, `/proc` | Accept (merged) | Disk scratch; ignore compat bits; minimal bind set | WP-4 | Open — Bubblewrap 0.6.1 refusal reproduced by ClineSR |
+| F-08 + K-05 | Claude + Kimi K-F05 | P1 | LIKELY / CONFIRMED-static | erofs.py L54-56, L82-96 | Whole tree must fit a 1 GiB RAM tmpfs; unknown compat bits refused; bwrap ro-binds host `/`, `/dev`, `/proc` | Accept (merged) | Private disk scratch and minimal bind set. Unknown features fail closed | WP-4 | Fallback validated locally. Standard EROFS tools unavailable |
 | F-09 | Claude | P1 | LIKELY | images.py L57; packages.py L199; debuginfo.py L89 | A single 60 s default timeout covers long operations | Accept | Per-operation timeouts | WP-3 | Verified (PM, 0c40d40) |
 | F-10 | Claude | P1 | CONFIRMED-static | rpm_payload.py L236-262, L76/L94 | Serial RPM collection; Python byte-sum CRC on all payload bytes | Accept after VD-1 data | Process pool; CRC only for 070702; content-hash cache | post-RC unless VD-1 > 2 h/side | Pending data |
 | F-11 | Claude | P2 | CONFIRMED-exec | compare.py L96-100 | Identical debug-only files give UNKNOWN HIGH | Accept | DEBUG_ONLY exports NOT_APPLICABLE | WP-2 | Verified (PM, 2026-11-27, 323e0e1) |
@@ -62,14 +62,14 @@ Owner: technical PM (Claude). Maintained by Codex from PM decisions. Baseline co
 | LINK-AGG | Codex | P1 | CONFIRMED-exec | linker.py | Per-import observations dominate real reports | Record | See WP-3b and VD-1 evidence | WP-3b | Verified (PM, 2633672) |
 | RPT-SIZE-2 | Codex | P1 | CONFIRMED-exec | CSV and JSON output | Matched symbol rows and repeated inventories inflate reports | Record | See WP-3b and VD-1 evidence | WP-3b | Verified (PM, 2633672) |
 
-| POL-WEAK | Owner VD-1b | P1 | CONFIRMED-exec | compare.py | Weak C++ removals dominate | D-POL-WEAK | UNKNOWN LOW pending owner review | WP-4 | Open |
-| POL-BINDING | PM VD-1b | P1 | CONFIRMED-exec | compare.py | Defined weak/global changes have overstated risk | D-POL-BINDING | Loader-aware binding policy | WP-4 | Open |
-| COPY-REL | PM VD-1b | P1 | CONFIRMED-exec | elf.py | Executable copy relocation uses verneed | Accept | Classify import and check provider size | WP-4 | Open |
-| DT-AGG | PM | P1 | CONFIRMED-exec | linker.py | Individual non-breaking DT_NEEDED findings | Accept | Group and retain detail | WP-4 | Open |
-| RPT-SIZE-3 | VD-1b | P1 | CONFIRMED-exec | reports | 15.5 GB full repository projection | Accept | Compression and compact rows | WP-4 | Open |
-| SUITE-ARM | PM | P1 | NEEDS_VERIFICATION | ClineSR | Python 3.10 test host needed | Accept | Publish a private-output suite runner | WP-4 | Open |
+| POL-WEAK | Owner VD-1b | P1 | CONFIRMED-exec | compare.py | Weak C++ removals dominate | D-POL-WEAK | UNKNOWN LOW pending owner review | WP-4 | Implemented and fixture-verified. Owner review remains pending |
+| POL-BINDING | PM VD-1b | P1 | CONFIRMED-exec | compare.py | Defined weak/global changes have overstated risk | D-POL-BINDING | Loader-aware binding policy | WP-4 | Implemented and fixture-verified. Awaiting PM review |
+| COPY-REL | PM VD-1b | P1 | CONFIRMED-exec | elf.py | Executable copy relocation uses verneed | Accept | Classify import and check provider size | WP-4 | Verified on real x86-64 and ARMv7 fixtures. Awaiting PM review |
+| DT-AGG | PM | P1 | CONFIRMED-exec | linker.py | Individual non-breaking DT_NEEDED findings | Accept | Group and retain detail | WP-4 | Implemented. SR retained 82,992 Linking findings against the 80,000 target |
+| RPT-SIZE-3 | VD-1b | P1 | CONFIRMED-exec | reports | 15.5 GB full repository projection | Accept | Compression and compact rows | WP-4 | Scale passed at 39.76%. SR missed at 59.31%. VD sizing pending |
+| SUITE-ARM | PM | P1 | NEEDS_VERIFICATION | ClineSR | Python 3.10 test host needed | Accept | Publish a private-output suite runner | WP-4 | Runner published and host-tested. Native Python 3.10 blocked here |
 | VD-ASAN | Owner | P2 | CONFIRMED | VD QuickBuild | ASAN is a name only | Close | Fixture-only validation | N/A | Closed |
-| PERF-LINK | PM | P2 | CONFIRMED-exec | linker.py | Scale cost | Measure only | Defer optimisation | post-RC | Open |
+| PERF-LINK | PM | P2 | CONFIRMED-exec | linker.py | Scale cost | Measure only | Defer optimisation | post-RC | Measured in WP-4. Optimisation deferred |
 
 ## Deferred / owner-decided
 

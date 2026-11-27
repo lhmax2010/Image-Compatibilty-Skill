@@ -1,18 +1,18 @@
 # Codex checkpoint
 
-WP-3b is implemented and awaits independent PM review. Start with the
-[WP-3b report](work-packages/WP-3b/REPORT.md).
+WP-4 produced v1.5.3-rc1. [Full section 10 report](work-packages/WP-4/REPORT.md)
 
-- Step 0 published revision 5 at `3395992a2f0d5b1d88beebc86366134185aa97d5`.
-  Published script SHA-256 `8bf3dc72b7d2a20b5ac1f98fbd4c7aa77cd9b100c512134b7053dd5a8780af66`.
-- The PM evidence checkpoint is `0e08fdb5bdf8719b621690b42536ca49582c5535`.
-- The implementation commit `e525a838a847d0a71c9431eb10b0de5c76c73039`
-  passed 381 tests with 375 passed, six existing skips and zero failures.
-- The compact SR retry completed. The independent checks reconciled every
-  detail row and every Finding CSV/JSON row. Inputs matched their original
-  SHA-256 values. The initial interrupted output remains local. There are
-  no WP-3b analysis or test jobs pending.
-- The Step 0 backups and before-run checkpoints were verified. The final
-  backup is selected by `.local-backups/LATEST`. Raw evidence remains local.
-- WP-4 holds the Python 3.10 and EROFS gates and the policy review after
-  ClineSR detail. VD-2 holds real ASan positive validation.
+- Step 0 `4bebed633420b758356c8384d32ddbc144ca2d5f` records the accepted
+  WP-3b work and the VD-1b measurements.
+- Step 7 `6434bdf07a3e4a9396297dcdbfcbcf599282bfd4` publishes the tested
+  ClineSR suite runner. Script SHA-256
+  `99d5a0115c1c6e190f4a27e60d2894796481dc6e675ba6cb3f1dde7954cd091f`.
+- Implementation `8b948dd0fa98bf74fbae6dbda04a922b8696d1d5` passed
+  391 regression tests with 385 passed, six existing skips and zero failures.
+- Synthetic scale met its size target. SR completed and reconciled with
+  82,992 Linking findings and 963,303,190 report bytes. Both SR targets
+  remain open. The initial run omitted the performance exclusion, so the
+  measured rerun used the historical arguments in a fresh output.
+- Real EROFS, native Python 3.10 and VD acceptance remain pending. Raw traces,
+  historical reports and immutable hash checks are workspace-local. The
+  selected final backup is in `.local-backups/LATEST`. No WP-4 jobs remain.

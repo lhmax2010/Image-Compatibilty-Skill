@@ -75,3 +75,13 @@ The PM accepted WP-3b at `2633672`, including all 381 tests on the PM host, the 
 VD-1b measured 324.9 MB at WP-3b on 150 ARM packages per side. The PM projects about 40 minutes and 15.5 GB for 5,693 RPMs per side (about 10.2 GB of inputs each), making RPT-SIZE-3 a VD-2 blocker. The owner confirmed the candidate QuickBuild name contains ASAN but the build uses no ASan. VD-ASAN closes with fixture-only detection evidence.
 
 D-POL-WEAK sends qualifying unreferenced weak C++ removals to UNKNOWN LOW owner review. D-POL-BINDING treats defined GLOBAL and WEAK exports as equivalent under default glibc lookup, with an exception for LD_DYNAMIC_WEAK. UNIQUE to WEAK retains the GNU unique loss risk. [Full VD-1b counts and PM evidence](work-packages/WP-3b/PM_REVIEW.md)
+
+## WP-4 recorded outcomes
+
+The RC implementation at `8b948dd0fa98bf74fbae6dbda04a922b8696d1d5` passed
+391 tests on this host with six existing skips. The scale report reached
+39.76% of its WP-3b size. The SR run reached 82,992 Linking findings and
+59.31% of the original report size. Both SR targets remain open. The
+SR output contains 10,011 owner-review rows under D-POL-WEAK. Two other
+previously reported export removals are versioned copy relocations.
+[WP-4 verification and unresolved gates](work-packages/WP-4/REPORT.md)
