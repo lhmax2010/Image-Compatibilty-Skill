@@ -50,9 +50,9 @@ bash .local-work/vd1_measure.sh detail <WORK> <7-hex-tag>
 ## Revision 7
 
 Download the current kit through the same read-only Git workflow. Verify the
-published SHA-256 .
+published SHA-256 `4a8b6ae5d4442604a36cb2362690d0f344c186ec8a635f58980b9583a84cfb78`.
 The source handoff matched
-.
+`3effc6819b0b35d1f44c8e0f360e8707a2c61fcb74396df55000f1f4fc846abb`.
 
 Summary skips tags that have no run in the current WORK. Detail reads both
 legacy and compressed RC reports and includes export inventory shape,
