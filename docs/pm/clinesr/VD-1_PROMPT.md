@@ -46,3 +46,18 @@ bash .local-work/vd1_measure.sh rerun <WORK> <40-hex-published-commit>
 bash .local-work/vd1_measure.sh summary <WORK> 323e0e1 0c40d40
 bash .local-work/vd1_measure.sh detail <WORK> <7-hex-tag>
 ```
+
+## Revision 7
+
+Download the current kit through the same read-only Git workflow. Verify the
+published SHA-256 .
+The source handoff matched
+.
+
+Summary skips tags that have no run in the current WORK. Detail reads both
+legacy and compressed RC reports and includes export inventory shape,
+extraction-error categories, owner-review counts and copy relocation counts.
+The local privacy review restricted report keys and values to fixed output
+categories and bounded decompressed diagnostic reads. WP-3b, RC1 and the
+redaction fixture passed locally. Forward the counts-only output and retain
+the private logs on the server.

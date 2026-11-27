@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# VD-1 measurement kit (revision 5). FOR CLINESR ONLY. Measurement only, not acceptance.
+# VD-1 measurement kit (revision 7). FOR CLINESR ONLY. Measurement only, not acceptance.
 #
 # Usage, from the ClineSR workspace root:
 #   bash .local-work/vd1_measure.sh check
@@ -8,6 +8,10 @@
 #   bash .local-work/vd1_measure.sh summary <WORK>
 #   bash .local-work/vd1_measure.sh rerun <WORK> <40-hex commit on origin/main>   (revision 5)
 #   bash .local-work/vd1_measure.sh detail <WORK> <7-hex tag>                     (revision 5)
+#   Revision 6: summary skips tags not run in this WORK; detail adds object-shape and
+#   extraction-error breakdowns and more fixed readelf diagnostic classes.
+#   Revision 7: reads v1.5.3-rc1 reports (gzip manifests/evidence, symbol references in findings,
+#   reason-code-based classification, owner-review and copy-relocation counts).
 #
 # Revision 5 adds 'rerun' (same sample, another published tool commit) and 'detail'
 # (name-free breakdowns of one report). Existing WORK directories from revision 4.2 remain valid.
@@ -217,22 +221,84 @@ cmd_rerun() {
   echo "RERUN OK TAG=$tag"
 }
 
+report_safety() {
+cat <<'PYTHON'
+import gzip
+
+STATES = set("COMPATIBLE INCOMPATIBLE IDENTICAL UNKNOWN NOT_APPLICABLE NOT_EXECUTED COMPLETE PARTIAL FAILED PASS FAIL PENDING NONE BLOCKED".split())
+DIMENSIONS = set("elf abi api headers linking compiler_runtime kernel ipc commands filesystem packages services security runtime hardware network performance".split())
+ROLES = {"RUNTIME", "RUNTIME_WITH_DEBUG", "DEBUG_ONLY", "UNKNOWN"}
+CLASSES = {"ELF32", "ELF64"}
+MACHINES = {"ARM", "AArch64", "Advanced Micro Devices X86-64", "Intel 80386", "RISC-V", "PowerPC", "PowerPC64", "MIPS R3000"}
+TYPES = {"NONE", "REL", "EXEC", "DYN", "CORE"}
+CXX = set("c cxx_template cxx_other vtable typeinfo typeinfo_name vtt guard thunk".split())
+KINDS = set("DT_NEEDED VERSION_NODE VERSIONED_IMPORT UNVERSIONED_IMPORT COPY_RELOCATION CONSUMER_INVENTORY".split())
+CHANGES = set("ADDED MISSING MATCHED CHANGED BASELINE_OBSERVED CANDIDATE_OBSERVED".split())
+INVENTORY = set("COMMON VERSION_CHANGED BASELINE_ONLY CANDIDATE_ONLY BASELINE_ONLY_OR_UNRESOLVED AMBIGUOUS_MULTIPLE_VERSIONS AMBIGUOUS_IDENTICAL_NEVRA".split())
+REASONS = set("""
+    none EXPORT_REMOVED EXPORT_NOT_OBSERVED EXPORT_INVENTORY_INCOMPLETE DUPLICATE_DYNSYM_IDENTITY
+    VERSION_DEFINITION_REMOVED VERSION_DEFINITION_NOT_OBSERVED DEFAULT_VERSION_LOOKUP_LOST
+    DEFAULT_VERSION_CHANGED DEFAULT_SYMBOL_VERSION_CHANGED DT_NEEDED_CHANGED ELF_AVAILABILITY_UNVERIFIED
+    EXECUTABLE_NOT_FOUND OBJECT_UNPAIRED LIBRARY_NOT_FOUND_INCOMPLETE_INVENTORY PROVIDER_AMBIGUOUS
+    LIBRARY_REMOVED KIND_CHANGED TLS_KIND_CHANGED DATA_SIZE_DECREASED DATA_SIZE_INCREASED
+    IFUNC_TRANSITION NOTYPE_ANNOTATION GNU_UNIQUE_DROPPED SYMBOL_BINDING_CHANGED SYMBOL_VISIBILITY_CHANGED
+    INSTRUMENTATION_MISMATCH INSTRUMENTATION_SYMBOL DWARF_ABI_CHANGED DWARF_ABI_UNAVAILABLE
+    DIMENSION_NOT_EXECUTED COVERAGE_LIMITATION LOADER_ENV_MISSING UNKNOWN_COLLECTION UNKNOWN_SEARCH_ENVIRONMENT
+    UNKNOWN_LOADER_ABI UNKNOWN_LOADER_FEATURE UNKNOWN_VERSION_REQUIREMENT UNKNOWN_SYMBOL_SCOPE UNKNOWN_SYMBOL_SEMANTICS
+    MISSING_PROVIDER UNRESOLVABLE_PROVIDER MISSING_VERSION MISSING_SYMBOL SYMBOL_TYPE_MISMATCH VERIFIED
+    NEEDED_SONAME_UNAVAILABLE VERSION_NODE_UNAVAILABLE VERSIONED_SYMBOL_UNAVAILABLE ALSO_UNSATISFIED_IN_BASELINE
+    UNVERSIONED_SYMBOL_NOT_IN_CLOSURE WEAK_REFERENCE_UNSATISFIED VERSION_PROVIDER_UNAVAILABLE
+    REQUIREMENT_INVENTORY_INCOMPLETE CONSUMER_INVENTORY_INCOMPLETE TOOL_TIMEOUT OUTPUT_LIMIT TOOL_UNAVAILABLE
+    CONTRACT_DIFFERENCE CONTRACT_UNVERIFIED LINKING_STATIC_DIFFERENCE READELF_DIAGNOSTIC DYNSYM_ROWS_INCONSISTENT
+    VERSION_RECORDS_INCONSISTENT HEADER_FIELDS_MISSING OBJECT_INCOMPLETE COPY_RELOC_SIZE_CHANGED
+    SYMBOL_BINDING_WEAKENED SYMBOL_BINDING_STRENGTHENED DYNAMIC_WEAK_SEMANTICS
+    WEAK_CXX_EXPORT_REMOVED_UNREFERENCED WEAK_CXX_EXPORT_REMOVAL_ACCEPTED WEAK_CXX_EXPORT_REMOVAL_REJECTED
+""".split())
+
+def fixed(value, choices):
+    return value if isinstance(value, str) and value in choices else 'OTHER'
+
+def numeric(value):
+    return value if type(value) in (int, float) else None
+
+def counts(values, choices):
+    result = {}
+    for key, value in (values or {}).items():
+        if type(value) is int:
+            label = fixed(key, choices)
+            result[label] = result.get(label, 0) + value
+    return result
+
+def reason(row):
+    return fixed(row.get('reason_code') or 'none', REASONS)
+
+def state(row):
+    return fixed(row.get('status'), STATES)
+
+def dimension(row):
+    return fixed(row.get('dimension'), DIMENSIONS)
+PYTHON
+}
+
 cmd_summary() {
   need_work "${1:-}"
   local log
   log=$(mktemp "$W/summary.private.XXXXXXXX.log") || stop "could not create private summary log"
   shift
   local t; for t in "$@"; do [[ "$t" =~ ^[0-9a-f]{7}$ ]] || stop "tags must be 7 hex characters"; done
-  python3 - "$W" "${V151:0:7}" "${FIX:0:7}" "$@" 2>"$log" <<'EOF' || stop "summary failed (see private summary log in WORK; do not share it)"
+  python3 -c "$(report_safety)
+$(cat <<'EOF'
 import collections, json, os, re, sys
 w, *tags = sys.argv[1:]
 def size(p):
     return sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(p) for f in fs)
-print('VD-1 RESULT (revision 5, sample, counts only)')
+print('VD-1 RESULT (revision 7, sample, counts only)')
 print('sample: base_rpms', len(os.listdir(f'{w}/base')), 'cand_rpms', len(os.listdir(f'{w}/cand')),
       'base_bytes', size(f'{w}/base'), 'cand_bytes', size(f'{w}/cand'))
 for tag in tags:
     r = f'{w}/report-{tag}'
+    if not os.path.isfile(f'{w}/run-{tag}.metrics'):
+        print('===', tag, 'not run in this WORK'); continue
     metrics = open(f'{w}/run-{tag}.metrics').read().strip()
     if not re.fullmatch(rf'{tag} exit=-?\d+ wall_seconds=\d+\.\d+ peak_rss_mb=\d+\.\d+', metrics):
         sys.exit('invalid metrics record')
@@ -245,44 +311,45 @@ for tag in tags:
             print('no results.json; stderr_lines', sum(1 for _ in diagnostics))
         continue
     for side in ('baseline', 'candidate'):
-        m = json.load(open(f'{r}/{side}-manifest.json'))
+        m = json.load(open(f'{r}/{side}-manifest.json') if os.path.isfile(f'{r}/{side}-manifest.json') else __import__('gzip').open(f'{r}/{side}-manifest.json.gz', 'rt'))
         o = m['elf_objects']; c = m['repository']['counts']
-        print(f'## {side}', 'rpm_total', c.get('rpm_total'), 'metadata_complete', c.get('metadata_complete'),
-              'extracted', c.get('extracted'), 'extraction_failed', c.get('extraction_failed'))
-        print('  elf_objects', len(o), 'elf_complete', c.get('elf_complete'),
-              'export_inventories_complete', c.get('export_inventories_complete'))
-        print('  machines', dict(collections.Counter(x.get('machine') for x in o)),
-              'classes', dict(collections.Counter(x.get('class') for x in o)))
-        print('  roles', dict(collections.Counter(x.get('elf_runtime_role') for x in o)))
-        print('  export_status', dict(collections.Counter(x.get('export_inventory_status') for x in o)))
+        print(f'## {side}', 'rpm_total', numeric(c.get('rpm_total')), 'metadata_complete', numeric(c.get('metadata_complete')),
+              'extracted', numeric(c.get('extracted')), 'extraction_failed', numeric(c.get('extraction_failed')))
+        print('  elf_objects', len(o), 'elf_complete', numeric(c.get('elf_complete')),
+              'export_inventories_complete', numeric(c.get('export_inventories_complete')))
+        print('  machines', dict(collections.Counter(fixed(x.get('machine'), MACHINES) for x in o)),
+              'classes', dict(collections.Counter(fixed(x.get('class'), CLASSES) for x in o)))
+        print('  roles', dict(collections.Counter(fixed(x.get('elf_runtime_role'), ROLES) for x in o)))
+        print('  export_status', dict(collections.Counter(fixed(x.get('export_inventory_status'), STATES) for x in o)))
         print('  incomplete_reason_codes', dict(collections.Counter(
-            x.get('export_inventory_reason_code') or ('limit' if 'limit' in str(x.get('error', '')) else 'other')
+            fixed(x.get('export_inventory_reason_code'), REASONS) if x.get('export_inventory_reason_code') else ('limit' if 'limit' in str(x.get('error', '')) else 'other')
             for x in o if x.get('export_inventory_status') == 'UNKNOWN')))
         print('  asan_objects', sum(any('asan' in n for n in x.get('needed', [])) for x in o),
-              'exports_total', c.get('exports'), 'imports_total', c.get('imports'))
+              'exports_total', numeric(c.get('exports')), 'imports_total', numeric(c.get('imports')))
     res = json.load(open(f'{r}/results.json'))
     rr = res.get('repository', {})
-    print('## result status', res['status'], 'gate', res['quality_gate']['status'], 'findings', res['summary']['findings'])
-    print('  by_status', res['summary']['by_status'])
-    print('  inventory_states', rr.get('inventory_states'))
-    print('  comparison_validity', rr.get('comparison_validity'), 'confounders', rr.get('confounders'))
-    print('  instrumentation_downgrades', rr.get('instrumentation_downgrades'))
+    print('## result status', state(res), 'gate', state(res['quality_gate']), 'findings', numeric(res['summary']['findings']))
+    print('  by_status', counts(res['summary']['by_status'], STATES))
+    print('  inventory_states', counts(rr.get('inventory_states'), INVENTORY))
+    print('  comparison_validity', fixed(rr.get('comparison_validity'), {'COMPARABLE','CONFOUNDED'}), 'confounder_count', len(rr.get('confounders') or []))
+    print('  instrumentation_downgrades', counts(rr.get('instrumentation_downgrades'), REASONS))
     req = rr.get('requirements') or {}
-    print('  requirements_by_kind', req.get('by_kind'))
-    print('  requirements_by_reason', req.get('by_reason'))
+    print('  requirements_by_kind', {k: counts(v, {'satisfied','failed','unknown'}) for k,v in (req.get('by_kind') or {}).items() if k in KINDS})
+    print('  requirements_by_reason', counts(req.get('by_reason'), REASONS))
     sd = rr.get('symbol_differences') or {}
-    print('  symbol_differences_by_role', {k: v.get('by_change') for k, v in (sd.get('by_role') or {}).items()})
-    rc = collections.Counter(f.get('reason_code') for f in res['findings'] if f.get('reason_code'))
+    print('  symbol_differences_by_role', {k: counts(v.get('by_change'), CHANGES) for k, v in (sd.get('by_role') or {}).items() if k in {'EXPORT','IMPORT'}})
+    rc = collections.Counter(reason(f) for f in res['findings'] if f.get('reason_code'))
     print('  reason_codes', dict(rc.most_common(20)))
-    inc = collections.Counter((f['dimension'], f.get('reason_code') or 'none') for f in res['findings']
+    inc = collections.Counter((dimension(f), reason(f)) for f in res['findings']
                               if f['status'] == 'INCOMPATIBLE')
     print('  incompatible_by_dimension_reason', {f'{a}/{b}': n for (a, b), n in inc.most_common(15)})
     if os.path.exists(f'{r}/run-summary.json'):
         s = json.load(open(f'{r}/run-summary.json'))
-        print('  run_summary', {k: s.get(k) for k in ('requested_objective', 'objective_completion',
+        print('  run_summary', {k: fixed(s.get(k), STATES | {'EXPORT_SYMBOLS','PACKAGE_INVENTORY','STATIC_REPORT'}) for k in ('requested_objective', 'objective_completion',
               'execution_status', 'compatibility_status', 'coverage_status', 'ci_gate_status')})
 print('END OF VD-1 RESULT')
 EOF
+)" "$W" "${V151:0:7}" "${FIX:0:7}" "$@" 2>"$log" || stop "summary failed (see private summary log in WORK; do not share it)"
 }
 
 cmd_detail() {
@@ -291,14 +358,15 @@ cmd_detail() {
   [[ "$tag" =~ ^[0-9a-f]{7}$ ]] || stop "tag must be 7 hex characters"
   [ -d "$W/report-$tag" ] && [ ! -L "$W/report-$tag" ] || stop "report-$tag missing; run 'run' or 'rerun' first"
   log=$(mktemp "$W/detail.private.XXXXXXXX.log") || stop "could not create private detail log"
-  python3 - "$W" "$tag" 2>"$log" <<'EOF' || stop "detail failed (see private detail log in WORK; do not share it)"
+  python3 -c "$(report_safety)
+$(cat <<'EOF'
 import collections, json, os, re, sys
 w, tag = sys.argv[1:]
 r = f'{w}/report-{tag}'
 C = collections.Counter
 def top(counter, n=15):
     return dict(counter.most_common(n))
-print(f'VD-1 DETAIL (revision 5, tag {tag}, counts only)')
+print(f'VD-1 DETAIL (revision 7, tag {tag}, counts only)')
 # Full repositories, from the header scan made by 'prepare' (no names printed).
 maps = {}
 for side in ('BASE', 'CAND'):
@@ -317,6 +385,8 @@ print(metrics)
 # Report size by top-level entry; entry names are tool outputs, checked against an allowlist pattern.
 known_entries = {
     '.compat-run', 'baseline-manifest.json', 'candidate-manifest.json', 'collection.log',
+    'baseline-manifest.json.gz', 'candidate-manifest.json.gz', 'weak-export-review.csv',
+    'expected-tests.json', 'expected-tests-results.json', 'build/',
     'elf-symbol-summary.csv', 'evidence/', 'extraction-errors.csv', 'findings.csv',
     'index.html', 'linking-details.csv', 'package-symbol-summary.csv', 'packages.csv',
     'requirement-findings.csv', 'results.json', 'rpm-repository.json', 'run-summary.json',
@@ -333,15 +403,19 @@ for entry in os.scandir(r):
 print('report_bytes_by_entry', top(sizes, 15))
 res = json.load(open(f'{r}/results.json'))
 F = res['findings']
-print('findings', len(F), 'by_dimension_status', top(C(f"{f['dimension']}/{f['status']}" for f in F), 20))
-print('unknown_by_dimension_reason', top(C(f"{f['dimension']}/{f.get('reason_code') or 'none'}" for f in F if f['status'] == 'UNKNOWN'), 20))
+print('findings', len(F), 'by_dimension_status', top(C(f"{dimension(f)}/{state(f)}" for f in F), 20))
+print('unknown_by_dimension_reason', top(C(f"{dimension(f)}/{reason(f)}" for f in F if f['status'] == 'UNKNOWN'), 20))
 def kind(f):
     i, b, c = f.get('interface') or '', f.get('baseline'), f.get('candidate')
     if i.startswith('version definition:'): return 'VERSION_DEFINITION'
     if i.endswith(':default lookup'): return 'DEFAULT_LOOKUP'
     if i.endswith(':default symbol version'): return 'DEFAULT_SYMBOL_VERSION'
+    rc = f.get('reason_code') or ''
+    if rc in ('EXPORT_REMOVED', 'EXPORT_NOT_OBSERVED', 'WEAK_CXX_EXPORT_REMOVED_UNREFERENCED',
+              'WEAK_CXX_EXPORT_REMOVAL_ACCEPTED', 'WEAK_CXX_EXPORT_REMOVAL_REJECTED') or f.get('removal_context'):
+        return 'EXPORT_REMOVED'
     if isinstance(b, dict) and c is None and i == b.get('name'): return 'EXPORT_REMOVED'
-    if b is None and isinstance(c, dict) and i == c.get('name'): return 'EXPORT_ADDED'
+    if b is None and isinstance(c, dict) and (i == c.get('name') or '$symbol' in c): return 'EXPORT_ADDED'
     field = i.rsplit(':', 1)[-1] if ':' in i else ''
     if field in ('type', 'binding', 'visibility', 'size') and not isinstance(b, dict): return 'FIELD_' + field.upper()
     if i in ('ELF availability', 'dynamic export collection coverage', 'dynamic export applicability',
@@ -350,7 +424,7 @@ def kind(f):
         return 'META:' + i
     return 'OTHER'
 abi = [f for f in F if f['dimension'] == 'abi']
-print('abi_by_kind_status_reason', top(C(f"{kind(f)}/{f['status']}/{f.get('reason_code') or 'none'}" for f in abi), 25))
+print('abi_by_kind_status_reason', top(C(f"{kind(f)}/{state(f)}/{reason(f)}" for f in abi), 25))
 elf_fields = {
     'FIELD_TYPE': {'NOTYPE', 'OBJECT', 'FUNC', 'SECTION', 'FILE', 'COMMON', 'TLS', 'IFUNC', 'GNU_IFUNC'},
     'FIELD_BINDING': {'LOCAL', 'GLOBAL', 'WEAK', 'UNIQUE', 'GNU_UNIQUE'},
@@ -364,14 +438,16 @@ for f in abi:
     if k.startswith('FIELD_'):
         b, c = f.get('baseline'), f.get('candidate')
         if k == 'FIELD_SIZE':
-            label = ('decrease' if (c or 0) < (b or 0) else 'increase') + '/' + str(f['status'])
+            label = ('decrease' if (c or 0) < (b or 0) else 'increase') + '/' + state(f)
         else:
             label = f'{elf_field(k, b)}->{elf_field(k, c)}'
         fields[k][re.sub(r'[^A-Za-z_>/-]', '', label)[:40]] += 1
 for k in sorted(fields):
     print(f'  {k.lower()}_pairs', top(fields[k], 12))
 def manifest(side):
-    return json.load(open(f'{r}/{side}-manifest.json'))['elf_objects']
+    import gzip
+    p = f'{r}/{side}-manifest.json'
+    return json.load(open(p) if os.path.isfile(p) else gzip.open(p + '.gz', 'rt'))['elf_objects']
 objs = {side: manifest(side) for side in ('baseline', 'candidate')}
 def base(n):
     return n.split('@', 1)[0]
@@ -384,14 +460,37 @@ def cxx(n):
                      ('_ZGV', 'guard'), ('_ZTh', 'thunk'), ('_ZTv', 'thunk'), ('_ZTc', 'thunk')):
         if n.startswith(p): return label
     return 'cxx_template' if 'I' in n[2:] and 'E' in n else 'cxx_other'
-print('removed_exports', len(removed), 'by_status', dict(C(f['status'] for f in removed)))
-print('  by_binding_type', top(C("/".join(elf_field(k, f['baseline'].get(field)) for k, field in (("FIELD_BINDING", "binding"), ("FIELD_TYPE", "type"))) for f in removed), 12))
-print('  versioned', sum('@' in (f['baseline'].get('name') or '') for f in removed),
-      'by_cxx_class', top(C(cxx(f['baseline'].get('base_name') or base(f['baseline'].get('name', ''))) for f in removed), 10))
-ib = [f for f in removed if imported['baseline'][f['baseline'].get('base_name') or base(f['baseline']['name'])]]
-ic = [f for f in removed if imported['candidate'][f['baseline'].get('base_name') or base(f['baseline']['name'])]]
-print('  imported_by_some_baseline_object', len(ib), 'by_binding', dict(C(elf_field('FIELD_BINDING', f['baseline'].get('binding')) for f in ib)),
+def rctx(f):
+    x = f.get('removal_context') or {}
+    b = f.get('baseline') if isinstance(f.get('baseline'), dict) and 'name' in f.get('baseline') else {}
+    name = b.get('base_name') or base(b.get('name') or f.get('interface') or '')
+    return {'binding': x.get('binding', b.get('binding')), 'type': x.get('type', b.get('type')),
+            'versioned': x.get('versioned', '@' in (b.get('name') or '')),
+            'cxx': x.get('cxx_class') or cxx(name), 'name': name,
+            'imp_b': (x.get('observed_importers') or {}).get('baseline'),
+            'imp_c': (x.get('observed_importers') or {}).get('candidate')}
+R = [(f, rctx(f)) for f in removed]
+print('removed_exports', len(removed), 'by_status_reason', top(C(f"{state(f)}/{reason(f)}" for f, _ in R), 10))
+print('  by_binding_type', top(C(f"{elf_field('FIELD_BINDING', x['binding'])}/{elf_field('FIELD_TYPE', x['type'])}" for _, x in R), 12))
+print('  versioned', sum(bool(x['versioned']) for _, x in R), 'by_cxx_class',
+      top(C(fixed(x['cxx'], CXX) for _, x in R), 10))
+ib = [(f, x) for f, x in R if (x['imp_b'] if x['imp_b'] is not None else imported['baseline'][x['name']])]
+ic = [(f, x) for f, x in R if (x['imp_c'] if x['imp_c'] is not None else imported['candidate'][x['name']])]
+print('  imported_by_some_baseline_object', len(ib), 'by_binding', dict(C(elf_field('FIELD_BINDING', x['binding']) for _, x in ib)),
       'imported_by_some_candidate_object', len(ic))
+print('reason_by_status', top(C(f"{state(f)}/{reason(f)}" for f in F if f['status'] != 'COMPATIBLE'), 25))
+print('compatible_reasons', top(C(reason(f) for f in F if f['status'] == 'COMPATIBLE'), 10))
+try:
+    rv = json.load(open(f'{r}/run-summary.json')).get('review')
+    print('review', {k: numeric(rv.get(k)) for k in ('required', 'accepted', 'rejected', 'pending', 'unmatched')} | {'status': fixed(rv.get('status'), {'NONE','PENDING','COMPLETE'})} if isinstance(rv, dict) else None)
+except Exception:
+    print('review unreadable')
+wr = f'{r}/weak-export-review.csv'
+if os.path.isfile(wr):
+    import csv
+    rows = list(csv.DictReader(open(wr, newline='', errors='replace')))
+    print('weak_review_rows', len(rows), 'by_cxx_class', top(C(fixed(x.get('cxx_class'), CXX) for x in rows), 10),
+          'demangled_filled', sum(bool(x.get('demangled')) for x in rows))
 # Export inventory incompleteness: name-free flags plus sanitized readelf diagnostic signatures.
 def signature(line):
     # Emit a fixed template. Masking tokens cannot reliably identify short names.
@@ -402,12 +501,40 @@ def signature(line):
         (r'(?:dynamic|symbol) table', 'symbol table diagnostic'),
         (r'section (?:header|name|size|offset)', 'section metadata diagnostic'),
         (r'(?:corrupt|invalid|truncat|extends past|out of range)', 'invalid or truncated ELF data'),
+        (r'(?:NOBITS|has no data|not dumped|no data)', 'section without file data'),
+        (r'(?:debuglink|debugaltlink|gnu_debug|separate debug)', 'debug link diagnostic'),
+        (r'(?:DWARF|debug_|\.debug)', 'debug info diagnostic'),
+        (r'(?:dynamic segment|PT_DYNAMIC|\.dynamic)', 'dynamic segment diagnostic'),
+        (r'(?:reloc)', 'relocation diagnostic'),
+        (r'(?:string table|strtab)', 'string table diagnostic'),
+        (r'(?:\bnote\b|\.note)', 'note diagnostic'),
+        (r'(?:unable to|could not|cannot|failed to|short read)', 'read failure'),
+        (r'(?:unknown|unrecogni|unsupported|unhandled)', 'unsupported feature'),
     ):
         if re.search(pattern, line, re.IGNORECASE):
             return f'{level}: {label}'
     return f'{level}: other readelf diagnostic'
+def path_class(p):
+    p = p or ''
+    if p.startswith('/usr/lib/debug/') or '/.debug/' in p: return 'debug_tree'
+    if p.endswith('.debug'): return 'debug_suffix'
+    if re.search(r'\.ko(\.[a-z]+)?$', p): return 'kernel_module'
+    if p.endswith('.o') or p.endswith('.a'): return 'object_or_archive'
+    if re.search(r'\.so(\.[0-9.]+)?$', p): return 'shared_library_name'
+    if '/bin/' in p or '/sbin/' in p or '/libexec/' in p: return 'executable_dir'
+    return 'other'
+def elf_type(obj):
+    return fixed(str(obj.get('type') or '').split(' ', 1)[0], TYPES)
 for side in ('baseline', 'candidate'):
+    allo = objs[side]
+    print(f'copy_relocations_{side}', 'objects', sum(bool(o.get('copy_relocations')) for o in allo),
+          'entries', sum(len(o.get('copy_relocations') or []) for o in allo))
+    print(f'objects_{side}', len(allo), 'by_role_type', top(C(f"{fixed(o.get('elf_runtime_role'), ROLES)}/{elf_type(o)}" for o in allo), 10),
+          'by_path_class', top(C(path_class(o.get('package_path') or o.get('path')) for o in allo), 10))
     bad = [o for o in objs[side] if o.get('export_inventory_status') == 'UNKNOWN']
+    print(f'  export_incomplete_{side}_shape', top(C(f"{fixed(o.get('elf_runtime_role'), ROLES)}/{elf_type(o)}/{path_class(o.get('package_path') or o.get('path'))}/"
+          + ('exports' if o.get('exports') else 'no_exports') + '/'
+          + fixed(o.get('export_inventory_reason_code'), REASONS) for o in bad), 12))
     flags, sigs = C(), C()
     for o in bad:
         defs = {v.get('name') for v in o.get('version_definitions') or []}
@@ -419,27 +546,42 @@ for side in ('baseline', 'candidate'):
         if any(s.get('version') and s['version'] not in reqs for s in o.get('imports') or []): f.add('import_version_unrequired')
         if any(s.get('version') and s.get('version_index') is not None and not s.get('version_file') for s in o.get('imports') or []):
             f.add('import_version_file_missing')
-        if o.get('export_inventory_reason_code'): f.add('code:' + re.sub(r'[^A-Z_]', '', o['export_inventory_reason_code'])[:40])
+        if o.get('export_inventory_reason_code'): f.add('code:' + fixed(o['export_inventory_reason_code'], REASONS))
         warned = False
         for ref in o.get('export_inventory_evidence') or []:
-            if not re.fullmatch(r'evidence/[a-f0-9]{64}\.txt', ref):
+            if not re.fullmatch(r'evidence/[a-f0-9]{64}\.txt(\.gz)?', ref):
                 continue
             p = os.path.join(r, ref)
+            if not os.path.isfile(p) and os.path.isfile(p + '.gz'):
+                p += '.gz'
             if os.path.commonpath((os.path.realpath(p), os.path.realpath(r))) != os.path.realpath(r):
                 continue
             if not os.path.isfile(p) or os.path.getsize(p) > 1024 * 1024:
                 continue
-            for line in open(p, errors='replace'):
-                if re.match(r'^\S*readelf\S*: (Warning|Error)', line):
-                    warned = True; sigs[signature(line.split(':', 1)[1])] += 1
+            reader = gzip.open if p.endswith('.gz') else open
+            with reader(p, 'rb') as evidence:
+                preview = evidence.read(1024 * 1024 + 1)
+            if len(preview) > 1024 * 1024:
+                continue
+            for line in preview.decode('utf-8', 'replace').splitlines():
+                diagnostic = re.match(r'^\S*readelf\S*: ((?:Warning|Error):.*)', line)
+                if diagnostic:
+                    warned = True; sigs[signature(diagnostic[1])] += 1
         if warned: f.add('readelf_diagnostic')
         for x in f or {'no_flag'}:
             flags[x] += 1
     print(f'export_incomplete_{side}', len(bad), 'flags', dict(flags))
     if sigs:
         print(f'  readelf_signatures_{side}', top(sigs, 8))
+ee = f'{r}/extraction-errors.csv'
+if os.path.isfile(ee):
+    import csv
+    rows = list(csv.DictReader(open(ee, newline='', errors='replace')))
+    print('extraction_errors', len(rows), 'by_side_stage_code_tool',
+          top(C(f"{fixed(x.get('side'), {'baseline','candidate'})}/{fixed(x.get('stage'), {'metadata','extraction','payload','elf','identity'})}/{fixed(x.get('reason_code'), REASONS)}/{fixed(x.get('tool'), {'rpm','rpm2cpio','readelf','llvm-readelf'})}" for x in rows), 12))
 print('END OF VD-1 DETAIL')
 EOF
+)" "$W" "$tag" 2>"$log" || stop "detail failed (see private detail log in WORK; do not share it)"
 }
 
 case "${1:-}" in
