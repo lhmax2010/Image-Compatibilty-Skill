@@ -10,9 +10,9 @@ Owner: technical PM (Claude). Maintained by Codex from PM decisions. Baseline co
 
 | Issue | Source | Sev | Evidence | Module / location | Root cause (short) | PM decision | Selected solution | WP | Status |
 |---|---|---|---|---|---|---|---|---|---|
-| F-01 | Claude | P0 | CONFIRMED-exec | elf.py L135, L201 | readelf prints st_size > 99,999 as 0x hex; regex accepts decimal only, so the inventory is incomplete and the marker leaks | Accept | Parse hex or decimal; marker handling; revision bump | WP-1 | Implemented, awaiting PM review |
-| F-02 | Claude | P0 | CONFIRMED-exec | elf.py L190-196, core.py L341-343 | `-r` output pushes dynsym past the 16 MiB parse window | Accept | Separate relocation call; full-output parse | WP-1 | Implemented, awaiting PM review |
-| F-03 | Claude | P1 | CONFIRMED-exec | compare.py L138-142 | Any type change is INCOMPATIBLE, including FUNC↔IFUNC | Accept | Declarative symbol rule table | WP-1 | Implemented, awaiting PM review |
+| F-01 | Claude | P0 | CONFIRMED-exec | elf.py L135, L201 | readelf prints st_size > 99,999 as 0x hex; regex accepts decimal only, so the inventory is incomplete and the marker leaks | Accept | Parse hex or decimal; marker handling; revision bump | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
+| F-02 | Claude | P0 | CONFIRMED-exec | elf.py L190-196, core.py L341-343 | `-r` output pushes dynsym past the 16 MiB parse window | Accept | Separate relocation call; full-output parse | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
+| F-03 | Claude | P1 | CONFIRMED-exec | compare.py L138-142 | Any type change is INCOMPATIBLE, including FUNC↔IFUNC | Accept | Declarative symbol rule table | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
 | F-04 | Claude | P1 (blocker) | CONFIRMED-exec | repository.py L55-81, L146-149 | ELF pairing is package-local; library loss across packages is reported as INFO | Accept | Repository-wide SONAME/path index; LIBRARY_REMOVED | WP-2 | Open |
 | F-05 | Claude | P1 (blocker) | CONFIRMED-static | repository.py L158-163 | No DT_NEEDED or versioned-import satisfiability check in repository mode | Accept | Closed-world AVAILABLE_SET requirement check | WP-2 | Open |
 | F-06 | Claude | P1 (blocker) | CONFIRMED-exec | linker.py L64, L207-249 | One finding per root × closure × import; mostly UNKNOWN HIGH by default | Accept | Memoize per (object, requirement); aggregate; NOT_EXECUTED without loader profile | WP-4 | Open |
@@ -20,13 +20,13 @@ Owner: technical PM (Claude). Maintained by Codex from PM decisions. Baseline co
 | OBJ-1 | PM + Kimi K-F02 | P0 | CONFIRMED-exec | tizen_compat.py L214-221; config.yaml ci | Exit 0 means only "threshold not hit"; no objective-completion status | Accept (K-F02 merged) | run-summary.json objective block; compat_run.py exit 4 = OBJECTIVE_NOT_MET; legacy CLI exits unchanged | WP-5 | Open |
 | AGT-1 | PM | P0 | CONFIRMED-static | 9 CLIs; SKILL.md 16 KB | No bounded summary or single entry point for weak agents | Accept | run-summary.json + compat_run.py doctor/run; SKILL.md ~60 lines | WP-5 | Open |
 | AGT-2 | Handover | P0 | NOT_EXECUTED | — | Real internal-agent validation missing | Accept | Drill with ClineSR after WP-5 | WP-5+ | Open |
-| OPS-1 | Owner | P0 | — | — | PM/Codex continuity backup | Accept | docs/pm/ + verified local backup + push to main | WP-1 | Implemented, awaiting PM review |
-| OPS-2 | PM | P0 | NOT_VERIFIED | workspace | Local state unknown to the PM | Accept | WP-1 Step 0 report | WP-1 | Implemented, awaiting PM review |
+| OPS-1 | Owner | P0 | — | — | PM/Codex continuity backup | Accept | docs/pm/ + verified local backup + push to main | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
+| OPS-2 | PM | P0 | NOT_VERIFIED | workspace | Local state unknown to the PM | Accept | WP-1 Step 0 report | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
 | OPS-4 | Claude | P0 | CONFIRMED (16 skips) | tests | Release suite passes while skipping all real RPM, EROFS and ARM tests | Accept | Real-tool CI image; skips fail under COMPAT_RELEASE_CI=1 | WP-6 | Open |
-| K-01 | Kimi K-F01 | P2 | CONFIRMED-exec | compare.py L36-37; repository.py L169-171 | Duplicate decorated dynsym names collapse in a dict; order-dependent result | Accept | Multimap; duplicates make the inventory incomplete | WP-1 | Implemented, awaiting PM review |
-| K-03 | Kimi K-F03 | P1 | CONFIRMED-exec | preparation.py L31-38 | All-zero file accepted as an empty TAR; UNKNOWN with gate PASS, exit 0 | Accept | Reject zero-member TAR without a recognized payload; exit 2 | WP-1 | Implemented, awaiting PM review |
-| K-06 | Kimi K-F06 | P1 | CONFIRMED-static | core.py L305-318 | Unbounded stdout/stderr written to disk | Accept | Bounded capture for all tools; OUTPUT_LIMIT reason | WP-1 | Implemented, awaiting PM review |
-| K-09 | Kimi K-F09 | P1 | CONFIRMED-static | report_io.py L111 | /proc/pressure/memory read unconditionally | Accept | NOT_AVAILABLE + meminfo/cgroup fallback | WP-1 | Implemented, awaiting PM review |
+| K-01 | Kimi K-F01 | P2 | CONFIRMED-exec | compare.py L36-37; repository.py L169-171 | Duplicate decorated dynsym names collapse in a dict; order-dependent result | Accept | Multimap; duplicates make the inventory incomplete | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
+| K-03 | Kimi K-F03 | P1 | CONFIRMED-exec | preparation.py L31-38 | All-zero file accepted as an empty TAR; UNKNOWN with gate PASS, exit 0 | Accept | Reject zero-member TAR without a recognized payload; exit 2 | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
+| K-06 | Kimi K-F06 | P1 | CONFIRMED-static | core.py L305-318 | Unbounded stdout/stderr written to disk | Accept | Bounded capture for all tools; OUTPUT_LIMIT reason | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
+| K-09 | Kimi K-F09 | P1 | CONFIRMED-static | report_io.py L111 | /proc/pressure/memory read unconditionally | Accept | NOT_AVAILABLE + meminfo/cgroup fallback | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
 | VD-1 | Handover | P0 | NOT_EXECUTED | VD workstation | Real VD sample measurement (v1.5.1) | Accept | ClineSR prompt docs/pm/clinesr/VD-1_PROMPT.md | VD-1 | Open |
 | VD-2 | Handover | P0 | NOT_EXECUTED | VD workstation | Real VD full acceptance | Accept | With v1.5.2-rc1 and the confound flag | VD-2 | Blocked on WP-1..WP-3 |
 
@@ -42,7 +42,7 @@ Owner: technical PM (Claude). Maintained by Codex from PM decisions. Baseline co
 | F-15 | Claude | P2 | CONFIRMED-exec | linker.py L89-94 | Linking verification needs security-dimension metadata | Accept | Always collect execution metadata when linking is active | WP-4 | Open |
 | F-16 | Claude | P2 | LIKELY | collect.py L211-230 | Cache trusts stored JSON; no permissions; non-atomic | Accept | 0700 per-user cache; re-derive from evidence; atomic writes | WP-6 | Open |
 | F-18 | Claude | P2 | DESIGN_GAP | sdb_runtime.py L71-81; SKILL.md | Agent can self-authorize device execution via config | Accept (doc now) | SKILL.md "always ask"; out-of-band authorization in v1.6 | WP-5 / v1.6 | Open |
-| F-20 | Claude | P3 | CONFIRMED-exec | core.py L20 | Stale collector version 1.3.1-phase8a | Accept | Read VERSION | WP-1 | Implemented, awaiting PM review |
+| F-20 | Claude | P3 | CONFIRMED-exec | core.py L20 | Stale collector version 1.3.1-phase8a | Accept | Read VERSION | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
 | F-21 | Claude | P2 | LIKELY | rpm_payload.py L252 | `rpm -qp --xml` capped at 16 MiB | Accept | `--qf` with the needed tags only | WP-2 | Open |
 | F-22 + K-F08 | Claude + Kimi | P2 | DESIGN_GAP | report_browser.py L152-232 | No local access token; fixed port 8765 | Accept (merged) | URL token; `--port 0` default | WP-6 | Open |
 | F-23 | Claude | P2 | DESIGN_GAP | results.json / summary.md | Image-controlled strings reach agent-read files | Accept | Agent reads only run-summary.json | WP-5 | Open |

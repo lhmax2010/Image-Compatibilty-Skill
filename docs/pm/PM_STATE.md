@@ -16,7 +16,7 @@ This is a static developer tool for Tizen compatibility evidence. Authorized run
 | H · SDK and runtime evidence | Both SR SDKs compiled accepted ARMv7 ELF fixtures and the real RPM payload path passed. Runtime is experimental |
 | I · PM continuity | WP-1 state and backup checkpoints are included in the handover |
 
-The WP-1 items, including F-01, F-02 and K-03, are implemented and awaiting PM review. The remaining open release blockers are F-04, F-05, F-06, F-07, OBJ-1, AGT-1 and OPS-4. See [ISSUE_REGISTER.md](ISSUE_REGISTER.md) for owners and selected solutions.
+The PM verified all ten WP-1 items on ae4d269 on 2026-11-27. The remaining open release blockers are F-04, F-05, F-06, F-07, OBJ-1, AGT-1 and OPS-4. See [ISSUE_REGISTER.md](ISSUE_REGISTER.md) for owners and selected solutions.
 
 ## Owner decisions · 2026-11-26
 
@@ -24,4 +24,10 @@ Use the temporary public GitHub repository for ordinary pushes to main. The owne
 
 ## Open work
 
-Claude reviews the WP-1 report and source commits before confirming closure. The real internal-agent drill follows WP-5. The approved ClineSR workstation runs VD-1.
+WP-2 implements repository pairing, available-set checks and instrumentation handling. ClineSR can pull the VD-1 prompt in the startup commit. The real internal-agent drill follows WP-5. The approved ClineSR workstation runs VD-1.
+
+## WP-1 independent PM verification · 2026-11-27
+
+The PM tested ae4d269 on x86-64 with binutils 2.42 and Python 3.13. Both hex-size cases detected the bar@@V1 removal and the expected DATA_SIZE_DECREASED or DATA_SIZE_INCREASED. The shrink case had no V1 marker finding, and the growth case exited 1. FUNC to IFUNC produced UNKNOWN LOW IFUNC_TRANSITION. The actual libLLVM.so.20.1 inventory was complete at 55,959 exports. All-zero inputs exited 2. The workflow fixture exited 1 with objective_completion=COMPLETE and a 5.3 KB run summary. The independent suite ran 355 tests and returned OK with 21 skips for its environment, which lacked RPM and EROFS tools. Source review found F-20, K-06 and K-09 consistent with WP-1.
+
+Readelf output is held in memory up to its configured cap, 512 MiB by default. VD-1 supplies the next resource measurement. The WP-1 Bubblewrap EROFS integration case remained BLOCKED. WP-2 permits private unprivileged namespace binds and prohibits host mounts.
