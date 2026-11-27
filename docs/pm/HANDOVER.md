@@ -15,3 +15,12 @@ git bundle verify "$backup/main-and-tags.bundle"
 ```
 
 Restore into a fresh directory under the workspace. The bundle contains committed history and local tags. The other archives preserve the PM docs and untracked inputs, and the patch files preserve staged and unstaged differences. Reconcile the restored state before applying those patches. The normal push of main backs up committed PM continuity material.
+
+## ClineSR owner rules
+
+1. ClineSR is the Native Server AI. It may download from GitHub but must **never** push, commit or upload anything to GitHub. No prompt may ask it to.
+2. ClineSR receives prompts only by the owner's copy-and-paste. Any script or file it needs must be committed to `main` by Codex; ClineSR then downloads it from GitHub.
+3. ClineSR's workspace is `/home/liushanshan/Toolchain/Tools/Image-Compatibilty-Skill`, an existing clone of this repository. It must not create any file outside that workspace. Its scratch area is `<workspace>/.local-work/`.
+4. `/home/linhao/Downloads` exists only on Codex's PC.
+5. The owner relays ClineSR results to the PM.
+6. ClineSR's clone currently holds two unpushed local documentation commits made by mistake. Nobody should push or replay them. ClineSR uses `git fetch` plus `git show`/`git archive` only, never `pull` or `merge`.
