@@ -1,5 +1,6 @@
 """WP-4 static policy, report and scratch behavior controls."""
 from collections import Counter, namedtuple
+from contextlib import redirect_stdout
 import csv
 import hashlib
 import io
@@ -42,7 +43,7 @@ class Policies(Environment):
         target = collect_elf(binary, '/bin/copy', self.tools, 'static')
         self.assertEqual(target['export_inventory_status'], 'COMPLETE')
         (copy,) = target['copy_relocations']
-        self.assertIn('optind@', copy['name'])
+        self.assertEqual(copy['name'], 'optind')
         self.assertNotIn(copy['name'], {s['name'] for s in target['exports']})
         raw = (self.output / target['evidence'][0]).read_text()
         relocation = (self.output / target['evidence'][-2]).read_text()
@@ -50,7 +51,8 @@ class Policies(Environment):
         self.assertRegex(relocation, r'R_\w+_COPY.*optind@')
         self.assertEqual(parse_readelf(raw, '')['copy_relocations'], [])
         self.assertEqual(parse_readelf(raw.split('Version needs section', 1)[0], relocation)['copy_relocations'], [])
-        self.assertEqual(symbol_identity(copy['name']+' (3)'), symbol_identity(copy['name']))
+        decorated = copy['name']+'@'+copy['version']
+        self.assertEqual(symbol_identity(decorated+' (3)'), symbol_identity(decorated))
 
         (req,) = [r for r in obligations(target) if r[0] == 'COPY_RELOCATION']
         self.assertEqual(req[4], copy['size'])
@@ -167,6 +169,46 @@ class Policies(Environment):
         index = self.base/'index'
         build(self.output,index,FixtureGuard)
         self.assertEqual(json.loads((index/'validation.json').read_text())['status'],'PASS')
+
+    def test_review_gate_headline_and_exit_code(self):
+        left = self.blank() | {'schema_version':'1.2','elf_objects':[elf('/lib/a.so',exports=[symbol('_Z3runv',binding='WEAK')])]}
+        right = self.blank() | {'schema_version':'1.2','elf_objects':[elf('/lib/a.so')]}
+        for side, data in (('old', left), ('new', right)):
+            (self.base/(side+'.json')).write_text(json.dumps(data))
+        def run(tag, candidate, *args):
+            output = self.base/tag
+            with redirect_stdout(io.StringIO()) as console:
+                code = main(['--baseline-manifest',str(self.base/'old.json'),'--candidate-manifest',
+                             str(self.base/(candidate+'.json')),'--output',str(output),*args])
+            self.assertEqual(code,0)
+            handoff = json.loads((output/'run-summary.json').read_text())
+            self.assertEqual(handoff['ci_gate_status'],'PASS')
+            return output, console.getvalue(), handoff
+
+        output,line,handoff = run('pending','new')
+        notice = 'Owner review: 1 weak C++ export removals pending (see weak-export-review.csv).'
+        self.assertEqual(handoff['review_gate'],'PENDING')
+        self.assertIn(notice,line)
+        markdown = (output/'summary.md').read_text()
+        html = (output/'index.html').read_text()
+        self.assertIn(notice,markdown.split('## ',1)[0])
+        self.assertIn(notice,html.split('Collector execution',1)[0])
+        self.assertIn('| cxx_other | 1 |',markdown)
+        self.assertIn('<th>C++ class</th><th>Count</th>',html)
+
+        with (output/'weak-export-review.csv').open() as stream:
+            row = next(csv.DictReader(stream))
+        decision = self.base/'accept.csv'
+        decision.write_text('review_id,review_decision,reviewer,review_note\n'
+                            +row['review_id']+',ACCEPT,Owner,Verified\n')
+        for expected, candidate, args in (('NONE','old',()),
+                                           ('COMPLETE','new',('--review-decisions',str(decision)))):
+            with self.subTest(expected=expected):
+                output,line,handoff = run(expected,candidate,*args)
+                self.assertEqual(handoff['review_gate'],expected)
+                self.assertNotIn('Owner review:',line)
+                for leaf in ('summary.md','index.html'):
+                    self.assertNotIn('Owner review:', (output/leaf).read_text())
 
     def test_review_decisions_scope_and_receipt(self):
         a,b = self.weak_inputs()

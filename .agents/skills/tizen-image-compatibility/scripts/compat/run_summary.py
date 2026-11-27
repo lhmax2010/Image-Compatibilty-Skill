@@ -118,6 +118,7 @@ def make_summary(a, b, result, config, objective=None, reused=False):
             'linking_detail_counts':result.get('linking_detail_counts', {}),
             'export_incomplete_by_reason':result.get('export_incomplete_by_reason', {}),
             'removed_exports':result.get('removed_exports', {}),
+            'review_gate':result.get('review', {}).get('status', 'NONE'),
             'review':{k:v for k,v in result.get('review', {}).items() if k != 'review_unmatched'},
             'missing_reason_codes':result.get('finding_integrity', {}).get('missing_reason_codes', 0),
             'high_risk_findings':[{key: str(f[key])[:240] for key in ('id','dimension','component','interface','status','severity')}
@@ -136,5 +137,5 @@ def blocked_summary(objective, phase, reason):
         error.update(reason_code='TOOL_TIMEOUT', tool=message.partition(': ')[2])
     return {'schema':SCHEMA, 'scope':None, 'requested_objective':objective, 'objective_completion':'BLOCKED',
             'execution_status':phase, 'compatibility_status':'UNKNOWN', 'coverage_status':'NOT_EXECUTED',
-            'statistics':{}, 'high_risk_findings':[], 'errors':[error], 'report_paths':{},
+            'review_gate':'NONE', 'statistics':{}, 'high_risk_findings':[], 'errors':[error], 'report_paths':{},
             'next_step':'Resolve the reported blocker and use a new output directory.'}

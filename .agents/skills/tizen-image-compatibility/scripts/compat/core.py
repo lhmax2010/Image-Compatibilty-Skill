@@ -18,6 +18,8 @@ import threading
 import time
 from typing import Any
 
+from .packed_rows import encode_packed_rows
+
 VERSION = (Path(__file__).resolve().parents[2] / 'VERSION').read_text(encoding='ascii').strip()
 SCHEMA = '1.2'
 DIMENSIONS = ('elf', 'abi', 'api', 'headers', 'linking', 'compiler_runtime', 'kernel',
@@ -84,7 +86,7 @@ def digest(data: bytes) -> str:
 
 
 def canonical(obj: Any) -> str:
-    return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(',', ':'), default=encode_packed_rows)
 
 
 def write_json(path: Path, obj: Any, *, compact=False) -> None:
@@ -92,7 +94,7 @@ def write_json(path: Path, obj: Any, *, compact=False) -> None:
     # Stream large inventories rather than retaining a second full JSON copy.
     writer = gzip.open(path, 'wt', encoding='utf-8', compresslevel=3) if path.suffix == '.gz' else path.open('w', encoding='utf-8')
     with writer as stream:
-        json.dump(obj, stream, ensure_ascii=False, sort_keys=True,
+        json.dump(obj, stream, ensure_ascii=False, sort_keys=True, default=encode_packed_rows,
                   indent=None if compact else 2, separators=(',', ':') if compact else None)
         stream.write('\n')
 

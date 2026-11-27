@@ -65,11 +65,14 @@ Owner: technical PM (Claude). Maintained by Codex from PM decisions. Baseline co
 | POL-WEAK | Owner VD-1b | P1 | CONFIRMED-exec | compare.py | Weak C++ removals dominate | D-POL-WEAK | UNKNOWN LOW pending owner review | WP-4 | Implemented and fixture-verified. Owner review remains pending |
 | POL-BINDING | PM VD-1b | P1 | CONFIRMED-exec | compare.py | Defined weak/global changes have overstated risk | D-POL-BINDING | Loader-aware binding policy | WP-4 | Implemented and fixture-verified. Awaiting PM review |
 | COPY-REL | PM VD-1b | P1 | CONFIRMED-exec | elf.py | Executable copy relocation uses verneed | Accept | Classify import and check provider size | WP-4 | Verified on real x86-64 and ARMv7 fixtures. Awaiting PM review |
-| DT-AGG | PM | P1 | CONFIRMED-exec | linker.py | Individual non-breaking DT_NEEDED findings | Accept | Group and retain detail | WP-4 | Implemented. SR retained 82,992 Linking findings against the 80,000 target |
-| RPT-SIZE-3 | VD-1b | P1 | CONFIRMED-exec | reports | 15.5 GB full repository projection | Accept | Compression and compact rows | WP-4 | Scale passed at 39.76%. SR missed at 59.31%. VD sizing pending |
+| DT-AGG | PM | P1 | CONFIRMED-exec | linker.py | Individual non-breaking DT_NEEDED findings | Accept | Group and retain detail | WP-4 | PM accepted 82,992 Linking findings for RC1 against the 80,000 target |
+| RPT-SIZE-3 | VD-1b | P1 | CONFIRMED-exec | reports | 15.5 GB full repository projection | Accept | Compression and compact rows | WP-4 | PM accepted the SR result for RC1. Native VD sizing remains the gate |
 | SUITE-ARM | PM | P1 | NEEDS_VERIFICATION | ClineSR | Python 3.10 test host needed | Accept | Publish a private-output suite runner | WP-4 | Runner published and host-tested. Native Python 3.10 blocked here |
 | VD-ASAN | Owner | P2 | CONFIRMED | VD QuickBuild | ASAN is a name only | Close | Fixture-only validation | N/A | Closed |
 | PERF-LINK | PM | P2 | CONFIRMED-exec | linker.py | Scale cost | Measure only | Defer optimisation | post-RC | Measured in WP-4. Optimisation deferred |
+
+| REV-HEAD | PM WP-4 RC1 | P1 | CONFIRMED-exec | Report and CLI headlines | Owner review pending was hidden below the headline | Accept | Pending notices and a separate review gate | WP-4 B | Implemented. Local PENDING, NONE and COMPLETE tests pass |
+| MEM-SCALE | VD-1c | P1 | CONFIRMED-exec | RPM ELF inventory retention | Full repository RSS projects to about 14 GB under WP-3b | Accept | Compact live collected symbol arrays per ELF object | WP-4 B | Synthetic slope target passed. Native VD memory budget pending |
 
 ## Deferred / owner-decided
 

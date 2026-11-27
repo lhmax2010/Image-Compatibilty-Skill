@@ -10,7 +10,7 @@ from .profile import instrumentation
 
 HEADER_KEYS = {'Class': 'class', 'Data': 'endianness', 'OS/ABI': 'osabi',
                'ABI Version': 'abi_version', 'Type': 'type', 'Machine': 'machine', 'Flags': 'flags'}
-ELF_INVENTORY_REVISION = 7
+ELF_INVENTORY_REVISION = 8
 DYNAMIC_SYMBOL_ROW = re.compile(r'^[ \t]*(\d+):[ \t]+([0-9a-fA-F]+)[ \t]+(0[xX][0-9a-fA-F]+|\d+)[ \t]+(\S+)[ \t]+(\S+)'
                                 r'[ \t]+(\S+)[ \t]+(\S+)(?:[ \t](.*))?$')
 
@@ -194,7 +194,7 @@ def parse_readelf(text: str, relocation_text=None) -> dict[str, Any]:
         if (symbol['type'] == 'OBJECT' and symbol['section'].isdigit() and req and req['file']
                 and symbol['version_index'] not in definition_indices
                 and (relocation_text is None or symbol['name'] in copies)):
-            obj['copy_relocations'].append({'name':symbol['name'], 'version':symbol['version'], 'size':symbol['size'],
+            obj['copy_relocations'].append({'name':symbol['base_name'], 'version':symbol['version'], 'size':symbol['size'],
                                             'provider_soname':req['file']})
         else:
             exported.append(symbol)
@@ -398,6 +398,12 @@ def symbol_identity(name: str) -> dict[str, Any]:
     name = normalized_symbol_name(name)
     base, separator, version = name.partition('@@' if '@@' in name else '@')
     return {'base_name': base, 'version': version or None, 'default_version': separator == '@@'}
+
+
+def copy_relocation_check(record):
+    """Use the same version-qualified check for RC1 and base-name records."""
+    name = symbol_identity(record['name'])['base_name']
+    return f"copy relocation:{name}@{normalize_version(record['version'])}"
 
 
 def arm_abi(obj: dict[str, Any]) -> dict[str, Any]:

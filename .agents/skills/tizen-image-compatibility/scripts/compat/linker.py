@@ -5,7 +5,7 @@ Unknown environment/cache, unsupported tokens and shared-library caller scopes s
 from collections import OrderedDict, deque
 import posixpath
 from .core import finding, canonical, digest
-from .elf import dynamic_exports, normalize_version, runtime_metadata_complete, symbol_identity, target_abi_matches, version_nodes
+from .elf import copy_relocation_check, dynamic_exports, normalize_version, runtime_metadata_complete, symbol_identity, target_abi_matches, version_nodes
 
 
 NEXT_ACTIONS = {
@@ -340,7 +340,7 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
                 proven = bool(scope_known and symbol_scope_known and provider and not other_entries)
                 state = ('unknown_symbol_scope' if not proven or len(entries) > 1 else 'missing_symbol' if not entries else
                          'copy_reloc_size_changed' if entries[0]['size'] != copy['size'] else 'verified')
-                emit(obj, 'copy relocation:' + copy['name'], copy, {'provider': provider['path'], 'export': entries[0]}
+                emit(obj, copy_relocation_check(copy), copy, {'provider': provider['path'], 'export': entries[0]}
                      if len(entries) == 1 else None, state,
                      'INCOMPATIBLE' if state in ('copy_reloc_size_changed', 'missing_symbol') else None,
                      context={'scope_proven':proven, 'provider':provider_identity(provider)})

@@ -100,7 +100,9 @@ with exact name and version identities, excluding the provider itself.
 The static CLI writes `weak-export-review.csv`. Copy it, enter `ACCEPT` or
 `REJECT` with a reviewer and note, and run another comparison in an empty output
 directory with `--review-decisions path/to/review.csv`. Empty rows remain pending.
-The run summary records the input SHA-256 and review counts. The results list
+The run summary records the input SHA-256 and review counts. Its separate
+`review_gate` is PENDING, COMPLETE or NONE. Existing CI gates and exit codes
+continue to describe collection, coverage and compatibility. The results list
 unmatched review IDs. Decisions apply only to the matching eligible review ID.
 An owner should check package variants and the full consumer set before accepting
 one. Set `policy.weak_cxx_export_removal: incompatible` for legacy grading.

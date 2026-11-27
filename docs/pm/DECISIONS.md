@@ -85,3 +85,31 @@ The RC implementation at `8b948dd0fa98bf74fbae6dbda04a922b8696d1d5` passed
 SR output contains 10,011 owner-review rows under D-POL-WEAK. Two other
 previously reported export removals are versioned copy relocations.
 [WP-4 verification and unresolved gates](work-packages/WP-4/REPORT.md)
+
+## WP-4 RC1 acceptance and VD-1c
+
+The PM accepted RC1 at `da37925`. The PM suite ran 391 tests with 29 tool-dependent skips. The SR Linking and size deviations were accepted for RC1. The native VD measurement determines RPT-SIZE-3. [PM verification](work-packages/WP-4/PM_REVIEW.md)
+
+The ClineSR server runs **Python 3.10.22**.
+
+VD-1c covers 600 packages per side (1.8 GB each) with tool `2633672`:
+
+| Metric | 150 packages | 600 packages | Linear projection to 5,693 |
+|---|---:|---:|---:|
+| Wall time | 50 s | 223 s | ≈ 35 min |
+| Peak RSS | 424 MB | 1,535 MB | **≈ 14 GB** |
+| Report | 325 MB | 1,315 MB | **≈ 12.5 GB** |
+
+- **600-package report breakdown:** evidence 318 MB, `symbol-differences.csv` 281 MB, `results.json` 254 MB, manifests 318 MB, `findings.csv` 78 MB, `requirement-findings.csv` 51 MB.
+- **Removed exports and binding changes:** 23,251 removed exports, of which 21,380 are weak (92%). 958 are imported somewhere: 658 GLOBAL and 300 WEAK. Binding changes: GLOBAL→WEAK 25,512, UNIQUE→WEAK 729. Also 6 `DEFAULT_VERSION_LOOKUP_LOST`.
+- **Export-incomplete objects:** 463 in the baseline and 365 in the candidate.
+  - 341 per side are `DUPLICATE_DYNSYM_IDENTITY`. 352 per side are `object_incomplete` with about 12,200 readelf warnings each side.
+  - This symmetric group is **unexplained**. It is not split debug files in the PM's x86 reproduction. Kit revision 7 will classify its shape. Do not change classification for it yet.
+- **Extraction errors:** `extraction-errors.csv` is 2.3 MB, cause unknown. Revision 7 counts it.
+
+REV-HEAD and MEM-SCALE are RC2 work. The unexplained symmetric export-inventory group and extraction failures remain under observation.
+
+
+Addendum B RC2 passed the local 392-test suite. Synthetic memory slope
+fell from 1,079.52 to 310.50 KiB per package. Native RSS and report sizing
+still determine VD-2 admission. [Addendum B verification](work-packages/WP-4/ADDENDUM_B_REPORT.md)

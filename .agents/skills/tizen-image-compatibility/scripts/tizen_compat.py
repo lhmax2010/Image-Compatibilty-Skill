@@ -21,7 +21,7 @@ from compat.preparation import identity, prepared_input
 from compat.report_io import open_payload
 from compat.report import build_results, generate
 from compat.run_summary import OBJECTIVES, blocked_summary, save
-from compat.weak_review import Review
+from compat.weak_review import Review, pending_headline
 from compat.testing import run_matrix
 from compat.matrix_manifest import reconcile
 
@@ -257,7 +257,9 @@ def main(argv: list[str] | None = None) -> int:
             generate(output, a, b, result, config, objective=args.objective, reused=bool(args.baseline_manifest), tools=tools)
             save(output, result['run_summary'])
             finalized = True
-            print(f"{result['status']}: {len(findings)} findings; execution {result['execution']['status']}; quality gate {result['quality_gate']['status']} (compatibility={result['quality_gate']['compatibility_status']}, coverage={result['quality_gate']['coverage_status']}, execution={result['quality_gate']['execution_status']}); report {output / 'index.html'}")
+            review_notice = pending_headline(result['review'])
+            review_suffix = ' ' + review_notice if review_notice else ''
+            print(f"{result['status']}: {len(findings)} findings; execution {result['execution']['status']}; quality gate {result['quality_gate']['status']} (compatibility={result['quality_gate']['compatibility_status']}, coverage={result['quality_gate']['coverage_status']}, execution={result['quality_gate']['execution_status']}); report {output / 'index.html'}{review_suffix}")
             if result['quality_gate']['execution_status'] == 'FAIL':
                 return 3
             threshold = SEVERITIES.index(config['ci']['fail_on'])

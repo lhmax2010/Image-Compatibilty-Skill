@@ -26,6 +26,12 @@ COLUMNS = ('review_id', 'package', 'soname', 'path', 'symbol', 'demangled', 'cxx
            'review_decision', 'reviewer', 'review_note')
 
 
+def pending_headline(review):
+    if review.get('status') == 'PENDING':
+        return f"Owner review: {review['pending']} weak C++ export removals pending (see weak-export-review.csv)."
+    return ''
+
+
 class Review:
     def __init__(self, path=None):
         self.decisions = {}

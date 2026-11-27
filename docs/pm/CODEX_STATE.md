@@ -1,18 +1,16 @@
 # Codex checkpoint
 
-WP-4 produced v1.5.3-rc1. [Full section 10 report](work-packages/WP-4/REPORT.md)
+WP-4 RC1 was independently accepted. Addendum B packages v1.5.3-rc2.
+[PM verification](work-packages/WP-4/PM_REVIEW.md) · [RC2 report](work-packages/WP-4/ADDENDUM_B_REPORT.md)
 
-- Step 0 `4bebed633420b758356c8384d32ddbc144ca2d5f` records the accepted
-  WP-3b work and the VD-1b measurements.
-- Step 7 `6434bdf07a3e4a9396297dcdbfcbcf599282bfd4` publishes the tested
-  ClineSR suite runner. Script SHA-256
-  `99d5a0115c1c6e190f4a27e60d2894796481dc6e675ba6cb3f1dde7954cd091f`.
-- Implementation `8b948dd0fa98bf74fbae6dbda04a922b8696d1d5` passed
-  391 regression tests with 385 passed, six existing skips and zero failures.
-- Synthetic scale met its size target. SR completed and reconciled with
-  82,992 Linking findings and 963,303,190 report bytes. Both SR targets
-  remain open. The initial run omitted the performance exclusion, so the
-  measured rerun used the historical arguments in a fresh output.
-- Real EROFS, native Python 3.10 and VD acceptance remain pending. Raw traces,
-  historical reports and immutable hash checks are workspace-local. The
-  selected final backup is in `.local-backups/LATEST`. No WP-4 jobs remain.
+- Kit revision 7 is published at `068df39ee3ec05511fdaad144c5505512859f281`.
+  Published SHA-256
+  `4a8b6ae5d4442604a36cb2362690d0f344c186ec8a635f58980b9583a84cfb78`.
+  A follow-up documentation commit records both digests.
+- REV-HEAD and the COPY-REL base-name fix passed. The full local suite
+  ran 392 tests with 386 passed, six existing skips and zero failures.
+- The synthetic MEM-SCALE slope fell 71.24%, with full report and evidence
+  reconciliation. Native Python 3.10.22 and the actual VD memory and
+  output budgets remain open. No Addendum B local jobs remain.
+- Backups and raw benchmark evidence remain workspace-local.
+  The final verified backup is selected by `.local-backups/LATEST`.

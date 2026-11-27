@@ -173,6 +173,7 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
         return '<table><thead><tr>' + ''.join('<th>' + esc(x) + '</th>' for x in headers) + '</tr></thead><tbody>' + ''.join(
             '<tr>' + ''.join('<td><pre>' + esc(x) + '</pre></td>' for x in row) + '</tr>' for row in rows) + '</tbody></table>'
     summary = results['summary']
+    review_notice = weak_review.pending_headline(results.get('review', {}))
     handoff = results.get('run_summary', {})
     banner = ''
     if results.get('comparison_validity') == 'CONFOUNDED':
@@ -188,6 +189,8 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
             f"Tests: {summary['total_tests']}; passed: {summary['passed_tests']}; failed: {summary['failed_tests']}; unknown: {summary['unknown_tests']}.",
             f"Findings: {summary['findings']}; incompatible: {summary['by_status']['INCOMPATIBLE']}; unknown: {summary['by_status']['UNKNOWN']}.", '',
             'Static findings are not executable test counts. No runtime execution means no runtime pass.', '']
+        if review_notice:
+            lines[4:4] = ['**'+review_notice+'**', '']
         if banner:
             lines[:0] = [banner, '']
         if handoff:
@@ -228,7 +231,8 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
                           'See requirement-findings.csv for all failed and unknown requirements when CSV is enabled.']
         if results.get('review', {}).get('pending'):
             lines += ['', '## '+weak_review.TITLE, '', weak_review.RATIONALE, '',
-                      'Counts by C++ class: '+canonical(review_classes), '',
+                      'Counts by C++ class', '', '| C++ class | Count |', '| --- | ---: |',
+                      *(f'| {esc(name)} | {count} |' for name, count in sorted(review_classes.items())), '',
                       ('Top 20 libraries by pending count. See weak-export-review.csv for individual decisions.'
                        if report['csv'] else 'Top 20 libraries by pending count. CSV output is disabled.')]
             lines += ['- '+esc((pkg+' ' if pkg else '')+lib.replace('\n',' '))+' — '+str(len(review_groups[pkg,lib]))
@@ -249,6 +253,8 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
         content = ('<p class="status">'+esc(banner)+'</p>' if banner else '')
         content += '<h1>Tizen image compatibility</h1><h2>Executive summary</h2>'
         content += '<p class="status">' + esc(results['status']) + '</p>'
+        if review_notice:
+            content += '<p class="status">'+esc(review_notice)+'</p>'
         if handoff:
             content += table([[label,handoff[key]] for label,key in headline], ['Status field','Value'])
             content += '<p><a href="run-summary.json">Download the compact run summary</a></p>'
@@ -284,7 +290,7 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
             content += '<p>Package rows: '+str(len(repo['packages']))+'; preview: '+str(min(200,len(repo['packages'])))+'.</p>'
         if results.get('review', {}).get('pending'):
             content += '<h2>'+esc(weak_review.TITLE)+'</h2><p>'+esc(weak_review.RATIONALE)+'</p>'
-            content += '<p>Counts by C++ class: '+esc(review_classes)+'</p>'
+            content += '<p>Counts by C++ class</p>' + table(sorted(review_classes.items()), ['C++ class', 'Count'])
             if report['csv']:
                 content += '<p><a href="weak-export-review.csv">Full review table</a></p>'
             for pkg, lib in review_libraries:

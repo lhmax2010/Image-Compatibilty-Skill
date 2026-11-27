@@ -3,6 +3,7 @@ from collections import Counter, defaultdict, deque
 
 from .core import canonical, finding
 from .elf import duplicate_dynsym_names, dynamic_exports, normalize_version, symbol_identity, version_nodes
+from .packed_rows import PackedRows
 from .profile import runtime_object
 from .report_io import csv_rows
 from .repository_pairing import abi_key
@@ -185,7 +186,7 @@ def check_available_set(dictionaries, owners, components, complete, output=None,
             package_id, nevra = owners[path]
             abi = abi_key(obj)
             usable = (obj.get('complete') and obj.get('resolution_metadata_complete') is True
-                      and obj.get('export_inventory_complete') is True and isinstance(obj.get('imports'),list)
+                      and obj.get('export_inventory_complete') is True and isinstance(obj.get('imports'), (list, PackedRows))
                       and all(abi) and not duplicate_dynsym_names(obj))
             requirements = obligations(obj) if usable else [('CONSUMER_INVENTORY',None,None,None,False)]
             details = []

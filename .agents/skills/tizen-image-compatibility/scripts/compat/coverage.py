@@ -1,7 +1,7 @@
 """Independent compatibility outcome and explicit required-check completeness (1.2)."""
 from collections import defaultdict
 from .core import DIMENSIONS, SEVERITIES
-from .elf import dynamic_exports, symbol_identity
+from .elf import copy_relocation_check, dynamic_exports, symbol_identity
 
 SECTIONS = {'elf': 'elf_objects', 'abi': 'elf_objects', 'linking': 'elf_objects', 'api': 'public_headers',
             'headers': 'public_headers', 'compiler_runtime': 'runtime_libraries', 'kernel': 'kernel',
@@ -139,7 +139,7 @@ def coverage_report(a, b, findings, tests, matrix, config, *, linking_details=No
                 required = {'DT_NEEDED:' + n for n in obj.get('needed', [])}
                 symbolic = {'import:' + s['name'] for s in obj.get('imports', [])}
                 symbolic |= {'version:' + r['file'] + ':' + r['name'] for r in obj.get('version_requirements', [])}
-                symbolic |= {'copy relocation:' + r['name'] for r in obj.get('copy_relocations', [])}
+                symbolic |= {copy_relocation_check(r) for r in obj.get('copy_relocations', [])}
                 if linking_details is None:
                     required |= symbolic
                 else:

@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.5.3-rc2
+
+- Surface pending weak C++ owner review in the console, report headlines and the separate `review_gate` field.
+- Store copy-relocation names separately from their versions. Keep RC1 records readable.
+- Pack collected repository symbol inventories per ELF object in memory and emit the original manifest arrays.
+- Update the ClineSR measurement kit to read RC reports and share fixed diagnostic categories.
+
 ## v1.5.3-rc1
 
 - WP-1 reconciles complete GNU dynsym tables, handles large symbol sizes and bounds raw tool capture.

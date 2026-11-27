@@ -12,6 +12,7 @@ from xml.etree import ElementTree
 from .core import Tools, canonical, digest, hash_file, limitation
 from .elf import collect_elf, dynamic_exports
 from .packages import parse_rpm_evidence
+from .packed_rows import pack_symbol_inventory
 from .report_io import evidence_path
 
 FIELDS = ('name', 'epoch', 'version', 'release', 'arch')
@@ -100,6 +101,7 @@ def file_content(stream, length, elf_path, tools, mode, path, scan_elf):
         if target:
             target.close()
             result = collect_elf(elf_path,path,tools,mode,bounded=True)
+            pack_symbol_inventory(result)
     finally:
         if target:
             target.close()
