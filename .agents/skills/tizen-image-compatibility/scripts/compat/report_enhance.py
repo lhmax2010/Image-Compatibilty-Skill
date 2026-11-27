@@ -32,7 +32,9 @@ def export(store):
     specs = {
         'package-symbol-summary.csv': 'SELECT summary FROM packages ORDER BY side,name,id',
         'elf-symbol-summary.csv': 'SELECT summary FROM pairs ORDER BY id',
-        'symbol-differences.csv': 'SELECT row_json FROM differences ORDER BY n',
+        'symbol-differences.csv': ('SELECT row_json FROM differences WHERE difference_type <> \'MATCHED\' ORDER BY n'
+                                  if store.metadata.get('symbol_differences_mode') == 'changes'
+                                  else 'SELECT row_json FROM differences ORDER BY n'),
         'linking-findings-groups.csv': 'SELECT summary FROM groups ORDER BY id',
     }
     for filename, query in specs.items():

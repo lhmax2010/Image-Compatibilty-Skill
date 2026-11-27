@@ -50,7 +50,7 @@ DEFAULTS: dict[str, Any] = {
                           'sysroots': {}, 'compilers': {}, 'header_limit': 50,
                           'include_dirs': ['usr/include'], 'probes': [], 'builds': {}, 'semantic_headers': False, 'target_abis': {}, 'runtime_objects': {}, 'sdk_package_manifests': {}},
     'performance': {'enabled': False, 'tolerance_percent': 10},
-    'report': {'html': True, 'json': True, 'markdown': True, 'csv': True},
+    'report': {'html': True, 'json': True, 'markdown': True, 'csv': True, 'symbol_differences': 'changes'},
     'ci': {'fail_on': 'HIGH', 'strict': False, 'minimum_coverage': {}, 'fail_on_collector_failure': True},
     'severity_overrides': {},
 }
@@ -157,6 +157,8 @@ def validate_config(c: dict[str, Any]) -> None:
     require(type(c['analysis']['workers']) is int and type(c['cross_compilation']['header_limit']) is int,
             'workers and header_limit must be integers')
     require(c['ci']['fail_on'] in SEVERITIES, 'Invalid fail_on severity')
+    require(c['report']['symbol_differences'] in ('changes', 'all'),
+            'report.symbol_differences must be changes or all')
     require(all(k in DIMENSIONS and v in SEVERITIES for k, v in c['severity_overrides'].items()),
             'severity_overrides must map dimension to severity')
     require(all(isinstance(v, str) or v is False for v in c['tools'].values()), 'Tool must be path or false')
@@ -509,6 +511,9 @@ def finding(dimension: str, component: str, interface: str, baseline: Any, candi
     if reason_code:
         item['reason_code'] = reason_code
     item['id'] = 'TC-' + digest(canonical(item).encode())[:16]
+    if not reason_code and status in ('INCOMPATIBLE', 'UNKNOWN'):
+        from .observation import observation_reason
+        item['reason_code'] = observation_reason(interface, status)
     return item
 
 
@@ -536,6 +541,9 @@ def read_manifest(path: Path) -> dict[str, Any]:
                 raise ValueError('Invalid ELF runtime role')
             if 'export_inventory_complete' in obj and type(obj['export_inventory_complete']) is not bool:
                 raise ValueError('Invalid export inventory completeness marker')
+            if obj.get('export_inventory_status') == 'UNKNOWN' and not obj.get('export_inventory_reason_code'):
+                obj.update(export_inventory_reason_code='OBJECT_INCOMPLETE',
+                           export_inventory_diagnostics=['OBJECT_INCOMPLETE'])
             if 'resolution_metadata_complete' in obj and type(obj['resolution_metadata_complete']) is not bool:
                 raise ValueError('Invalid symbol-resolution completeness marker')
             if not isinstance(obj.get('path'), str) or type(obj.get('complete')) is not bool:

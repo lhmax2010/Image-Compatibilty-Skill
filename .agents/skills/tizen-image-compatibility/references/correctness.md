@@ -103,3 +103,52 @@ An instrumentation share of at least 20% on one side and at most 2% on the other
 flags a CONFOUNDED comparison. A particular pair with different instrumentation
 can downgrade an OBJECT or TLS size change even below the image-wide threshold.
 Complete evidence for a removed ordinary export still supports INCOMPATIBLE.
+
+## WP-3b reason-code vocabulary
+
+Reason codes explain observed results. They do not grant completeness or change
+the severity. Historical reports may omit these fields.
+
+| Codes | Status | Meaning | Next action |
+| --- | --- | --- | --- |
+| `EXPORT_REMOVED` | INCOMPATIBLE | Complete candidate dynamic inventory lacks a previously observed export. | Review the required export/version and affected consumers. |
+| `EXPORT_NOT_OBSERVED`, `EXPORT_INVENTORY_INCOMPLETE`, `DUPLICATE_DYNSYM_IDENTITY` | UNKNOWN | Collection or duplicate identities prevent an absence proof. | Repeat or repair collection before treating an export as removed. |
+| `VERSION_DEFINITION_REMOVED`, `VERSION_DEFINITION_NOT_OBSERVED` | INCOMPATIBLE, UNKNOWN respectively | GNU version node is absent or not observed with incomplete evidence. | Check the provided GNU version nodes and inventory evidence. |
+| `DEFAULT_VERSION_LOOKUP_LOST` | INCOMPATIBLE or UNKNOWN | Unversioned lookup no longer finds a default export, conditional on completeness. | Restore or verify the default symbol version. |
+| `DEFAULT_VERSION_CHANGED`, `DEFAULT_SYMBOL_VERSION_CHANGED` | UNKNOWN | The observed default version differs. | Verify unversioned consumers with the matching loader. |
+| `DT_NEEDED_CHANGED` | UNKNOWN | Declared dependency list differs. | Inspect the candidate dependency and loader environment. |
+| `ELF_AVAILABILITY_UNVERIFIED`, `EXECUTABLE_NOT_FOUND`, `OBJECT_UNPAIRED`, `LIBRARY_NOT_FOUND_INCOMPLETE_INVENTORY`, `PROVIDER_AMBIGUOUS` | UNKNOWN | A unique candidate object or provider has not been established. | Reconcile identities, aliases and complete inventories. |
+| `LIBRARY_REMOVED` | INCOMPATIBLE | Complete available RPM payload comparison proves the library absent. | Restore the provided contract or validate the replacement and consumers. |
+| `KIND_CHANGED`, `TLS_KIND_CHANGED`, `DATA_SIZE_DECREASED`, `DATA_SIZE_INCREASED` | INCOMPATIBLE | An observed export type, TLS classification or data size violates the retained ABI rule. | Verify the contract and rebuild or restore the provider as appropriate. |
+| `IFUNC_TRANSITION`, `NOTYPE_ANNOTATION`, `GNU_UNIQUE_DROPPED`, `SYMBOL_BINDING_CHANGED`, `SYMBOL_VISIBILITY_CHANGED` | UNKNOWN | Dispatch, annotation, binding or visibility differs with unresolved behavior. | Use matching consumer and loader probes. |
+| `INSTRUMENTATION_MISMATCH` | UNKNOWN | Instrumentation can account for a data-size change. | Compare like instrumented or plain builds. |
+| `INSTRUMENTATION_SYMBOL` | COMPATIBLE or UNKNOWN | An observed additional instrumentation-related symbol. | Keep the instrumentation context with the comparison. |
+| `DWARF_ABI_CHANGED`, `DWARF_ABI_UNAVAILABLE` | INCOMPATIBLE, UNKNOWN respectively | Type/layout analysis found an ABI break or lacks conclusive evidence. | Inspect abidiff evidence and matching debug files. |
+| `DIMENSION_NOT_EXECUTED`, `COVERAGE_LIMITATION`, `LOADER_ENV_MISSING` | UNKNOWN | A check was not executed or its coverage is incomplete. | Review limitations and configure the required collector or loader profile. |
+| `UNKNOWN_COLLECTION`, `UNKNOWN_SEARCH_ENVIRONMENT`, `UNKNOWN_LOADER_ABI`, `UNKNOWN_LOADER_FEATURE` | UNKNOWN | Collection, loader identity, search proof or supported feature set is incomplete. | Supply actual loader, namespace, search and execution metadata. |
+| `UNKNOWN_VERSION_REQUIREMENT`, `UNKNOWN_SYMBOL_SCOPE`, `UNKNOWN_SYMBOL_SEMANTICS` | UNKNOWN | Required node, scope, symbol selection or special lookup rules are unverified. | Record the complete scope and verify actual binding on the matching target. |
+| `MISSING_PROVIDER`, `UNRESOLVABLE_PROVIDER` | INCOMPATIBLE or UNKNOWN | Required library is absent or unusable in its search context. | Inspect the proof and restore the expected library or search path. |
+| `MISSING_VERSION`, `MISSING_SYMBOL`, `SYMBOL_TYPE_MISMATCH` | INCOMPATIBLE | A proven scope lacks the required node/symbol or gives a mismatched type. | Restore the versioned provider and repeat the check. |
+| `VERIFIED` | COMPATIBLE | The offline requirements were satisfied in the recorded context. | Use separate runtime evidence for interposition, behaviors or dynamic loads. |
+| `NEEDED_SONAME_UNAVAILABLE`, `VERSION_NODE_UNAVAILABLE`, `VERSIONED_SYMBOL_UNAVAILABLE` | INCOMPATIBLE | A baseline-satisfied available-set requirement fails in the complete candidate inventory. | Reconcile the candidate repository and required version/provider. |
+| `ALSO_UNSATISFIED_IN_BASELINE`, `UNVERSIONED_SYMBOL_NOT_IN_CLOSURE`, `WEAK_REFERENCE_UNSATISFIED`, `VERSION_PROVIDER_UNAVAILABLE`, `REQUIREMENT_INVENTORY_INCOMPLETE`, `CONSUMER_INVENTORY_INCOMPLETE` | UNKNOWN | Available-set evidence cannot confirm a new failure. | Read CSV detail and collect complete runtime or repository evidence. |
+| `TOOL_TIMEOUT`, `OUTPUT_LIMIT` | UNKNOWN when used on a finding | Collection timed out or hit a capture cap. | Inspect the bounded tool evidence and verify resource limits before retrying. |
+| `CONTRACT_DIFFERENCE`, `CONTRACT_UNVERIFIED` | INCOMPATIBLE, UNKNOWN respectively | Other dimension-specific comparison outcomes without a narrower code. | Use the finding interface, detection method and evidence. |
+| `LINKING_STATIC_DIFFERENCE` | UNKNOWN summary fallback | Legacy linking observation lacks a producer code. | Review the retained original evidence. |
+
+An UNKNOWN export inventory includes its primary `export_inventory_reason_code`
+and all observed `export_inventory_diagnostics`. Diagnostics preserve the
+collector gates and can report more than one failure.
+
+| Export inventory codes | Meaning | Next action |
+| --- | --- | --- |
+| `READELF_DIAGNOSTIC` | Stderr warnings or errors prevent completeness. | Inspect retained raw evidence and fixed `readelf_diagnostic_classes`. |
+| `DYNSYM_ROWS_INCONSISTENT` | Advertised rows, indexes or symbol attributes do not reconcile. | Verify the source ELF and complete GNU readelf output. |
+| `VERSION_RECORDS_INCONSISTENT` | Definitions, needs records or versioned symbols do not reconcile. | Inspect GNU version sections alongside dynsym. |
+| `HEADER_FIELDS_MISSING` | Required machine, class, type or encoding is unavailable. | Inspect the ELF header and collector output. |
+| `OBJECT_INCOMPLETE` | Object collection failed or legacy data omits an explanation. | Recollect from the original ELF for a specific diagnosis. |
+| `TOOL_TIMEOUT`, `OUTPUT_LIMIT`, `DUPLICATE_DYNSYM_IDENTITY` | Bounding or ambiguous identity prevents a complete inventory. | Review the same constraints described above. |
+
+Removal context records the binding, type, version flag and the C++ category
+inferred from Itanium name markers. Importer counts describe the analyzed set.
+A zero count includes the possibility of unsampled consumers.

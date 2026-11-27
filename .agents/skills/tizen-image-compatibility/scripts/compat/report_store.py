@@ -225,6 +225,9 @@ class Store:
                         (side, ident, record['name'], scope, pack(record), pack(assessment),
                          value.get('baseline_assessment_id'), value.get('match_status', 'UNKNOWN')))
         for obj in owned.get('elf', []):
+            expected = {'image': side, 'scope': scope, 'path': obj['path']}
+            if obj.get('symbol_inventory_ref', expected) != expected:
+                raise ValueError('Invalid owned ELF symbol inventory reference: ' + obj['path'])
             row = self.db.execute('SELECT elf_id FROM aliases WHERE side=? AND scope=? AND path=?',
                                   (side, scope, obj['path'])).fetchone()
             if row is None:

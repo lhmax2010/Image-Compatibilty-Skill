@@ -10,7 +10,7 @@ from .profile import instrumentation
 
 HEADER_KEYS = {'Class': 'class', 'Data': 'endianness', 'OS/ABI': 'osabi',
                'ABI Version': 'abi_version', 'Type': 'type', 'Machine': 'machine', 'Flags': 'flags'}
-ELF_INVENTORY_REVISION = 5
+ELF_INVENTORY_REVISION = 6
 DYNAMIC_SYMBOL_ROW = re.compile(r'^[ \t]*(\d+):[ \t]+([0-9a-fA-F]+)[ \t]+(0[xX][0-9a-fA-F]+|\d+)[ \t]+(\S+)[ \t]+(\S+)'
                                 r'[ \t]+(\S+)[ \t]+(\S+)(?:[ \t](.*))?$')
 
@@ -189,6 +189,24 @@ def parse_readelf(text: str) -> dict[str, Any]:
     return obj
 
 
+def diagnostic_classes(stderr):
+    classes = set()
+    for line in stderr.splitlines():
+        if not line.strip():
+            continue
+        if re.search(r'program interpreter', line, re.I):
+            classes.add('INTERPRETER_DIAGNOSTIC')
+        elif re.search(r'version (index|information|symbol|definition|need)', line, re.I):
+            classes.add('VERSION_METADATA_DIAGNOSTIC')
+        elif re.search(r'(?:dynamic|symbol) table', line, re.I):
+            classes.add('SYMBOL_TABLE_DIAGNOSTIC')
+        elif re.search(r'section (header|name|size|offset)', line, re.I):
+            classes.add('SECTION_METADATA_DIAGNOSTIC')
+        else:
+            classes.add('OTHER_READELF_DIAGNOSTIC')
+    return sorted(classes)
+
+
 def collect_elf(path: Path, virtual: str, tools: Tools, mode: str, *, bounded=False) -> dict[str, Any]:
     obj: dict[str, Any] = {'path': virtual, 'size': path.stat().st_size, 'complete': False, 'resolution_metadata_complete': False,
                            'export_inventory_complete': False, 'export_inventory_status': 'UNKNOWN', 'elf_runtime_role': 'UNKNOWN'}
@@ -252,6 +270,26 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str, *, bounded=Fa
                        export_inventory_reason_code='DUPLICATE_DYNSYM_IDENTITY', duplicate_dynsym_identities=sorted(duplicates))
         elif result.get('reason_code'):
             obj['export_inventory_reason_code'] = result['reason_code']
+        diagnostics = []
+        if duplicates:
+            diagnostics.append('DUPLICATE_DYNSYM_IDENTITY')
+        if result.get('reason_code'):
+            diagnostics.append(result['reason_code'])
+        diagnostic = bool(result['stderr'].strip() or result.get('stderr_truncated'))
+        if diagnostic:
+            diagnostics.append('READELF_DIAGNOSTIC')
+            obj['readelf_diagnostic_classes'] = diagnostic_classes(result['stderr']) or ['OTHER_READELF_DIAGNOSTIC']
+        if not rows_valid:
+            diagnostics.append('DYNSYM_ROWS_INCONSISTENT')
+        if not version_valid:
+            diagnostics.append('VERSION_RECORDS_INCONSISTENT')
+        if not all(obj.get(k) for k in ('machine', 'class', 'endianness', 'type')):
+            diagnostics.append('HEADER_FIELDS_MISSING')
+        if not obj['complete']:
+            diagnostics.append('OBJECT_INCOMPLETE')
+        obj['export_inventory_diagnostics'] = diagnostics
+        if obj['export_inventory_status'] == 'UNKNOWN':
+            obj['export_inventory_reason_code'] = diagnostics[0]
         if obj['elf_runtime_role'] == 'DEBUG_ONLY':
             obj.update(export_inventory_complete=False, export_inventory_status='NOT_APPLICABLE',
                        export_inventory_reason='Split debug ELF has no applicable runtime exports.')
@@ -269,7 +307,9 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str, *, bounded=Fa
         if not obj['complete']:
             obj['error'] = result['error'] or result['stderr'] or 'Incomplete ELF parse'
     else:
-        obj['error'] = 'readelf unavailable; ELF header fallback only, symbols unsupported'
+        obj.update(error='readelf unavailable; ELF header fallback only, symbols unsupported',
+                   export_inventory_reason_code='OBJECT_INCOMPLETE',
+                   export_inventory_diagnostics=['OBJECT_INCOMPLETE'])
         with path.open('rb') as stream:
             header = stream.read(20)
         if len(header) >= 20:

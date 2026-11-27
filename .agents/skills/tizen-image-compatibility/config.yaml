@@ -67,6 +67,7 @@ report:
   json: true
   markdown: true
   csv: true
+  symbol_differences: changes # Use all to include MATCHED rows. Summary counts always include them.
 ci:
   fail_on: HIGH
   strict: false

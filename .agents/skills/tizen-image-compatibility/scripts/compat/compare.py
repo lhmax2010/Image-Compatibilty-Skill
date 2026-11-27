@@ -11,6 +11,7 @@ from .profile import INSTRUMENTATION_EXPORTS, instrumentation
 from .debuginfo import advanced_abi
 from .source import declaration_reachability, header_inventory_complete
 from .symbol_rules import classify_symbol_change
+from .observation import Importers
 
 
 def index(items: list[dict[str, Any]], key: str = 'path') -> dict[str, dict[str, Any]]:
@@ -48,7 +49,9 @@ def runtime_requirements(obj):
             'unwind_sections': obj.get('unwind_sections', [])}
 
 
-def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
+def compare_elf(a: dict[str, Any], b: dict[str, Any], *, importers=None) -> list[dict[str, Any]]:
+    if importers is None:
+        importers = Importers(a['elf_objects'], b['elf_objects'])
     findings = []
     old, new = index(a['elf_objects']), index(b['elf_objects'])
     for path, obj in old.items():
@@ -138,11 +141,15 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
                         'INCOMPATIBLE' if new_exports_complete else 'UNKNOWN', 'HIGH', 'ELF default-version lookup', ev))
                 elif default_candidates[0]['name'] != name:
                     findings.append(finding('abi', path, identity['base_name'] + ':default lookup', name, default_candidates[0]['name'],
-                        'UNKNOWN', 'HIGH', 'ELF default-version lookup', ev))
+                        'UNKNOWN', 'HIGH', 'ELF default-version lookup', ev) |
+                        {'reason_code': 'DEFAULT_VERSION_CHANGED'})
             if next_symbol is None:
                 findings.append(finding('abi', path, name, symbol, None, 'INCOMPATIBLE' if new_exports_complete else 'UNKNOWN', 'HIGH',
                     'ELF dynamic export/version comparison', ev, 'Previously linkable symbol or default symbol version is absent.' if new_exports_complete else 'Symbol not observed in an incomplete dynamic export inventory; absence is unproven.',
-                    'Restore the exported ABI/version or rebuild and validate all affected consumers.', 'high'))
+                    'Restore the exported ABI/version or rebuild and validate all affected consumers.', 'high') |
+                    {'reason_code': 'EXPORT_REMOVED' if new_exports_complete else 'EXPORT_NOT_OBSERVED',
+                     'removal_context': importers.removal(symbol, obj.get('inventory_path', obj['path']),
+                                                         other.get('inventory_path', other['path']))})
             else:
                 if '@' not in name and symbol['name'] != next_symbol['name']:
                     findings.append(finding('abi', path, name + ':default symbol version', symbol['name'], next_symbol['name'],
@@ -249,7 +256,7 @@ def compare_packages(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any
     return findings
 
 
-def compare_static(a: dict[str, Any], b: dict[str, Any], config: dict[str, Any]) -> list[dict[str, Any]]:
+def compare_static(a: dict[str, Any], b: dict[str, Any], config: dict[str, Any], *, linking_details=None) -> list[dict[str, Any]]:
     if 'repository' in a and 'repository' in b:
         from .repository import compare_repository
         return compare_repository(a,b,config)[1]
@@ -270,9 +277,10 @@ def compare_static(a: dict[str, Any], b: dict[str, Any], config: dict[str, Any])
                 out.append(loader_missing(side))
         if candidate:
             target = b | {'loader_environment': candidate}
-            out += dependency_checks(target, 'candidate')
+            out += dependency_checks(target, 'candidate', details=linking_details)
             if baseline:
-                out += dependency_checks(target, 'baseline consumers on candidate', a['elf_objects'], consumer_manifest=a)
+                out += dependency_checks(target, 'baseline consumers on candidate', a['elf_objects'],
+                                         consumer_manifest=a, details=linking_details)
     for dimension, key in [('filesystem', 'filesystem'), ('commands', 'commands'), ('services', 'services'),
         ('filesystem', 'configurations'), ('security', 'security_interfaces'), ('kernel', 'kernel'),
         ('hardware', 'hardware'), ('network', 'network'), ('packages', 'development'), ('compiler_runtime', 'runtime_libraries')]:

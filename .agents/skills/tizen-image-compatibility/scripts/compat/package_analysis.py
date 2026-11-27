@@ -83,7 +83,9 @@ def analyze_packages(a, b, findings, coverage):
             for obj in manifest.get(section, []):
                 association = ownership.lookup(obj['path'])
                 item = {'path': obj['path'], 'ownership': association, 'evidence': obj.get('evidence', [])}
-                if kind == 'elf': item.update(soname=obj.get('soname'), type=obj.get('type'), exports=obj.get('exports', []), needed=obj.get('needed', []))
+                if kind == 'elf':
+                    item.update(soname=obj.get('soname'), type=obj.get('type'), needed=obj.get('needed', []),
+                                symbol_inventory_ref={'image': label, 'scope': scope, 'path': obj['path']})
                 if not association['owners']: unassigned.append(dict(item, image=label, scope=scope, kind=kind))
                 for ident in association['owners']:
                     owned[(label, ident)][kind].append(item)

@@ -19,6 +19,7 @@ from compat.compare import compare_static, finalize
 from compat.core import InputError, finding, validate_config
 from compat.images import Image
 from compat.linker import check_import, dependency_checks
+from compat.linking_details import LinkingDetails
 from compat.report import build_results, generate
 from compat.report_enhance import build
 from compat.requirements import check_available_set
@@ -91,6 +92,23 @@ class WP3Tests(Environment):
                 self.assertTrue(all(f['status'] == 'COMPATIBLE' and f['roots']['count'] == 1 for f in puts))
                 # One evaluation per emitted import context, independent of relation size.
                 self.assertEqual(checks.call_count, sum(f['check_id'].startswith('import:') for f in rows))
+                detail_csv = self.base/f'linking-{count}.csv'
+                with LinkingDetails(self.base/f'linking-{count}.sqlite') as details:
+                    compact = dependency_checks(image, 'fixture', roots[:count], consumer_manifest=image, details=details)
+                    compact.extend(details.finish(detail_csv))
+                with detail_csv.open() as stream:
+                    detail = list(csv.DictReader(stream))
+                expected_rows = {f['id']:f for f in rows if f['check_id'].startswith(('import:', 'version:'))
+                                 or f['status']=='INCOMPATIBLE'}
+                self.assertSetEqual({row['id'] for row in detail}, set(expected_rows))
+                self.assertTrue(all(int(row['roots_count']) == expected_rows[row['id']]['roots']['count'] for row in detail))
+                self.assertTrue({row['anchor_finding_id'] for row in detail} <= {f['id'] for f in compact})
+                groups = [f for f in compact if f.get('aggregated_checks')]
+                self.assertEqual(len(groups), len({(f['consumer_image'], f['consumer_path'], f['resolution'],
+                                                    json.dumps(f['search_context'], sort_keys=True)) for f in groups}))
+                self.assertTrue(all(f['status']=='COMPATIBLE' for f in compact if f.get('aggregated_checks')
+                                    and f['consumer_path'].startswith('/bin/app-')))
+                print(f'WP3B_LINKING_SCALE roots={count} before={len(rows)} after={len(compact)} detail={len(detail)}')
                 old_count = len(prior.dependency_checks(image, 'fixture', roots[:count], consumer_manifest=image)) if prior else None
                 print(f'WP3_LINKING_SCALE roots={count} old={old_count} new={len(rows)}')
         self.assertEqual(counts[3]-counts[2], 7*(counts[2]-counts[1]))
@@ -123,6 +141,7 @@ class WP3Tests(Environment):
         self.assertTrue(all(f['reason_code']=='LOADER_ENV_MISSING' for f in linking))
         result = build_results(a, b, records, [], [], self.config) | {'scope':'RUNTIME_ROOTFS'}
         self.assertEqual({u['verification'] for u in result['coverage']['linking']['units']}, {'NOT_EXECUTED'})
+        self.assertEqual(result['finding_integrity']['missing_reason_codes'], 0)
         generate(self.output, a, b, result, self.config)
         run = result['run_summary']['linking_summary']['LOADER_ENV_MISSING']
         self.assertEqual(run['count'], 2)
@@ -208,7 +227,9 @@ class WP3Tests(Environment):
             findings = finalize(compare_static(*manifests, self.config), self.config)
             result = build_results(*manifests, findings, [], [], self.config)
             self.assertEqual(result['comparison_validity'], 'COMPARABLE' if extra else 'CONFOUNDED')
-            self.assertTrue(any(f['interface']=='removed' and f['status']=='INCOMPATIBLE' for f in findings))
+            self.assertTrue(any(f['interface']=='removed' and f['status']=='INCOMPATIBLE'
+                                and f['reason_code']=='EXPORT_REMOVED' for f in findings))
+            self.assertEqual(result['finding_integrity']['missing_reason_codes'], 0)
             self.assertTrue(any(f['interface']=='table:size' and
                         (f['status'], f['severity'], f['reason_code'])==('UNKNOWN','MEDIUM','INSTRUMENTATION_MISMATCH')
                         for f in findings))

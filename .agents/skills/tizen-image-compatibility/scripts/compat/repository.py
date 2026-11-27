@@ -5,6 +5,7 @@ from .compare import compare_elf, finalize
 from .core import canonical, digest, finding, write_json
 from .elf import duplicate_dynsym_names, dynamic_exports, symbol_identity, symbol_multimap
 from .profile import comparison_profile, runtime_object
+from .observation import Importers, incomplete_exports
 from .report_io import csv_rows
 from .report_symbols import size_difference
 from .repository_pairing import reconcile
@@ -195,6 +196,7 @@ def compare_repository(a,b,config,output=None):
             packages.append(row)
     payload_complete = [complete_payload(repo, list(objects.values())) for repo,objects in zip(repos,dictionaries)]
     pairs, ambiguous = reconcile(pairs,dictionaries)
+    importers = Importers(a['elf_objects'], b['elf_objects'])
     downgrades = Counter()
     components = {}
     for pair in pairs:
@@ -205,8 +207,9 @@ def compare_repository(a,b,config,output=None):
         comparisons = []
         safe_pair = pair.pop('safe_pair')
         if o and ((p and safe_pair) or o.get('elf_runtime_role')=='DEBUG_ONLY'):
-            comparisons = compare_elf({'elf_objects':[o | {'path':component}]},
-                                      {'elf_objects':[p | {'path':component}] if p else []})
+            comparisons = compare_elf({'elf_objects':[o | {'path':component, 'inventory_path':o['path']}]},
+                                      {'elf_objects':[p | {'path':component, 'inventory_path':p['path']}] if p else []},
+                                      importers=importers)
         elif o:
             comparisons = [unpaired_finding(o,component,all(payload_complete) and p is None and o.get('complete'),
                                             ambiguous.get(o['path'],[]),return_scope)]
@@ -230,7 +233,8 @@ def compare_repository(a,b,config,output=None):
     for side,repo in zip(('baseline','candidate'),repos):
         for error in repo['errors']:
             out.append(finding('packages',side+':'+error['archive'],'RPM '+error['stage']+' coverage',None,error['reason'],
-                               'UNKNOWN','HIGH','repository collection',error['evidence']))
+                               'UNKNOWN','HIGH','repository collection',error['evidence']) |
+                       ({'reason_code':error['reason_code']} if error.get('reason_code') else {}))
     out.append(finding('linking','repository','Installed loader coverage',None,None,'UNKNOWN','INFO',
                        impact='Repository comparisons establish ELF contracts only; the installed loader and provider set are unverified.'))
     requirements = None
@@ -240,8 +244,9 @@ def compare_repository(a,b,config,output=None):
                                                       output if config['report']['csv'] else None)
         out.extend(examples)
     stats = [r['counts'] | symbol_counts(m['elf_objects']) for m,r in zip((a,b),repos)]
-    for counts, complete in zip(stats,payload_complete):
+    for counts, complete, manifest in zip(stats,payload_complete,(a,b)):
         counts['payload_inventory_complete'] = complete
+        counts['export_incomplete_by_reason'] = incomplete_exports(manifest['elf_objects'])
     return {'scope':return_scope,'baseline':stats[0],'candidate':stats[1],
             'packages':packages,'elf_pairs':pairs,'inventory_states':dict(Counter(p['inventory_status'] for p in packages)),
             **comparison_profile(a['elf_objects'],b['elf_objects']),
@@ -377,7 +382,7 @@ PACKAGE_COLUMNS = ('id','name','arch','scope','inventory_status','status','basel
     'candidate_payload_status','provides','requires','replacement_hints','finding_ids','evidence')
 
 
-def symbol_differences(results, objects):
+def symbol_differences(results, objects, mode='all'):
     by_component = defaultdict(lambda:defaultdict(list))
     for f in results['findings']:
         if f['dimension']=='abi':
@@ -399,7 +404,8 @@ def symbol_differences(results, objects):
             changes[row['change']] += 1
             roles[row['role']][row['change']] += 1
             unsatisfied += row.get('baseline_identity_satisfied')=='false'
-            yield row
+            if mode == 'all' or row['change'] != 'MATCHED':
+                yield row
     results['repository']['symbol_differences'] = {
         'rows':sum(changes.values()),'by_change':dict(sorted(changes.items())),
         'exports_baseline_unsatisfied':unsatisfied,
@@ -457,6 +463,6 @@ def export_repository(output,a,b,results):
              + ('baseline_package_id','candidate_package_id'),elf_stats())
     csv_rows(output/'symbol-differences.csv',('package_id','component','role','change','details','status',
              'baseline','candidate','finding_ids','baseline_sha256','candidate_sha256','evidence',
-             'baseline_identity_satisfied'),symbol_differences(results,objects))
+             'baseline_identity_satisfied'),symbol_differences(results,objects,results['symbol_differences_mode']))
     csv_rows(output/'extraction-errors.csv',('side','archive','stage','path','reason','evidence','reason_code','tool'),repo['errors'])
     write_json(output/'rpm-repository.json',{k:repo[k] for k in ('scope','baseline','candidate','inventory_states','symbol_differences')})

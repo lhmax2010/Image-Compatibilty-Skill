@@ -104,12 +104,18 @@ def make_summary(a, b, result, config, objective=None, reused=False):
             paths['requirement-findings.csv'] = 'requirement-findings.csv'
     if detail:
         paths.update({name:name for name in ('elf-symbol-summary.csv','symbol-differences.csv')})
+    if result.get('linking_detail_counts', {}).get('csv_written'):
+        paths['linking-details.csv'] = 'linking-details.csv'
     paths.update({'run-summary.json':'run-summary.json','evidence':'evidence/'})
     summary = {'schema':SCHEMA, 'scope':scope, 'requested_objective':objective, 'objective_completion':completion,
             'execution_status':execution, 'compatibility_status':result['status'], 'coverage_status':coverage,
             'ci_gate_status':result['quality_gate']['status'], 'source_evidence': 'MANIFEST_REUSE' if reused else 'COLLECTED',
             'statistics':stats, 'finding_counts':result['summary']['by_status'], 'errors':errors,
             'linking_summary':result.get('linking_summary', {}),
+            'linking_detail_counts':result.get('linking_detail_counts', {}),
+            'export_incomplete_by_reason':result.get('export_incomplete_by_reason', {}),
+            'removed_exports':result.get('removed_exports', {}),
+            'missing_reason_codes':result.get('finding_integrity', {}).get('missing_reason_codes', 0),
             'high_risk_findings':[{key: str(f[key])[:240] for key in ('id','dimension','component','interface','status','severity')}
                                   for f in high], 'report_paths':paths,
             'next_step': ('Review symbol or Finding evidence for the requested objective.' if completion == 'COMPLETE' else

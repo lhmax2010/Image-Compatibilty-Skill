@@ -11,6 +11,7 @@ from typing import Any
 from .coverage import coverage_report
 from .package_analysis import analyze_packages
 from .profile import comparison_profile
+from .observation import incomplete_exports, removed_exports, valid_reason_code
 from .linker import summarize_unknowns
 from .report_io import FINDING_DETAIL_COLUMNS, finding_cells
 from .core import DIMENSIONS, SCHEMA, STATUSES, canonical, expected_collectors, write_json
@@ -49,7 +50,7 @@ def collector_execution(a, b, config):
 
 def build_results(a: dict[str, Any], b: dict[str, Any], findings: list[dict[str, Any]],
                   tests: list[dict[str, Any]], matrix: list[dict[str, Any]], config: dict[str, Any], *,
-                  repository=None) -> dict[str, Any]:
+                  repository=None, linking_details=None) -> dict[str, Any]:
     if len({f['id'] for f in findings}) != len(findings):
         raise ValueError('Duplicate finding IDs: finalize findings before report aggregation')
     counts = Counter(f['status'] for f in findings)
@@ -65,7 +66,7 @@ def build_results(a: dict[str, Any], b: dict[str, Any], findings: list[dict[str,
             names = {p[side+'_object']:p['component'] for p in repository['elf_pairs'] if p[side+'_object']}
             views.append(manifest | {'elf_objects':[obj | {'path':names.get(obj['path'],obj['path'])}
                                                      for obj in manifest['elf_objects']]})
-    coverage, gate = coverage_report(*views, findings, tests, matrix, config)
+    coverage, gate = coverage_report(*views, findings, tests, matrix, config, linking_details=linking_details)
     execution = collector_execution(a, b, config)
     execution_gate = 'FAIL' if execution['status'] == 'FAILED' and execution['fail_on_collector_failure'] else 'PASS'
     gate['execution_status'] = execution_gate
@@ -83,7 +84,14 @@ def build_results(a: dict[str, Any], b: dict[str, Any], findings: list[dict[str,
     return {'package_inventory': package_inventory, 'package_results': package_results,
         **{key: profile[key] for key in ('comparison_validity', 'confounders', 'build_profile')},
         'execution': execution, 'linking_summary': summarize_unknowns(findings),
-        'finding_integrity': {'unique_findings': len(findings), 'source_occurrences': sum(f.get('occurrences', 1) for f in findings),
+        **({'linking_detail_counts': linking_details.counts} if linking_details is not None else {}),
+        'export_incomplete_by_reason': {side: incomplete_exports(manifest['elf_objects'])
+                                        for side, manifest in (('baseline', a), ('candidate', b))},
+        'removed_exports': removed_exports(findings),
+        'finding_integrity': {'missing_reason_codes': sum(
+            f['status'] in ('UNKNOWN','INCOMPATIBLE') and
+            not valid_reason_code(f.get('reason_code')) for f in findings),
+            'unique_findings': len(findings), 'source_occurrences': sum(f.get('occurrences', 1) for f in findings),
                               'deduplicated': [{'id': f['id'], 'occurrences': f['occurrences']} for f in findings if f.get('occurrences', 1) > 1]},
         'expected_tests': a.get('expected_tests', []) + b.get('expected_tests', []),
         'coverage': coverage, 'quality_gate': gate,
@@ -112,6 +120,7 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
     write_json(output / 'baseline-manifest.json', a, compact=True)
     write_json(output / 'candidate-manifest.json', b, compact=True)
     report = config['report']
+    results['symbol_differences_mode'] = report.get('symbol_differences', 'changes')
     if report['csv']:
         with (output / 'findings.csv').open('w', newline='') as stream:
             writer = csv.DictWriter(stream, fieldnames=FINDING_DETAIL_COLUMNS)
@@ -220,6 +229,9 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
         lines += ['', 'Excluded dimensions: ' + ', '.join(results['excluded_dimensions']), '', 'See index.html, results.json and evidence/ for details.']
         (output / 'summary.md').write_text('\n'.join(lines) + '\n')
     if report['html']:
+        exports_for_html = {(scope, obj['path']): obj.get('exports', ())
+                            for scope, manifest in (('runtime', a), ('sdk', a.get('sdk_package_manifest', {})))
+                            for obj in manifest.get('elf_objects', [])}
         content = ('<p class="status">'+esc(banner)+'</p>' if banner else '')
         content += '<h1>Tizen image compatibility</h1><h2>Executive summary</h2>'
         content += '<p class="status">' + esc(results['status']) + '</p>'
@@ -265,7 +277,9 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
             preview = {k: package[k] for k in ('id', 'match_status', 'replacement_hint', 'finding_ids', 'missing_interfaces', 'limitations', 'evidence')}
             preview['owned ELF'] = [{k: e.get(k) for k in ('path', 'soname', 'type')} for e in package['owned_interfaces']['elf'][:100]]
             preview['headers'] = package['owned_interfaces']['headers'][:100]
-            preview['public symbols (first 100)'] = list(islice((s['name'] for e in package['owned_interfaces']['elf'] for s in e['exports']), 100))
+            preview['public symbols (first 100)'] = list(islice((
+                s['name'] for e in package['owned_interfaces']['elf']
+                for s in exports_for_html.get((package['scope'], e['path']), ())), 100))
             preview = {k: v[:100] if isinstance(v, list) else v for k, v in preview.items()}
             content += table([[k, v] for k, v in preview.items()], ['Detail (bounded preview)', 'Value']) + '</details>'
         content += '<h3>Candidate-only inventory (first 1000)</h3>' + table([[p['package']['name'], p['package']['version'], p['reason']] for p in inventory['candidate_additions'][:1000]], ['Package', 'Version', 'Assessment boundary'])

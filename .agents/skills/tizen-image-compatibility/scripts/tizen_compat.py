@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import ExitStack
 import json
 from pathlib import Path
 import shutil
@@ -134,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
             if sdk:
                 config['cross_compilation']['sysroots'][side] = str(sdk[0])
                 sdk_sources[side] = json.loads(sdk[3].read_text())['source']['sha256']
-        with tempfile.TemporaryDirectory(prefix='tizen-compat-', dir=output) as temporary:
+        with tempfile.TemporaryDirectory(prefix='tizen-compat-', dir=output) as temporary, ExitStack() as resources:
             workspace = Path(temporary)
             tools.aliases[str(workspace)] = '<workspace>'
             roots = None
@@ -181,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
                 if fallback_reason:
                     for manifest in (a,b):
                         manifest['image']['fallback_reason'] = fallback_reason
-            repo = None
+            repo = linking_details = None
             repo_inputs = [manifest.get('repository') for manifest in (a,b)]
             if any(manifest['image'].get('format') == 'rpm-collection' and not manifest.get('repository') for manifest in (a,b)):
                 raise InputError('Legacy RPM manifests lack repository scope; compare the original archives again')
@@ -191,7 +192,13 @@ def main(argv: list[str] | None = None) -> int:
                 from compat.repository import compare_repository
                 repo,findings = compare_repository(a,b,config,output)
             else:
-                findings = compare_static(a, b, config)
+                if 'linking' in config['analysis']['modes']:
+                    from compat.linking_details import LinkingDetails
+                    linking_details = resources.enter_context(LinkingDetails(workspace / 'linking-details.sqlite'))
+                findings = compare_static(a, b, config, linking_details=linking_details)
+                if linking_details is not None:
+                    csv_path = output / 'linking-details.csv' if config['report']['csv'] else None
+                    findings.extend(linking_details.finish(csv_path))
             if repo is None and roots and args.mode != 'quick' and 'abi' in config['analysis']['modes']:
                 findings += advanced_abi(a, b, roots, tools)
             if repo is not None:
@@ -225,7 +232,7 @@ def main(argv: list[str] | None = None) -> int:
                         cell.get('runtime_reason', cell.get('reason', 'Incomplete matrix')), 'UNKNOWN', 'INFO'))
             findings = finalize(findings, config)
             a['cross_matrix'] = b['cross_matrix'] = matrix
-            result = build_results(a, b, findings, tests, matrix, config, repository=repo)
+            result = build_results(a, b, findings, tests, matrix, config, repository=repo, linking_details=linking_details)
             result['scope'] = repo['scope'] if repo else 'RUNTIME_ROOTFS'
             if repo:
                 result['repository'] = repo

@@ -36,6 +36,7 @@ def export_rootfs_symbols(output, a, b, result):
     detail = {'elf_pairs':pairs}
     view = {'repository':detail,'findings':result['findings']}
     csv_rows(output/'symbol-differences.csv',('package_id','component','role','change','details','status',
-             'baseline','candidate','finding_ids','baseline_sha256','candidate_sha256','evidence'),symbol_differences(view,objects))
+             'baseline','candidate','finding_ids','baseline_sha256','candidate_sha256','evidence'),
+             symbol_differences(view,objects,result['symbol_differences_mode']))
     result['rootfs_symbol_detail'] = {'matching':'EXACT_ROOTFS_PATH','symbol_differences':detail['symbol_differences'],
                                     'baseline':symbol_counts(objects[0].values()),'candidate':symbol_counts(objects[1].values())}

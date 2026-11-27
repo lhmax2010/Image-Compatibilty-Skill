@@ -72,7 +72,7 @@ def finding_check(name, findings):
     return result
 
 
-def coverage_report(a, b, findings, tests, matrix, config):
+def coverage_report(a, b, findings, tests, matrix, config, *, linking_details=None):
     grouped = defaultdict(list); root_findings = defaultdict(list)
     for f in findings:
         grouped[(f['dimension'], f['component'])].append(f)
@@ -132,12 +132,30 @@ def coverage_report(a, b, findings, tests, matrix, config):
                     continue
                 applicable = [f for f in root_findings[path] if f.get('consumer_path', f['component']) == path]
                 slots = defaultdict(list)
-                for f in applicable: slots[f.get('check_id', f['interface'])].append(f)
-                required = {'DT_NEEDED:' + n for n in obj.get('needed', [])} | {'import:' + s['name'] for s in obj.get('imports', [])}
-                required |= {'version:' + r['file'] + ':' + r['name'] for r in obj.get('version_requirements', [])}
+                for f in applicable:
+                    name = f.get('check_id', f['interface'])
+                    if linking_details is None or not (f.get('aggregated_checks') or name.startswith(('import:', 'version:'))):
+                        slots[name].append(f)
+                required = {'DT_NEEDED:' + n for n in obj.get('needed', [])}
+                symbolic = {'import:' + s['name'] for s in obj.get('imports', [])}
+                symbolic |= {'version:' + r['file'] + ':' + r['name'] for r in obj.get('version_requirements', [])}
+                if linking_details is None:
+                    required |= symbolic
                 if obj.get('interpreter'): required.add('dynamic loader')
                 required |= set(slots)
                 checks = [finding_check(k, slots[k]) for k in sorted(required)]
+                if linking_details is not None and symbolic:
+                    counts = linking_details.direct.get(path, {})
+                    observed = sum(counts.values())
+                    expected = len(symbolic)
+                    complete = counts.get('COMPATIBLE', 0) + counts.get('INCOMPATIBLE', 0)
+                    status = ('INCOMPATIBLE' if counts.get('INCOMPATIBLE') else
+                              'COMPATIBLE' if complete == expected else 'UNKNOWN')
+                    slot = check('imports and version requirements', status, executed=bool(observed))
+                    if complete != expected:
+                        slot['verification'] = 'PARTIAL' if observed else 'NOT_EXECUTED'
+                    slot.update(required_count=expected, observed_count=observed, complete_count=complete)
+                    checks.append(slot)
                 # Closure/context completeness is independent of a single failed dependency.
                 closure_findings = root_findings[path]
                 checks.append(finding_check('scope/closure', closure_findings))

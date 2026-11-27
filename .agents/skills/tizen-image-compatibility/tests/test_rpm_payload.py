@@ -155,7 +155,9 @@ class RealRpmPayloadTests(unittest.TestCase):
         cls.build_rpm(cls.after,'candidate-addition','1',None)
         (cls.after/'broken.rpm').write_bytes(b'\xed\xab\xee\xdb truncated')
         cls.output = cls.root/'report'
-        cls.run_cli(cls.before.parent,cls.after.parent,cls.output,1)
+        report_config = cls.root/'all-symbols.yaml'
+        report_config.write_text('report: {symbol_differences: all}\n')
+        cls.run_cli(cls.before.parent,cls.after.parent,cls.output,1,'--config',str(report_config))
         cls.results = json.loads((cls.output/'results.json').read_text())
 
     @classmethod
@@ -324,9 +326,19 @@ touch "{cls.root}/SCRIPTLET-RAN"
         reused = json.loads((output/'results.json').read_text())
         self.assertEqual(reused['scope'],'RPM_REPOSITORY_PAYLOAD')
         self.assertEqual(reused['repository']['symbol_differences'],self.results['repository']['symbol_differences'])
+        self.assertEqual(reused['finding_integrity']['missing_reason_codes'], 0)
+        with (self.output/'symbol-differences.csv').open() as stream:
+            expected = [r for r in csv.DictReader(stream) if r['change'] != 'MATCHED']
+        with (output/'symbol-differences.csv').open() as stream:
+            self.assertEqual(list(csv.DictReader(stream)), expected)
         self.assertEqual({row['id'] for row in reused['findings']},{row['id'] for row in self.results['findings']})
         self.assertIn('broken.rpm',(output/'extraction-errors.csv').read_text())
-        self.assertEqual((output/'symbol-differences.csv').read_bytes(),(self.output/'symbol-differences.csv').read_bytes())
+        all_output = self.root/'replay-all-report'
+        replay_all = subprocess.run([*argv,'--candidate-manifest',str(candidate),'--output',str(all_output),
+                                     '--config',str(self.root/'all-symbols.yaml')],
+                                    capture_output=True,text=True,timeout=30)
+        self.assertEqual(replay_all.returncode,1,replay_all.stderr)
+        self.assertEqual((all_output/'symbol-differences.csv').read_bytes(),(self.output/'symbol-differences.csv').read_bytes())
 
         data = json.loads(candidate.read_text())
         data['repository']['archives'][0]['objects'].append('/no/such/ELF')

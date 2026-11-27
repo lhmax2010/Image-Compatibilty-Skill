@@ -2,7 +2,7 @@
 operator-supplied loader environment, not a claim of successful target execution.
 Unknown environment/cache, unsupported tokens and shared-library caller scopes stay UNKNOWN.
 """
-from collections import deque
+from collections import OrderedDict, deque
 import posixpath
 from .core import finding, canonical, digest
 from .elf import dynamic_exports, runtime_metadata_complete, symbol_identity, target_abi_matches, version_nodes
@@ -31,9 +31,10 @@ def summarize_unknowns(findings):
     for item in findings:
         if item['dimension'] == 'linking' and item['status'] == 'UNKNOWN':
             code = item.get('reason_code', 'LINKING_STATIC_DIFFERENCE')
-            group = summary.setdefault(code, {'count': 0, 'example_finding_ids': [],
+            group = summary.setdefault(code, {'count': 0, 'check_count': 0, 'example_finding_ids': [],
                 'next_action': NEXT_ACTIONS.get(code, item['recommended_action'])})
             group['count'] += 1
+            group['check_count'] += item.get('aggregated_checks', 1)
             if len(group['example_finding_ids']) < 20:
                 group['example_finding_ids'].append(item['id'])
     return summary
@@ -62,7 +63,7 @@ def expand(value, origin):
     return posixpath.normpath(value)
 
 
-def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, checkpoint=None):
+def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, checkpoint=None, *, details=None):
     debug_paths = {o['path'] for o in manifest['elf_objects'] if o.get('elf_runtime_role') == 'DEBUG_ONLY'}
     objects = {o['path']: o for o in manifest['elf_objects'] if o['path'] not in debug_paths}
     files = {f['path']: f for f in manifest.get('filesystem', [])}
@@ -77,13 +78,25 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
     inventory = inventory is True
     global_names = {posixpath.basename(p) for p in objects} | {o.get('soname') for o in objects.values()}
     grouped = {}
-    search_cache, requirement_cache, export_indexes, shared_scopes = {}, {}, {}, {}
-    requirement_keys = {}
+    search_cache, requirement_cache, export_indexes, shared_scopes = {}, OrderedDict(), {}, OrderedDict()
+    requirement_keys = OrderedDict()
+
+    def cache_put(cache, key, value, limit):
+        cache[key] = value
+        if details is not None and len(cache) > limit:
+            cache.popitem(last=False)
+
+    def decision(key, resolve):
+        if key not in requirement_cache:
+            cache_put(requirement_cache, key, resolve(), 8192)
+        requirement_cache.move_to_end(key)
+        return requirement_cache[key]
 
     def requirement_key(data):
         key = id(data)
         if key not in requirement_keys:
-            requirement_keys[key] = canonical(data)
+            cache_put(requirement_keys, key, canonical(data), 16384)
+        requirement_keys.move_to_end(key)
         return requirement_keys[key]
 
     def provider_identity(provider):
@@ -97,8 +110,17 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
         status = status or ('COMPATIBLE' if state == 'verified' else 'UNKNOWN')
         image = 'baseline' if consumers is not None and obj is root else 'candidate'
         key = (image, obj['path'], interface, key if key is not None else canonical([before, after, state]))
+        symbolic = interface.startswith(('import:', 'version:'))
+        detail = details is not None and (symbolic or status == 'INCOMPATIBLE')
+        aggregate = detail and symbolic and status != 'INCOMPATIBLE'
+        token = label, key
+        repeated = detail and details.repeat(token, root['path'])
+        if repeated and aggregate:
+            return
         entry = grouped.get(key)
         if entry is not None:
+            if detail and not repeated:
+                details.add(entry[0], root['path'], token, False)
             entry[1].add(root['path'])
             return
         item = finding('linking', obj['path'], label + ':' + interface, before, after, status,
@@ -114,7 +136,10 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
         if context is not None:
             item['search_context'] = context() if callable(context) else context
         item['id'] = 'TC-' + digest(canonical({k: v for k, v in item.items() if k != 'id'}).encode())[:16]
-        grouped[key] = (item, {root['path']})
+        if detail:
+            details.add(item, root['path'], token, aggregate)
+        if not aggregate:
+            grouped[key] = (item, {root['path']})
 
     def lookup(obj, paths, provider, proven, ambiguous):
         if provider and (not proven or not provider.get('complete') or not target_abi_matches(obj, provider)):
@@ -275,7 +300,10 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
         # The non-root providers and their order can be identical across many roots.
         shared = [p for p in closure if p is not root]
         scope_key = tuple(map(id, shared))
-        export_scope = shared_scopes.setdefault(scope_key, {})
+        if scope_key not in shared_scopes:
+            cache_put(shared_scopes, scope_key, {}, 32)
+        shared_scopes.move_to_end(scope_key)
+        export_scope = shared_scopes[scope_key]
         root_exports = provider_exports(root)
         # Requirements refer to a particular dependency, in addition to symbol lookup scope.
         for obj in closure:
@@ -286,12 +314,12 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
                 provider = edges.get((obj['path'], req['file'])) or loaded.get(req['file'])
                 weak = 'WEAK' in req.get('flags', '').upper()
                 key = (id(obj), requirement_key(req), id(provider), bool(scope_known))
-                if key not in requirement_cache:
+                def check_version():
                     present = req['name'] in version_nodes(provider or {})
                     state = ('verified' if present and scope_known else 'missing_version'
                              if scope_known and provider and not weak else 'unknown_version_requirement')
-                    requirement_cache[key] = present, state
-                present, state = requirement_cache[key]
+                    return present, state
+                present, state = decision(key, check_version)
                 if not present:
                     failed_requirements.add((req['file'], req['name']))
                 emit(obj, 'version:' + str(req['file']) + ':' + req['name'], req, provider['path'] if provider else None, state,
@@ -313,10 +341,8 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
                 complete_scope = bool(scope_known and symbol_scope_known)
                 key = (id(obj), requirement_key(symbol), tuple((id(p), id(e)) for p, e, _ in entries),
                        bool(scope_known), bool(symbol_scope_known), id(required_provider), constraint_failed)
-                if key not in requirement_cache:
-                    requirement_cache[key] = check_import(symbol, identity, entries, complete_scope,
-                                                          constraint_failed, constraint_unknown)
-                state, after = requirement_cache[key]
+                state, after = decision(key, lambda: check_import(symbol, identity, entries, complete_scope,
+                                                                    constraint_failed, constraint_unknown))
                 def context():
                     return {'scope_proven': bool(scope_known), 'startup_scope': bool(symbol_scope_known),
                            'required_provider': provider_identity(required_provider),

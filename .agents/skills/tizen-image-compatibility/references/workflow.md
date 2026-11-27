@@ -63,3 +63,33 @@ limit payload extraction. The VDFS adapter keeps its separate setting.
 1 GiB maximum. A timeout records `TOOL_TIMEOUT` and an exceeded capture cap
 records `OUTPUT_LIMIT`. The collector log retains bounded output evidence.
 The three large JSON files use compact serialization with the same data types.
+
+## WP-3b linking details and symbol reports
+
+The main rootfs CLI stages individual import and GNU version checks in a
+workspace-local SQLite scratch database. It streams `linking-details.csv` when
+CSV reports are enabled. Each row records the detail ID, its anchor finding ID,
+consumer image and path, check ID, state, observed provider path, root count,
+and SHA-256 over the full lookup context. The anchor includes a check count and
+up to 20 example check IDs. Anchors share requiring object, direction, state,
+search flags and the ordered image-qualified provider scope. The hash on each
+detail retains the per-symbol evidence distinction. DT_NEEDED observations
+stay individual. Confirmed failures also stay individual and link to their
+own finding. Coverage uses direct check counts and transitive root relations.
+`linking_detail_counts` reports detail totals by state, status and kind.
+`linking_summary.count` counts findings and `check_count` counts the represented
+checks and remaining individual observations. CSV-disabled runs keep the
+counters and omit the detail file.
+
+`report.symbol_differences` defaults to `changes`. Set it to `all` for MATCHED
+rows in the CSV. The per-role and global summary retain the MATCHED counts in
+both modes. Package assessments link to the manifest symbol inventory using
+`symbol_inventory_ref` with image, scope and virtual path. Manifest symbols
+and content-addressed evidence are still available to the enhanced index.
+It also recognizes the embedded symbol inventories in older reports.
+
+`finding_integrity.missing_reason_codes` audits UNKNOWN and INCOMPATIBLE
+findings. `export_incomplete_by_reason` separates incomplete export inventories
+from ABI conclusions. `removed_exports` counts removal observations by reason,
+binding, type and C++ class. Importer counts cover distinct sampled objects
+with exact name and version identities, excluding the provider itself.
