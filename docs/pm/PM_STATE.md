@@ -37,3 +37,7 @@ Readelf output is held in memory up to its configured cap, 512 MiB by default. V
 The source identifies the development collector as 1.5.3-dev. WP-2 local x86-64 and SR ARMv7 repository checks passed. The synthetic scale run analyzed 1,001 RPMs per side with 300,000 import observations across both sides. OPS-3 did not reproduce under 200 iterations with four concurrent workers. F-04, F-05, F-07, F-11, F-12 and OPS-3 are implemented or have their approved non-reproduction evidence, pending PM review.
 
 ClineSR still owns actual VD acceptance. F-06, F-21, the internal Agent workflow review and the real EROFS tool gate remain open. Use the WP-2 report and the final verified continuity backup when resuming.
+
+## WP-3 checkpoint
+
+The PM accepted the VD-1 kit at `d9aa080` and verified the WP-2 repository findings. WP-3 is implemented for independent review. Use the [WP-3 report](work-packages/WP-3/REPORT.md) for context-sensitive linking, timeout, Python and report evidence. WP-4 retains the Bubblewrap/EROFS and Python 3.10 runtime gates.

@@ -15,7 +15,7 @@ Owner: technical PM (Claude). Maintained by Codex from PM decisions. Baseline co
 | F-03 | Claude | P1 | CONFIRMED-exec | compare.py L138-142 | Any type change is INCOMPATIBLE, including FUNC↔IFUNC | Accept | Declarative symbol rule table | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
 | F-04 | Claude | P1 (blocker) | CONFIRMED-exec | repository.py L55-81, L146-149 | ELF pairing is package-local; library loss across packages is reported as INFO | Accept | Repository-wide SONAME/path index; LIBRARY_REMOVED | WP-2 | Verified (PM, 2026-11-27, 323e0e1) |
 | F-05 | Claude | P1 (blocker) | CONFIRMED-static | repository.py L158-163 | No DT_NEEDED or versioned-import satisfiability check in repository mode | Accept | Closed-world AVAILABLE_SET requirement check | WP-2 | Verified (PM, 2026-11-27, 323e0e1) |
-| F-06 | Claude | P1 (blocker) | CONFIRMED-exec | linker.py L64, L207-249 | One finding per root × closure × import; mostly UNKNOWN HIGH by default | Accept | Memoize per (object, requirement); aggregate; NOT_EXECUTED without loader profile | WP-4 | Open |
+| F-06 | Claude | P1 (blocker) | CONFIRMED-exec | linker.py L64, L207-249 | One finding per root × closure × import; mostly UNKNOWN HIGH by default | Accept | Memoize per (object, requirement); aggregate; NOT_EXECUTED without loader profile | WP-3 | Implemented, awaiting PM review |
 | F-07 | Claude | P1 (blocker for VD) | CONFIRMED-exec | repository.py L258; QUICK_START | No ASan/instrumentation confound detection (Clang ASan: global st_size 40→96 B) | Accept | Build-profile detector; CONFOUNDED run status | WP-2 | Verified (PM, 2026-11-27, 323e0e1) |
 | OBJ-1 | PM + Kimi K-F02 | P0 | CONFIRMED-exec | tizen_compat.py L214-221; config.yaml ci | Exit 0 means only "threshold not hit"; no objective-completion status | Accept (K-F02 merged) | run-summary.json objective block; compat_run.py exit 4 = OBJECTIVE_NOT_MET; legacy CLI exits unchanged | WP-5 | Open |
 | AGT-1 | PM | P0 | CONFIRMED-static | 9 CLIs; SKILL.md 16 KB | No bounded summary or single entry point for weak agents | Accept | run-summary.json + compat_run.py doctor/run; SKILL.md ~60 lines | WP-5 | Open |
@@ -34,22 +34,27 @@ Owner: technical PM (Claude). Maintained by Codex from PM decisions. Baseline co
 
 | Issue | Source | Sev | Evidence | Module / location | Root cause (short) | PM decision | Selected solution | WP | Status |
 |---|---|---|---|---|---|---|---|---|---|
-| F-08 + K-05 | Claude + Kimi K-F05 | P1 | LIKELY / CONFIRMED-static | erofs.py L54-56, L82-96 | Whole tree must fit a 1 GiB RAM tmpfs; unknown compat bits refused; bwrap ro-binds host `/`, `/dev`, `/proc` | Accept (merged) | Disk scratch; ignore compat bits; minimal bind set | EROFS item (post-RC) | Open |
-| F-09 | Claude | P1 | LIKELY | images.py L57; packages.py L199; debuginfo.py L89 | A single 60 s default timeout covers long operations | Accept | Per-operation timeouts | WP-6 | Open |
+| F-08 + K-05 | Claude + Kimi K-F05 | P1 | LIKELY / CONFIRMED-static | erofs.py L54-56, L82-96 | Whole tree must fit a 1 GiB RAM tmpfs; unknown compat bits refused; bwrap ro-binds host `/`, `/dev`, `/proc` | Accept (merged) | Disk scratch; ignore compat bits; minimal bind set | WP-4 | Open — Bubblewrap 0.6.1 refusal reproduced by ClineSR |
+| F-09 | Claude | P1 | LIKELY | images.py L57; packages.py L199; debuginfo.py L89 | A single 60 s default timeout covers long operations | Accept | Per-operation timeouts | WP-3 | Implemented, awaiting PM review |
 | F-10 | Claude | P1 | CONFIRMED-static | rpm_payload.py L236-262, L76/L94 | Serial RPM collection; Python byte-sum CRC on all payload bytes | Accept after VD-1 data | Process pool; CRC only for 070702; content-hash cache | post-RC unless VD-1 > 2 h/side | Pending data |
 | F-11 | Claude | P2 | CONFIRMED-exec | compare.py L96-100 | Identical debug-only files give UNKNOWN HIGH | Accept | DEBUG_ONLY exports NOT_APPLICABLE | WP-2 | Verified (PM, 2026-11-27, 323e0e1) |
 | F-12 | Claude | P2 | CONFIRMED-static | repository.py L184-204 | Version change counted as CHANGED although it is a missing requirement; roles mixed | Accept | Per-role, requirement-based counts; acceptance counts restated | WP-2 | Verified (PM, 2026-11-27, 323e0e1) |
-| F-15 | Claude | P2 | CONFIRMED-exec | linker.py L89-94 | Linking verification needs security-dimension metadata | Accept | Always collect execution metadata when linking is active | WP-4 | Open |
+| F-15 | Claude | P2 | CONFIRMED-exec | linker.py L89-94 | Linking verification needs security-dimension metadata | Accept | Always collect execution metadata when linking is active | WP-3 | Implemented, awaiting PM review |
 | F-16 | Claude | P2 | LIKELY | collect.py L211-230 | Cache trusts stored JSON; no permissions; non-atomic | Accept | 0700 per-user cache; re-derive from evidence; atomic writes | WP-6 | Open |
 | F-18 | Claude | P2 | DESIGN_GAP | sdb_runtime.py L71-81; SKILL.md | Agent can self-authorize device execution via config | Accept (doc now) | SKILL.md "always ask"; out-of-band authorization in v1.6 | WP-5 / v1.6 | Open |
 | F-20 | Claude | P3 | CONFIRMED-exec | core.py L20 | Stale collector version 1.3.1-phase8a | Accept | Read VERSION | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
-| F-21 | Claude | P2 | LIKELY | rpm_payload.py L252 | `rpm -qp --xml` capped at 16 MiB | Accept | `--qf` with the needed tags only | WP-2 | Open |
+| F-21 | Claude | P2 | LIKELY | rpm_payload.py L252 | `rpm -qp --xml` capped at 16 MiB | Accept | Validated per-archive XML capture limit and OUTPUT_LIMIT evidence | WP-3 | Implemented, awaiting PM review |
 | F-22 + K-F08 | Claude + Kimi | P2 | DESIGN_GAP | report_browser.py L152-232 | No local access token; fixed port 8765 | Accept (merged) | URL token; `--port 0` default | WP-6 | Open |
 | F-23 | Claude | P2 | DESIGN_GAP | results.json / summary.md | Image-controlled strings reach agent-read files | Accept | Agent reads only run-summary.json | WP-5 | Open |
 | F-24 | Claude | P3 | CONFIRMED-static | images.py L106-140 | No disk-free preflight for TAR | Accept | doctor preflight | WP-5/6 | Open |
 | K-11 | Kimi K-F11 | P3 | CONFIRMED-static | images.py L188 | /proc, /sys, /run silently excluded | Accept | Record as mountpoint metadata + limitation | WP-6 | Open |
 | OPS-3 | Handover | P1 | Reported | tests (frozen_runtime / runtime_release interrupt tests) | Flaky interruption test | Accept | Root cause; no retries, no weakened assertions | WP-2 | Closed — not reproduced in 800 executions (200 × 4 concurrent), assertions unchanged; reopen on recurrence |
 | PUB-2 | PM | P3 | CONFIRMED-static | references/implementation.md L38; examples/synthetic-report/* | Personal paths in tracked files; packaging regex misses /opt/*/<user>/ | Accept | Sanitize; widen scanner | WP-6 | Open |
+| REQ-AGG | PM WP-2 | P1 | CONFIRMED-exec | requirements.py | Missing SONAME and baseline-unsatisfied detail floods Findings | Accept | Group by consumer and SONAME; preserve each CSV detail and counts | WP-3 | Implemented, awaiting PM review |
+| F-07b | PM WP-2 | P1 | CONFIRMED-exec | compare.py; report.py | Rootfs comparison omitted instrumentation profiling | Accept | Share image profile and per-pair size rules | WP-3 | Implemented, awaiting PM review |
+| PORT-310 | ClineSR | P1 | CONFIRMED-exec | manage.py; demo generator | Python 3.11-only hashing on a Python 3.10 support claim | Accept | Chunk hashing; complete interpreter regression in WP-4 | WP-3 | Implemented, awaiting PM review |
+| RPT-SIZE | ClineSR | P2 | CONFIRMED-exec | report.py | Repeated JSON whitespace inflates scale reports | Accept | Compact machine outputs and measured size breakdown | WP-3 | Implemented, awaiting PM review |
+| PROC-1 | Owner | P2 | CONFIRMED-exec | HANDOVER.md | A Codex work package was given to ClineSR | Accept | Audience banners and owner-only result relay | WP-3 | Implemented, awaiting PM review |
 
 ## Deferred / owner-decided
 
