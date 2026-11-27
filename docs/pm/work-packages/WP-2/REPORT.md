@@ -184,3 +184,9 @@ The bundle records a complete history.
 ## 10. Recommended next step
 
 Claude should review the code commit, the real RPM fixture outcomes and the baseline-control classifications, then have ClineSR pull the verified main checkpoint and execute VD-1 on the intended workstation. Use that measurement to validate resource budgets and observed instrumentation shares before any actual VD compatibility decision.
+
+## WP-2 independent evidence
+
+The PM verified `323e0e1` on x86-64 with binutils 2.42 and Python 3.13 (365 run, 28 skipped). The tests confirmed repository library loss and relocation with a missing symbol, missing versioned imports and nodes under AVAILABLE_SET, and baseline-unsatisfied libc as UNKNOWN LOW. Plain GCC versus Clang ASan produced CONFOUNDED, an UNKNOWN MEDIUM size observation and an INCOMPATIBLE removed function. Rootfs instrumentation and repository requirement volume remain WP-3 items.
+
+ClineSR independently ran the WP-2 checks on a second Linux host. Python 3.11.18 ran 365 tests (354 passed, 10 skipped, one error) because Bubblewrap 0.6.1 rejects the EROFS `--size` option. Python 3.10 had 15 errors traced to `hashlib.file_digest` in ARM smoke admission. With 1,001 RPMs and 1,501 ELF objects per side, wall time was 148.21 s, peak RSS 504 MB and report size 390.8 MB. OPS-3 passed 200/200 iterations. The two local ClineSR documentation commits were left on that workstation.

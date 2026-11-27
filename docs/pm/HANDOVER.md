@@ -24,3 +24,8 @@ Restore into a fresh directory under the workspace. The bundle contains committe
 4. `/home/linhao/Downloads` exists only on Codex's PC.
 5. The owner relays ClineSR results to the PM.
 6. ClineSR's clone currently holds two unpushed local documentation commits made by mistake. Nobody should push or replay them. ClineSR uses `git fetch` plus `git show`/`git archive` only, never `pull` or `merge`.
+
+## Prompt routing
+
+- Every Codex prompt starts with a `FOR CODEX ONLY` banner, and every ClineSR prompt with `FOR CLINESR ONLY`.
+- ClineSR never commits or pushes.

@@ -32,3 +32,13 @@ The published VD-1 revision 4.2 incorporates the delegated Addendum A fixes. It 
 
 - Downloaded script SHA256 `b851c0937e044009da961257fe3c1a2b78668eeb3d370fb91fccad78a49f9068`
 - Published script SHA256 `ee9b0b6c109f67b9dd27bb70bce053b542364cc7a8f27017382be9a6cdb49a1a`
+
+## WP-2 independent evidence
+
+The PM verified `323e0e1` on x86-64 with binutils 2.42 and Python 3.13 (365 run, 28 skipped). The tests confirmed repository library loss and relocation with a missing symbol, missing versioned imports and nodes under AVAILABLE_SET, and baseline-unsatisfied libc as UNKNOWN LOW. Plain GCC versus Clang ASan produced CONFOUNDED, an UNKNOWN MEDIUM size observation and an INCOMPATIBLE removed function. Rootfs instrumentation and repository requirement volume remain WP-3 items.
+
+ClineSR independently ran the WP-2 checks on a second Linux host. Python 3.11.18 ran 365 tests (354 passed, 10 skipped, one error) because Bubblewrap 0.6.1 rejects the EROFS `--size` option. Python 3.10 had 15 errors traced to `hashlib.file_digest` in ARM smoke admission. With 1,001 RPMs and 1,501 ELF objects per side, wall time was 148.21 s, peak RSS 504 MB and report size 390.8 MB. OPS-3 passed 200/200 iterations. The two local ClineSR documentation commits were left on that workstation.
+
+## WP-3 Addendum A acceptance
+
+The PM reviewed and accepted `d9aa0803a3465f83b5d93cd2c15706c329b6cf4c`, including the delegated changes to VD-1 revision 4.2. The accepted script SHA256 is `ee9b0b6c109f67b9dd27bb70bce053b542364cc7a8f27017382be9a6cdb49a1a`. WP-3 starts from that documentation-only child of `323e0e1`.
