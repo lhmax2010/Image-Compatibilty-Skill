@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
-# VD-1 measurement kit (revision 4.2). FOR CLINESR ONLY. Measurement only, not acceptance.
+# VD-1 measurement kit (revision 5). FOR CLINESR ONLY. Measurement only, not acceptance.
 #
 # Usage, from the ClineSR workspace root:
 #   bash .local-work/vd1_measure.sh check
 #   BASE=<baseline rpm dir> CAND=<candidate rpm dir> bash .local-work/vd1_measure.sh prepare
 #   bash .local-work/vd1_measure.sh run <WORK>
 #   bash .local-work/vd1_measure.sh summary <WORK>
+#   bash .local-work/vd1_measure.sh rerun <WORK> <40-hex commit on origin/main>   (revision 5)
+#   bash .local-work/vd1_measure.sh detail <WORK> <7-hex tag>                     (revision 5)
+#
+# Revision 5 adds 'rerun' (same sample, another published tool commit) and 'detail'
+# (name-free breakdowns of one report). Existing WORK directories from revision 4.2 remain valid.
 #
 # Guarantees:
 #   - Writes only under <workspace>/.local-work/, verified physically (symlinks resolved and rejected).
@@ -14,7 +19,7 @@
 #     already fetched into the workspace clone.
 #   - Sets TMPDIR/TMP/TEMP to <workspace>/.local-work/tmp for itself and all children.
 #   - Prints counts only: no package names, file paths from inside RPMs, or symbol names.
-#     Raw diagnostics go to WORK/prepare.private.log and the run-*.stderr files, which stay local.
+#     Raw diagnostics go to WORK/prepare.private.log and the run-*.private.stderr files, which stay local.
 # Every failure prints a line starting with "STOP:" and exits non-zero.
 set -euo pipefail
 umask 077
@@ -160,41 +165,70 @@ EOF
   echo "PREPARE OK WORK=$W"
 }
 
-cmd_run() {
-  need_work "${1:-}"
-  for tag in ${V151:0:7} ${FIX:0:7}; do
+run_tool() {
+  local tag=$1 log
     [ -e "$W/report-$tag" ] || [ -L "$W/report-$tag" ] && stop "report-$tag already exists; use a new WORK from 'prepare'"
-    for f in run-$tag.stdout run-$tag.stderr run-$tag.metrics; do
+    for f in run-$tag.stdout run-$tag.stderr run-$tag.private.stdout run-$tag.private.stderr run-$tag.metrics; do
       [ -e "$W/$f" ] || [ -L "$W/$f" ] && stop "$f already exists; use a new WORK from 'prepare'"
     done
-    python3 - "$W/tool-$tag/.agents/skills/tizen-image-compatibility" "$W" "$tag" <<'EOF'
+    local skill="$W/tool-$tag/.agents/skills/tizen-image-compatibility"
+    inside_lw "$skill/scripts" && [ -f "$skill/scripts/tizen_compat.py" ] &&
+      [ ! -L "$skill/scripts/tizen_compat.py" ] || stop "tool path is unavailable or outside WORK"
+    log=$(mktemp "$W/run-$tag.private.XXXXXXXX.log") || stop "could not create private run log"
+    python3 - "$skill" "$W" "$tag" 2>"$log" <<'EOF' || stop "run failed (see private run logs in WORK; do not share them)"
 import resource, subprocess, sys, time
 skill, w, tag = sys.argv[1:4]
 t = time.time()
 rc = subprocess.call(['python3', f'{skill}/scripts/tizen_compat.py', '--baseline', f'{w}/base',
                       '--candidate', f'{w}/cand', '--rpm-mode', 'payload', '--mode', 'static',
                       '--output', f'{w}/report-{tag}'],
-                     stdout=open(f'{w}/run-{tag}.stdout', 'x'), stderr=open(f'{w}/run-{tag}.stderr', 'x'))
+                     stdout=open(f'{w}/run-{tag}.private.stdout', 'x'), stderr=open(f'{w}/run-{tag}.private.stderr', 'x'))
 peak = round(resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss / 1024, 1)
 line = f'{tag} exit={rc} wall_seconds={round(time.time() - t, 1)} peak_rss_mb={peak}'
 open(f'{w}/run-{tag}.metrics', 'x').write(line + '\n'); print(line)
 if rc == 2:
-    sys.exit('STOP: tool reported an input error (exit 2); see run-' + tag + '.stderr')
+    print('STOP: tool reported an input error (exit 2); see private run log in WORK', flush=True)
+    sys.exit(2)
 EOF
+}
+
+cmd_run() {
+  need_work "${1:-}"
+  for tag in ${V151:0:7} ${FIX:0:7}; do
+    run_tool "$tag"
   done
   echo "RUN OK"
+}
+
+cmd_rerun() {
+  need_work "${1:-}"
+  local c=${2:-} tag
+  [[ "$c" =~ ^[0-9a-f]{40}$ ]] || stop "give the full 40-character commit ID"
+  git -C "$WS" cat-file -e "$c^{commit}" 2>/dev/null || stop "commit not fetched; run: git -C \"$WS\" fetch origin main"
+  git -C "$WS" merge-base --is-ancestor "$c" origin/main 2>/dev/null || stop "commit is not on origin/main"
+  tag=${c:0:7}
+  [ -e "$W/tool-$tag" ] || [ -L "$W/tool-$tag" ] && stop "tool-$tag already exists in WORK"
+  mkdir "$W/tool-$tag"
+  LOG=$(mktemp "$W/rerun-$tag.private.XXXXXXXX.log") || stop "could not create private rerun log"
+  git -C "$WS" archive "$c" .agents/skills/tizen-image-compatibility 2>>"$LOG" |
+    tar -x -C "$W/tool-$tag" 2>>"$LOG" || stop "could not export tool $tag (details in private rerun log)"
+  echo "tool version: $(cat "$W/tool-$tag/.agents/skills/tizen-image-compatibility/VERSION")"
+  run_tool "$tag"
+  echo "RERUN OK TAG=$tag"
 }
 
 cmd_summary() {
   need_work "${1:-}"
   local log
   log=$(mktemp "$W/summary.private.XXXXXXXX.log") || stop "could not create private summary log"
-  python3 - "$W" "${V151:0:7}" "${FIX:0:7}" 2>"$log" <<'EOF' || stop "summary failed (see private summary log in WORK; do not share it)"
+  shift
+  local t; for t in "$@"; do [[ "$t" =~ ^[0-9a-f]{7}$ ]] || stop "tags must be 7 hex characters"; done
+  python3 - "$W" "${V151:0:7}" "${FIX:0:7}" "$@" 2>"$log" <<'EOF' || stop "summary failed (see private summary log in WORK; do not share it)"
 import collections, json, os, re, sys
 w, *tags = sys.argv[1:]
 def size(p):
     return sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(p) for f in fs)
-print('VD-1 RESULT (revision 4.2, sample, counts only)')
+print('VD-1 RESULT (revision 5, sample, counts only)')
 print('sample: base_rpms', len(os.listdir(f'{w}/base')), 'cand_rpms', len(os.listdir(f'{w}/cand')),
       'base_bytes', size(f'{w}/base'), 'cand_bytes', size(f'{w}/cand'))
 for tag in tags:
@@ -204,9 +238,12 @@ for tag in tags:
         sys.exit('invalid metrics record')
     print(f'=== {tag}', metrics, 'report_bytes', size(r))
     if not os.path.exists(f'{r}/results.json'):
-        err = open(f'{w}/run-{tag}.stderr', errors='replace').read().splitlines()
-        kinds = sorted({m.group(1) for line in err for m in [re.match(r'^([A-Za-z]+(?:Error|Exception))\b', line)] if m})
-        print('no results.json; stderr_lines', len(err), 'exception_types', kinds); continue
+        stderr = f'{w}/run-{tag}.private.stderr'
+        if not os.path.isfile(stderr):
+            stderr = f'{w}/run-{tag}.stderr'  # Existing revision 4.2 WORK.
+        with open(stderr, errors='replace') as diagnostics:
+            print('no results.json; stderr_lines', sum(1 for _ in diagnostics))
+        continue
     for side in ('baseline', 'candidate'):
         m = json.load(open(f'{r}/{side}-manifest.json'))
         o = m['elf_objects']; c = m['repository']['counts']
@@ -248,10 +285,169 @@ print('END OF VD-1 RESULT')
 EOF
 }
 
+cmd_detail() {
+  need_work "${1:-}"
+  local tag=${2:-} log
+  [[ "$tag" =~ ^[0-9a-f]{7}$ ]] || stop "tag must be 7 hex characters"
+  [ -d "$W/report-$tag" ] && [ ! -L "$W/report-$tag" ] || stop "report-$tag missing; run 'run' or 'rerun' first"
+  log=$(mktemp "$W/detail.private.XXXXXXXX.log") || stop "could not create private detail log"
+  python3 - "$W" "$tag" 2>"$log" <<'EOF' || stop "detail failed (see private detail log in WORK; do not share it)"
+import collections, json, os, re, sys
+w, tag = sys.argv[1:]
+r = f'{w}/report-{tag}'
+C = collections.Counter
+def top(counter, n=15):
+    return dict(counter.most_common(n))
+print(f'VD-1 DETAIL (revision 5, tag {tag}, counts only)')
+# Full repositories, from the header scan made by 'prepare' (no names printed).
+maps = {}
+for side in ('BASE', 'CAND'):
+    names, total, rows = set(), 0, 0
+    for line in open(f'{w}/{side}.map', encoding='utf-8', errors='surrogateescape'):
+        name, size, _ = line.rstrip('\n').split('\t', 2)
+        names.add(name); total += int(size); rows += 1
+    maps[side] = names
+    print(f'full_{side.lower()}: rpms {rows} bytes {total} names {len(names)}')
+print('full_common_names', len(maps['BASE'] & maps['CAND']),
+      'base_only_names', len(maps['BASE'] - maps['CAND']), 'cand_only_names', len(maps['CAND'] - maps['BASE']))
+metrics = open(f'{w}/run-{tag}.metrics').read().strip()
+if not re.fullmatch(rf'{tag} exit=-?\d+ wall_seconds=\d+\.\d+ peak_rss_mb=\d+\.\d+', metrics):
+    sys.exit('invalid metrics record')
+print(metrics)
+# Report size by top-level entry; entry names are tool outputs, checked against an allowlist pattern.
+known_entries = {
+    '.compat-run', 'baseline-manifest.json', 'candidate-manifest.json', 'collection.log',
+    'elf-symbol-summary.csv', 'evidence/', 'extraction-errors.csv', 'findings.csv',
+    'index.html', 'linking-details.csv', 'package-symbol-summary.csv', 'packages.csv',
+    'requirement-findings.csv', 'results.json', 'rpm-repository.json', 'run-summary.json',
+    'summary.md', 'symbol-differences.csv', 'test-results.csv',
+}
+sizes = C()
+for entry in os.scandir(r):
+    if entry.is_dir(follow_symlinks=False):
+        b = sum(os.path.getsize(os.path.join(d, f)) for d, _, fs in os.walk(entry.path) for f in fs)
+        key = entry.name + '/'
+    else:
+        b, key = entry.stat(follow_symlinks=False).st_size, entry.name
+    sizes[key if key in known_entries else 'other'] += b
+print('report_bytes_by_entry', top(sizes, 15))
+res = json.load(open(f'{r}/results.json'))
+F = res['findings']
+print('findings', len(F), 'by_dimension_status', top(C(f"{f['dimension']}/{f['status']}" for f in F), 20))
+print('unknown_by_dimension_reason', top(C(f"{f['dimension']}/{f.get('reason_code') or 'none'}" for f in F if f['status'] == 'UNKNOWN'), 20))
+def kind(f):
+    i, b, c = f.get('interface') or '', f.get('baseline'), f.get('candidate')
+    if i.startswith('version definition:'): return 'VERSION_DEFINITION'
+    if i.endswith(':default lookup'): return 'DEFAULT_LOOKUP'
+    if i.endswith(':default symbol version'): return 'DEFAULT_SYMBOL_VERSION'
+    if isinstance(b, dict) and c is None and i == b.get('name'): return 'EXPORT_REMOVED'
+    if b is None and isinstance(c, dict) and i == c.get('name'): return 'EXPORT_ADDED'
+    field = i.rsplit(':', 1)[-1] if ':' in i else ''
+    if field in ('type', 'binding', 'visibility', 'size') and not isinstance(b, dict): return 'FIELD_' + field.upper()
+    if i in ('ELF availability', 'dynamic export collection coverage', 'dynamic export applicability',
+             'dynamic interface surface', 'collection coverage', 'DWARF type/layout ABI',
+             'duplicate dynamic symbol identities'):
+        return 'META:' + i
+    return 'OTHER'
+abi = [f for f in F if f['dimension'] == 'abi']
+print('abi_by_kind_status_reason', top(C(f"{kind(f)}/{f['status']}/{f.get('reason_code') or 'none'}" for f in abi), 25))
+elf_fields = {
+    'FIELD_TYPE': {'NOTYPE', 'OBJECT', 'FUNC', 'SECTION', 'FILE', 'COMMON', 'TLS', 'IFUNC', 'GNU_IFUNC'},
+    'FIELD_BINDING': {'LOCAL', 'GLOBAL', 'WEAK', 'UNIQUE', 'GNU_UNIQUE'},
+    'FIELD_VISIBILITY': {'DEFAULT', 'INTERNAL', 'HIDDEN', 'PROTECTED'},
+}
+def elf_field(kind, value):
+    return value if isinstance(value, str) and value in elf_fields[kind] else 'OTHER'
+fields = collections.defaultdict(C)
+for f in abi:
+    k = kind(f)
+    if k.startswith('FIELD_'):
+        b, c = f.get('baseline'), f.get('candidate')
+        if k == 'FIELD_SIZE':
+            label = ('decrease' if (c or 0) < (b or 0) else 'increase') + '/' + str(f['status'])
+        else:
+            label = f'{elf_field(k, b)}->{elf_field(k, c)}'
+        fields[k][re.sub(r'[^A-Za-z_>/-]', '', label)[:40]] += 1
+for k in sorted(fields):
+    print(f'  {k.lower()}_pairs', top(fields[k], 12))
+def manifest(side):
+    return json.load(open(f'{r}/{side}-manifest.json'))['elf_objects']
+objs = {side: manifest(side) for side in ('baseline', 'candidate')}
+def base(n):
+    return n.split('@', 1)[0]
+imported = {side: C(s.get('base_name') or base(s['name']) for o in objs[side] for s in (o.get('imports') or []))
+            for side in objs}
+removed = [f for f in abi if kind(f) == 'EXPORT_REMOVED']
+def cxx(n):
+    if not n.startswith('_Z'): return 'c'
+    for p, label in (('_ZTV', 'vtable'), ('_ZTI', 'typeinfo'), ('_ZTS', 'typeinfo_name'), ('_ZTT', 'vtt'),
+                     ('_ZGV', 'guard'), ('_ZTh', 'thunk'), ('_ZTv', 'thunk'), ('_ZTc', 'thunk')):
+        if n.startswith(p): return label
+    return 'cxx_template' if 'I' in n[2:] and 'E' in n else 'cxx_other'
+print('removed_exports', len(removed), 'by_status', dict(C(f['status'] for f in removed)))
+print('  by_binding_type', top(C("/".join(elf_field(k, f['baseline'].get(field)) for k, field in (("FIELD_BINDING", "binding"), ("FIELD_TYPE", "type"))) for f in removed), 12))
+print('  versioned', sum('@' in (f['baseline'].get('name') or '') for f in removed),
+      'by_cxx_class', top(C(cxx(f['baseline'].get('base_name') or base(f['baseline'].get('name', ''))) for f in removed), 10))
+ib = [f for f in removed if imported['baseline'][f['baseline'].get('base_name') or base(f['baseline']['name'])]]
+ic = [f for f in removed if imported['candidate'][f['baseline'].get('base_name') or base(f['baseline']['name'])]]
+print('  imported_by_some_baseline_object', len(ib), 'by_binding', dict(C(elf_field('FIELD_BINDING', f['baseline'].get('binding')) for f in ib)),
+      'imported_by_some_candidate_object', len(ic))
+# Export inventory incompleteness: name-free flags plus sanitized readelf diagnostic signatures.
+def signature(line):
+    # Emit a fixed template. Masking tokens cannot reliably identify short names.
+    level = 'Warning' if line.lstrip().startswith('Warning:') else 'Error'
+    for pattern, label in (
+        (r'program interpreter', 'interpreter unavailable'),
+        (r'version (?:index|information|symbol|definition|need)', 'version metadata diagnostic'),
+        (r'(?:dynamic|symbol) table', 'symbol table diagnostic'),
+        (r'section (?:header|name|size|offset)', 'section metadata diagnostic'),
+        (r'(?:corrupt|invalid|truncat|extends past|out of range)', 'invalid or truncated ELF data'),
+    ):
+        if re.search(pattern, line, re.IGNORECASE):
+            return f'{level}: {label}'
+    return f'{level}: other readelf diagnostic'
+for side in ('baseline', 'candidate'):
+    bad = [o for o in objs[side] if o.get('export_inventory_status') == 'UNKNOWN']
+    flags, sigs = C(), C()
+    for o in bad:
+        defs = {v.get('name') for v in o.get('version_definitions') or []}
+        reqs = {v.get('name') for v in o.get('version_requirements') or []}
+        f = set()
+        if not o.get('complete'): f.add('object_incomplete')
+        if not all(o.get(k) for k in ('class', 'endianness', 'type')): f.add('header_field_missing')
+        if any(s.get('version') and s['version'] not in defs for s in o.get('exports') or []): f.add('export_version_undefined')
+        if any(s.get('version') and s['version'] not in reqs for s in o.get('imports') or []): f.add('import_version_unrequired')
+        if any(s.get('version') and s.get('version_index') is not None and not s.get('version_file') for s in o.get('imports') or []):
+            f.add('import_version_file_missing')
+        if o.get('export_inventory_reason_code'): f.add('code:' + re.sub(r'[^A-Z_]', '', o['export_inventory_reason_code'])[:40])
+        warned = False
+        for ref in o.get('export_inventory_evidence') or []:
+            if not re.fullmatch(r'evidence/[a-f0-9]{64}\.txt', ref):
+                continue
+            p = os.path.join(r, ref)
+            if os.path.commonpath((os.path.realpath(p), os.path.realpath(r))) != os.path.realpath(r):
+                continue
+            if not os.path.isfile(p) or os.path.getsize(p) > 1024 * 1024:
+                continue
+            for line in open(p, errors='replace'):
+                if re.match(r'^\S*readelf\S*: (Warning|Error)', line):
+                    warned = True; sigs[signature(line.split(':', 1)[1])] += 1
+        if warned: f.add('readelf_diagnostic')
+        for x in f or {'no_flag'}:
+            flags[x] += 1
+    print(f'export_incomplete_{side}', len(bad), 'flags', dict(flags))
+    if sigs:
+        print(f'  readelf_signatures_{side}', top(sigs, 8))
+print('END OF VD-1 DETAIL')
+EOF
+}
+
 case "${1:-}" in
   check) cmd_check ;;
   prepare) cmd_prepare ;;
   run) cmd_run "${2:-}" ;;
-  summary) cmd_summary "${2:-}" ;;
-  *) stop "usage: $0 check | prepare | run <WORK> | summary <WORK>" ;;
+  summary) shift; cmd_summary "$@" ;;
+  rerun) cmd_rerun "${2:-}" "${3:-}" ;;
+  detail) cmd_detail "${2:-}" "${3:-}" ;;
+  *) stop "usage: $0 check | prepare | run <WORK> | summary <WORK> [tag...] | rerun <WORK> <commit> | detail <WORK> <tag>" ;;
 esac

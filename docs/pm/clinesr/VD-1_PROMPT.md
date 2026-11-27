@@ -32,3 +32,17 @@ Step 5:
 bash .local-work/vd1_measure.sh summary <WORK path from Step 3>
 Give me the complete output from "VD-1 RESULT" to "END OF VD-1 RESULT", plus anything unexpected.
 Keep the WORK directory.
+
+## Revision 5
+
+Published script SHA-256 `8bf3dc72b7d2a20b5ac1f98fbd4c7aa77cd9b100c512134b7053dd5a8780af66`. The downloaded revision matched
+`16035e63e8b1197bdfe32d59f376da3ba1f4b62ec9a05ed75640844bc41efcdf`.
+The delegated privacy and confinement review restricted diagnostic signatures
+and file labels, moved new tool streams to private logs, and made rerun logs
+exclusive. Existing revision 4.2 WORK remains readable.
+
+```sh
+bash .local-work/vd1_measure.sh rerun <WORK> <40-hex-published-commit>
+bash .local-work/vd1_measure.sh summary <WORK> 323e0e1 0c40d40
+bash .local-work/vd1_measure.sh detail <WORK> <7-hex-tag>
+```
