@@ -35,3 +35,11 @@ System files are never executed: unit ExecStart, shell scripts, udev rules, pack
 ## Correctness changes in 1.1
 
 Read [correctness.md](correctness.md) for loader search/closure, version relationships, ARM ABI checks, split Build-ID DWARF, SDK/AST context and coverage denominators. Lexical equality and rootfs-wide SONAME presence do not establish semantic or loader compatibility.
+
+## WP-1 dynamic symbol evidence
+
+GNU readelf can format a large symbol size in hexadecimal. Parsing and advertised-row reconciliation use the same row grammar for decimal and hexadecimal values. A valid GNU version definition can identify its zero-valued ABS marker in either GNU spelling or LLVM's default-version spelling. Marker evidence remains recorded separately.
+
+The primary ELF metadata call omits relocations. Static ARM analysis reads relocations separately. A failed ARM relocation call leaves relocation coverage UNKNOWN independently of the primary export inventory. Both ordinary and RPM ELF collectors use the complete captured primary stream up to `analysis.max_readelf_bytes`. The default is 512 MiB of combined output per invocation and the maximum is 4 GiB. General host-tool capture has a 64 MiB default. An exceeded capture budget sets `OUTPUT_LIMIT` and the available bytes remain in evidence. A partial stream cannot prove export absence.
+
+Export and import observations are kept by decorated identity. When more than one observed row has the same decorated identity, all rows remain in the manifest and distinct ambiguous observations are available in repository symbol details. The export inventory records `DUPLICATE_DYNSYM_IDENTITY`; the ambiguous identity cannot establish compatibility or identical results. ELF cache keys include the bundled collector VERSION, inventory revision and capture budget. Manifest schema remains 1.2.

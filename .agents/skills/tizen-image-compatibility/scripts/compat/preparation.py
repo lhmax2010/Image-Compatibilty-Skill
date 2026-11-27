@@ -29,13 +29,15 @@ def file_format(path):
 
 
 def is_tar_container(path):
-    # tarfile accepts an all-zero initial block as an empty TAR. Raw flash
-    # files can legitimately have a zeroed prefix before their superblock.
     try:
         with tarfile.open(path) as archive:
-            return archive.next() is not None or file_format(path) is None
+            return archive.next() is not None
     except (OSError, EOFError, tarfile.TarError):
         return False
+
+
+def has_regular_file(root):
+    return any(not path.is_symlink() and path.is_file() for path in root.rglob('*'))
 
 
 def looks_like_root(path):
@@ -324,6 +326,8 @@ def prepare(source, output, tools, *, inspect_only=False, staged=None, replaceme
                         raise PreparationError('RPM_REPLACEMENT_INVALID', 'Expected a collection of raw RPM archives')
                 if scope == 'runtime-rootfs' and ('extractor' in record or replacement) and not looks_like_root(legacy.root):
                     record['coverage']['complete'] = False
+                if scope == 'runtime-rootfs' and not has_regular_file(legacy.root):
+                    raise PreparationError('ROOTFS_EMPTY', 'Extracted rootfs has no regular files')
                 if scope == 'sdk' and not any((include := legacy.resolve('/' + x)) and include.is_dir()
                                               for x in tools.config['cross_compilation']['include_dirs']):
                     record['coverage']['complete'] = False

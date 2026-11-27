@@ -11,7 +11,7 @@ from typing import Any, Iterator
 
 from .core import InputError, InfrastructureError, Tools
 from .flash import PROBE_BYTES, PreparationError, identify
-from .preparation import MANIFEST, _stamp, is_tar_container, looks_like_root, prepare, prepared_input, tar_payload
+from .preparation import MANIFEST, _stamp, has_regular_file, is_tar_container, looks_like_root, prepare, prepared_input, tar_payload
 
 
 class Image:
@@ -61,8 +61,13 @@ class Image:
                 self._prepare(workspace, tools, label)
             elif prefix.startswith(b'\xed\xab\xee\xdb') or self.source.suffix.lower() == '.rpm':
                 self.format = 'rpm-collection'
+            elif not prefix or not any(prefix):
+                raise InputError('Empty input or zero-member TAR without a recognized image signature')
             else:
                 raise InputError(f'Unsupported image format: {source}. For EXT4 use an isolated guest or read-only userspace extractor; for OCI export a merged rootfs. Supply the extracted directory or a rootfs TAR. No privileged mount is performed.')
+        extracted_root = self.format in ('tar','squashfs') or (self.extraction_manifest and not sdk and self.format!='rpm-collection')
+        if extracted_root and not has_regular_file(self.root):
+            raise InputError('Extracted rootfs has no regular files')
         if self.format in ('directory','tar') and not looks_like_root(self.root) and any(
                 p.is_file() and not p.is_symlink() for p in self.root.rglob('*.[rR][pP][mM]')):
             self.format = 'rpm-collection'

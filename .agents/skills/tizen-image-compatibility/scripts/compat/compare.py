@@ -5,10 +5,11 @@ from pathlib import Path
 from collections import defaultdict
 from typing import Any
 from .core import DIMENSIONS, SEVERITIES, Tools, canonical, digest, finding
-from .elf import dynamic_exports, symbol_identity, target_abi_matches, arm_abi, version_nodes
+from .elf import duplicate_dynsym_names, dynamic_exports, symbol_identity, symbol_multimap, target_abi_matches, arm_abi, version_nodes
 from .linker import dependency_checks
 from .debuginfo import advanced_abi
 from .source import declaration_reachability, header_inventory_complete
+from .symbol_rules import classify_symbol_change
 
 
 def index(items: list[dict[str, Any]], key: str = 'path') -> dict[str, dict[str, Any]]:
@@ -33,8 +34,8 @@ def virtual_alias(path: str, files: dict[str, dict[str, Any]]) -> str:
     return path
 
 
-def exports(obj: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return {symbol['name']: symbol for symbol in dynamic_exports(obj)}
+def exports(obj: dict[str, Any]) -> dict[str, list[dict[str, Any]]]:
+    return symbol_multimap(dynamic_exports(obj))
 
 
 def runtime_requirements(obj):
@@ -90,9 +91,16 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
             {k: obj.get(k) for k in ('class', 'machine', 'endianness', 'arm_abi')},
             {k: other.get(k) for k in ('class', 'machine', 'endianness', 'arm_abi')},
             'COMPATIBLE' if target_abi_matches(obj, other) else 'UNKNOWN', 'INFO', 'ELF target ABI metadata only', ev))
-        left, right = exports(obj), exports(other)
-        old_exports_complete = obj.get('export_inventory_complete') is True
-        new_exports_complete = other.get('export_inventory_complete') is True
+        duplicates = [duplicate_dynsym_names(item) for item in (obj,other)]
+        ambiguous = duplicates[0] | duplicates[1]
+        left, right = ({name:entries[0] for name,entries in exports(item).items() if name not in ambiguous}
+                       for item in (obj,other))
+        old_exports_complete = obj.get('export_inventory_complete') is True and not duplicates[0]
+        new_exports_complete = other.get('export_inventory_complete') is True and not duplicates[1]
+        if ambiguous:
+            findings.append(finding('abi',path,'duplicate dynamic symbol identities',*map(sorted,duplicates),
+                'UNKNOWN','HIGH','ELF dynamic symbol identity validation',ev,
+                reason_code='DUPLICATE_DYNSYM_IDENTITY'))
         if not (old_exports_complete and new_exports_complete):
             findings.append(finding('abi', path, 'dynamic export collection coverage',
                 obj.get('export_inventory_complete'), other.get('export_inventory_complete'), 'UNKNOWN', 'HIGH',
@@ -137,11 +145,15 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
                         'UNKNOWN', 'HIGH', evidence=ev, impact='Unversioned lookup now selects a different symbol version.'))
                 keys = ('type', 'visibility', 'binding') + (('size',) if symbol['type'] in ('OBJECT', 'TLS') else ())
                 for key in keys:
-                    if symbol.get(key) != next_symbol.get(key):
-                        findings.append(finding('abi', path, name + ':' + key, symbol.get(key), next_symbol.get(key),
-                            'INCOMPATIBLE' if key in ('size', 'type') else 'UNKNOWN', 'HIGH', evidence=ev))
+                    before, after = symbol.get(key), next_symbol.get(key)
+                    if before != after:
+                        status,severity,reason = classify_symbol_change(key,before,after)
+                        impact = ('GNU unique binding changes process-wide identity and may affect RTLD_LOCAL and dlclose.'
+                                  if reason=='GNU_UNIQUE_DROPPED' else '')
+                        findings.append(finding('abi',path,name+':'+key,before,after,status,severity,evidence=ev,
+                                                impact=impact,reason_code=reason))
         for name in sorted(set(right) - set(left)):
-            findings.append(finding('abi', path, name, None, right[name], 'COMPATIBLE' if old_exports_complete else 'UNKNOWN', 'INFO', evidence=ev,
+            findings.append(finding('abi', path, name, None, right[name], 'COMPATIBLE' if old_exports_complete and not ambiguous else 'UNKNOWN', 'INFO', evidence=ev,
                                     impact='Additional exported interface; existing exports are compared separately.'))
         if not debug_only and obj.get('needed') != other.get('needed'):
             findings.append(finding('linking', path, 'DT_NEEDED', obj.get('needed'), other.get('needed'), 'UNKNOWN', 'MEDIUM', evidence=ev,

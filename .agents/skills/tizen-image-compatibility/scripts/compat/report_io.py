@@ -63,6 +63,26 @@ class ResourceLimit(RuntimeError):
     pass
 
 
+def memory_pressure_sample(host_available):
+    try:
+        return Path('/proc/pressure/memory').read_text(), host_available, {}
+    except OSError:
+        pass
+    try:
+        group = next(line[3:] for line in Path('/proc/self/cgroup').read_text().splitlines() if line.startswith('0::'))
+        hierarchy = Path('/sys/fs/cgroup')
+        root = hierarchy / group.lstrip('/')
+        if '..' in root.relative_to(hierarchy).parts:
+            return 'NOT_AVAILABLE', host_available, {}
+        current = int((root/'memory.current').read_text())
+        raw_limit = (root/'memory.max').read_text().strip()
+        limit = None if raw_limit=='max' else int(raw_limit)
+        available = host_available if limit is None else min(host_available,max(0,limit-current))
+        return 'NOT_AVAILABLE', available, {'cgroup_memory_current_bytes':current,'cgroup_memory_max_bytes':limit}
+    except (OSError, ValueError, StopIteration):
+        return 'NOT_AVAILABLE', host_available, {}
+
+
 class ResourceGuard:
     """Linux experiment limits; frequent checkpoints include SQLite VM operations."""
     def __init__(self, output, disk_budget=None):
@@ -103,18 +123,19 @@ class ResourceGuard:
         allocated = sum(p.stat().st_blocks * 512 for p in self.output.rglob('*') if p.is_file())
         fs = os.statvfs(self.output)
         usage = resource.getrusage(resource.RUSAGE_SELF)
-        sample = dict(elapsed_seconds=now - self.started, mem_available_bytes=mem['MemAvailable'],
+        pressure, available, cgroup = memory_pressure_sample(mem['MemAvailable'])
+        sample = dict(elapsed_seconds=now - self.started, mem_available_bytes=available,
                       swap_free_bytes=mem['SwapFree'], tree_rss_bytes=rss,
                       process_peak_rss_bytes=usage.ru_maxrss * 1024,
                       cpu_seconds=usage.ru_utime + usage.ru_stime,
                       allocated_bytes=allocated, disk_free_bytes=fs.f_bavail * fs.f_frsize,
-                      memory_pressure=Path('/proc/pressure/memory').read_text())
+                      memory_pressure=pressure, **cgroup)
         self.last_snapshot = sample
         if force or not self.samples or now - self.samples[-1]['monotonic'] >= 10:
             with (self.output / 'resource-samples.jsonl').open('a') as stream:
                 stream.write(canonical(sample) + '\n')
             self.samples.append(dict(sample, monotonic=now))
-        self.low_since = (self.low_since or now) if mem['MemAvailable'] < 3 * 1024**3 else None
+        self.low_since = (self.low_since or now) if available < 3 * 1024**3 else None
         if self.low_since and now - self.low_since >= 10:
             raise ResourceLimit('MemAvailable below 3 GiB for at least 10 seconds')
         if max(rss, usage.ru_maxrss * 1024) > 3 * 1024**3:

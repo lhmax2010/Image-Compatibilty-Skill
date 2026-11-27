@@ -3,7 +3,7 @@ from collections import Counter, defaultdict
 
 from .compare import compare_elf, finalize
 from .core import canonical, digest, finding, write_json
-from .elf import dynamic_exports, symbol_identity
+from .elf import duplicate_dynsym_names, dynamic_exports, symbol_identity, symbol_multimap
 from .report_io import csv_rows
 from .report_symbols import size_difference
 from .rpm_payload import FIELDS
@@ -189,7 +189,8 @@ def compare_repository(a,b,config):
 
 def symbols(obj, role):
     entries = dynamic_exports(obj) if role=='EXPORT' else obj.get('imports',[])
-    return {(s['name'],s.get('version_file') if role=='IMPORT' else None):s for s in entries}
+    groups = symbol_multimap(entries,by_provider=role=='IMPORT')
+    return groups if role=='IMPORT' else {(name,None):rows for name,rows in groups.items()}
 
 
 def symbol_counts(objects):
@@ -213,9 +214,21 @@ def symbol_counts(objects):
 
 
 def symbol_rows(pair,o,p,findings):
+    duplicates = duplicate_dynsym_names(o) | duplicate_dynsym_names(p)
     for role in ('EXPORT','IMPORT'):
-        old,new = symbols(o,role),symbols(p,role)
-        ready = all(obj.get('export_inventory_complete') is True for obj in (o,p))
+        groups = [symbols(obj,role) for obj in (o,p)]
+        ready = not duplicates and all(obj.get('export_inventory_complete') is True for obj in (o,p))
+        for i,side in enumerate(('baseline','candidate')):
+            for key,records in sorted(groups[i].items(),key=lambda item:canonical(item[0])):
+                if key[0] not in duplicates:
+                    continue
+                for row in sorted(records,key=canonical):
+                    yield {'package_id':pair['package_id'],'component':pair['component'],'role':role,
+                           'change':side.upper()+'_OBSERVED','details':['DUPLICATE_DYNSYM_IDENTITY'],'status':'UNKNOWN',
+                           'baseline':row if i==0 else None,'candidate':row if i==1 else None,'finding_ids':[],
+                           'baseline_sha256':o.get('sha256'),'candidate_sha256':p.get('sha256'),
+                           'evidence':sorted(set(o.get('evidence',[])+p.get('evidence',[])))}
+        old,new = ({key:rows[0] for key,rows in group.items() if key[0] not in duplicates} for group in groups)
         def unmatched(keys, qualified):
             grouped = defaultdict(list)
             for key in keys:

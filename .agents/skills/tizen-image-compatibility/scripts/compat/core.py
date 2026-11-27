@@ -17,20 +17,21 @@ import threading
 import time
 from typing import Any
 
-VERSION = '1.3.1-phase8a'
+VERSION = (Path(__file__).resolve().parents[2] / 'VERSION').read_text(encoding='ascii').strip()
 SCHEMA = '1.2'
 DIMENSIONS = ('elf', 'abi', 'api', 'headers', 'linking', 'compiler_runtime', 'kernel',
               'ipc', 'commands', 'filesystem', 'packages', 'services', 'security',
               'runtime', 'hardware', 'network', 'performance')
 SEVERITIES = ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO')
 STATUSES = ('IDENTICAL', 'COMPATIBLE', 'INCOMPATIBLE', 'UNKNOWN', 'NOT_APPLICABLE')
-DEFAULT_CAPTURE_BYTES = 16 * 1024 * 1024
+DEFAULT_CAPTURE_BYTES = 64 * 1024 * 1024
 DEFAULTS: dict[str, Any] = {
     'comparison': {'baseline_name': 'baseline', 'candidate_name': 'candidate',
                    'baseline_toolchain': 'unknown', 'candidate_toolchain': 'unknown'},
     'analysis': {'modes': list(DIMENSIONS), 'ignore_build_ids': True,
                  'ignore_timestamps': True, 'normalize_build_paths': True,
                  'workers': 4, 'timeout_seconds': 60, 'max_text_bytes': 4194304,
+                 'max_readelf_bytes': 512 * 1024**2,
                  'max_extract_bytes': 107374182400, 'max_extract_files': 2000000, 'input_scope': {}},
     'tools': {},
     'rpm_payload': {'mode': 'payload', 'max_bytes': 1073741824, 'max_elf_bytes': 268435456,
@@ -123,6 +124,9 @@ def validate_config(c: dict[str, Any]) -> None:
                 require(value >= (0 if key in ('header_limit', 'tolerance_percent') else 1),
                         f'Invalid range: {section}.{key}')
     require(all(x in DIMENSIONS for x in c['analysis']['modes']), 'Unknown analysis dimension')
+    cap = c['analysis']['max_readelf_bytes']
+    require(type(cap) is int and 1 <= cap <= 4 * 1024**3,
+            'analysis.max_readelf_bytes must be an integer between 1 and 4294967296')
     require(type(c['analysis']['workers']) is int and 1 <= c['analysis']['workers'] <= 32,
             'analysis.workers must be an integer between 1 and 32')
     scope_fields = {'paths', 'file_contents', 'uid_gid_mode', 'xattrs', 'acl', 'smack', 'file_capabilities',
@@ -310,7 +314,7 @@ class Tools:
         return text
 
     def run(self, argv: list[str], timeout: float | None = None, *, max_capture_bytes: int | None = None,
-            cwd: Path | None = None, keep_interrupt=False) -> dict[str, Any]:
+            cwd: Path | None = None, keep_interrupt=False, full_output=False) -> dict[str, Any]:
         timeout = timeout or self.config['analysis']['timeout_seconds']
         limit = DEFAULT_CAPTURE_BYTES if max_capture_bytes is None else max_capture_bytes
         env = os.environ.copy()
@@ -327,6 +331,7 @@ class Tools:
             except OSError as exc:
                 code, error = -1, str(exc)
             result: dict[str, Any] = {'argv': [self.normalize(a) for a in argv], 'returncode': code, 'error': error}
+            result['reason_code'] = 'OUTPUT_LIMIT' if error == 'adapter output limit exceeded' else None
             result['local_process_group_status'] = local_group
             # Preserve bounded raw evidence even when the command failed or output was capped.
             hashes = []
@@ -340,9 +345,10 @@ class Tools:
                 with atomic_output(self.raw / f'{raw_id}.txt') as evidence:
                     shutil.copyfileobj(stream, evidence, 1024 * 1024)
                 stream.seek(0)
-                data = stream.read(DEFAULT_CAPTURE_BYTES + 1)
-                result[name] = self.normalize(data[:DEFAULT_CAPTURE_BYTES].decode('utf-8', 'replace'))
-                result[f'{name}_truncated'] = len(data) > DEFAULT_CAPTURE_BYTES
+                preview = limit if full_output else DEFAULT_CAPTURE_BYTES
+                data = stream.read(preview + 1)
+                result[name] = self.normalize(data[:preview].decode('utf-8', 'replace'))
+                result[f'{name}_truncated'] = len(data) > preview or result['reason_code']=='OUTPUT_LIMIT'
                 result[f'{name}_evidence'] = f'evidence/{raw_id}.txt'
                 hashes.append(raw_id)
             result['evidence_id'] = digest(canonical([result['argv'], code, hashes, error]).encode())
@@ -472,12 +478,15 @@ def expected_collectors(config):
 
 def finding(dimension: str, component: str, interface: str, baseline: Any, candidate: Any,
             status: str = 'UNKNOWN', severity: str = 'MEDIUM', method: str = 'static comparison',
-            evidence: Any = None, impact: str = '', action: str = '', confidence: str = 'medium') -> dict[str, Any]:
+            evidence: Any = None, impact: str = '', action: str = '', confidence: str = 'medium', *,
+            reason_code: str | None = None) -> dict[str, Any]:
     item = dict(dimension=dimension, component=component, interface=interface,
                 baseline=baseline, candidate=candidate, status=status, severity=severity,
                 confidence=confidence, evidence=evidence or [], detection_method=method,
                 potential_impact=impact or 'Review the observable contract before attributing this difference to a compiler.',
                 recommended_action=action or 'Validate with the matching target SDK and representative consumer.')
+    if reason_code:
+        item['reason_code'] = reason_code
     item['id'] = 'TC-' + digest(canonical(item).encode())[:16]
     return item
 

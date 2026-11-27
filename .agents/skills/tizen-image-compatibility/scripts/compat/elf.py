@@ -1,7 +1,7 @@
 """ELF extraction using binutils; raw readelf output remains authoritative."""
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, defaultdict
 import re
 from pathlib import Path
 from typing import Any
@@ -9,8 +9,8 @@ from .core import Tools
 
 HEADER_KEYS = {'Class': 'class', 'Data': 'endianness', 'OS/ABI': 'osabi',
                'ABI Version': 'abi_version', 'Type': 'type', 'Machine': 'machine', 'Flags': 'flags'}
-ELF_INVENTORY_REVISION = 4
-DYNAMIC_SYMBOL_ROW = re.compile(r'^[ \t]*(\d+):[ \t]+([0-9a-fA-F]+)[ \t]+(\d+)[ \t]+(\S+)[ \t]+(\S+)'
+ELF_INVENTORY_REVISION = 5
+DYNAMIC_SYMBOL_ROW = re.compile(r'^[ \t]*(\d+):[ \t]+([0-9a-fA-F]+)[ \t]+(0[xX][0-9a-fA-F]+|\d+)[ \t]+(\S+)[ \t]+(\S+)'
                                 r'[ \t]+(\S+)[ \t]+(\S+)(?:[ \t](.*))?$')
 
 
@@ -63,13 +63,13 @@ def runtime_metadata_complete(obj):
             and obj.get('elf_runtime_role', 'RUNTIME') in ('RUNTIME', 'RUNTIME_WITH_DEBUG'))
 
 
-def arm_inventory(obj, text, complete, relocations_requested):
+def arm_inventory(obj, text, relocation_text, relocation_complete):
     """Record observed ARM requirements without inferring hardware support."""
     attrs = obj['arm_attributes']
     stack = re.search(r'^\s*GNU_STACK\s+(?:0x[0-9a-fA-F]+\s+){5}([RWE ]+)\s+0x', text, re.M)
     relocations = Counter()
     advertised = 0
-    for line in text.splitlines():
+    for line in (relocation_text or '').splitlines():
         header = re.match(r"Relocation section '.+' at offset .* contains (\d+) entr(?:y|ies):", line)
         if header:
             advertised += int(header[1])
@@ -77,7 +77,7 @@ def arm_inventory(obj, text, complete, relocations_requested):
         if row:
             relocations[row[1]] += 1
     count_verified = advertised == sum(relocations.values()) and (
-        advertised > 0 or re.search(r'^There are no relocations in this file\.', text, re.M))
+        advertised > 0 or re.search(r'^There are no relocations in this file\.', relocation_text or '', re.M))
     return {'attributes': 'OBSERVED' if attrs else 'UNKNOWN',
             'arm_isa': attrs.get('Tag_ARM_ISA_use'), 'thumb_isa': attrs.get('Tag_THUMB_ISA_use'),
             'cpu_profile': attrs.get('Tag_CPU_arch_profile'),
@@ -88,8 +88,8 @@ def arm_inventory(obj, text, complete, relocations_requested):
             'tls_symbols_observed': sum(s['type'] == 'TLS' for s in obj['imports'] + obj['exports']),
             'relocations': dict(sorted(relocations.items())),
             'tls_relocations': sorted(r for r in relocations if '_TLS_' in r),
-            'relocation_status': 'NOT_EXECUTED' if not relocations_requested else
-            'COMPLETE' if complete and count_verified else 'UNKNOWN',
+            'relocation_status': 'NOT_EXECUTED' if relocation_text is None else
+            'COMPLETE' if relocation_complete and count_verified else 'UNKNOWN',
             'hardware_assessment': 'UNVERIFIED'}
 
 
@@ -111,7 +111,7 @@ def parse_readelf(text: str) -> dict[str, Any]:
                 version_index = re.fullmatch(r'(.*@\S+) \((\d+)\)',name) if section=='UND' else None
                 if version_index:
                     name = version_index[1]
-                symbol = dict(name=name, value=int(value, 16), size=int(size), type=kind, binding=binding,
+                symbol = dict(name=name, value=int(value, 16), size=int(size, 16 if size.lower().startswith('0x') else 10), type=kind, binding=binding,
                               visibility=visibility, section=section, **symbol_identity(name))
                 symbol['version_index'] = int(version_index[2]) if version_index else None
                 if section == 'UND':
@@ -194,14 +194,15 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str, *, bounded=Fa
     tool = tools.path('readelf')
     if tool:
         flags = ['-W', '-h', '-l', '-d', '--dyn-syms', '-V', '-S', '-A', '-n']
-        if mode != 'quick':
-            flags += ['-r']
-        result = tools.run([tool, *flags, str(path)], **({'max_capture_bytes':16*1024**2} if bounded else {}))
+        cap = tools.config['analysis']['max_readelf_bytes']
+        result = tools.run([tool, *flags, str(path)], max_capture_bytes=cap, full_output=True)
         obj.update(parse_readelf(result['stdout']))
         obj['evidence'] = [result['stdout_evidence'], result['stderr_evidence']]
-        obj['complete'] = result['returncode'] == 0 and not result['stdout_truncated'] and 'machine' in obj
+        obj['complete'] = result['returncode'] == 0 and not result.get('error') and not result['stdout_truncated'] and 'machine' in obj
         if obj['complete'] and not result.get('error') and not result.get('stderr_truncated'):
             obj['elf_runtime_role'] = elf_runtime_role(result['stdout'], obj['size'], result['stderr'])
+        if result['stderr'].strip() and obj['elf_runtime_role'] != 'DEBUG_ONLY':
+            obj['complete'] = False
         # ELF-header success is independent of complete negative export evidence.
         symbols = re.search(r"Symbol table '\.dynsym' contains (\d+) entries:\n(.*?)(?:\n\n|\Z)", result['stdout'], re.S)
         rows = [match.groups() for line in symbols[2].splitlines() if (match := DYNAMIC_SYMBOL_ROW.match(line))] if symbols else []
@@ -237,18 +238,29 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str, *, bounded=Fa
             'No dynamic symbol table on ET_REL.' if obj['export_inventory_status'] == 'NOT_APPLICABLE' else
             'Tool failure/warning, truncated output, missing or unsupported dynsym/version records; absence unproven.')
         obj['export_inventory_evidence'] = obj['evidence']
-        if obj['export_inventory_complete']:
-            visible = list(dynamic_exports(obj))
+        if rows_valid and version_valid:
+            nodes = version_nodes(obj)
+            visible = [s for s in obj['exports'] if not is_version_node_marker(s,nodes)]
             visible_rows = {id(symbol) for symbol in visible}
             obj['version_node_markers'] = [s for s in obj['exports'] if id(s) not in visible_rows]
             obj['exports'] = visible
+        if duplicates := duplicate_dynsym_names(obj):
+            obj.update(export_inventory_complete=False, export_inventory_status='UNKNOWN',
+                       export_inventory_reason='Duplicate decorated dynamic symbol identities; candidate selection is ambiguous.',
+                       export_inventory_reason_code='DUPLICATE_DYNSYM_IDENTITY', duplicate_dynsym_identities=sorted(duplicates))
+        elif result.get('reason_code'):
+            obj['export_inventory_reason_code'] = result['reason_code']
         obj['resolution_metadata_complete'] = bool(obj['export_inventory_complete']
             and all(obj.get(k) for k in ('class', 'endianness', 'type'))
             and 'Dynamic section at offset' in result['stdout'])
         obj['resolution_metadata_evidence'] = obj['evidence'] if obj['resolution_metadata_complete'] else []
         if obj.get('machine') == 'ARM':
-            obj['arm_inventory'] = arm_inventory(obj, result['stdout'], obj['complete'] and not result['stderr'].strip()
-                                                  and not result.get('stderr_truncated'), mode != 'quick')
+            relocations = tools.run([tool, '-W', '-r', str(path)], max_capture_bytes=cap, full_output=True) if mode!='quick' else None
+            obj['arm_inventory'] = arm_inventory(obj, result['stdout'], relocations['stdout'] if relocations else None,
+                bool(relocations and relocations['returncode']==0 and not relocations.get('error') and
+                     not relocations['stdout_truncated'] and not relocations.get('stderr_truncated') and not relocations['stderr'].strip()))
+            if relocations:
+                obj['evidence'] = obj['evidence'] + [relocations['stdout_evidence'], relocations['stderr_evidence']]
         if not obj['complete']:
             obj['error'] = result['error'] or result['stderr'] or 'Incomplete ELF parse'
     else:
@@ -278,12 +290,32 @@ def dynamic_exports(obj):
     """Exclude demonstrated GNU ld node markers, including on legacy manifest replay."""
     nodes = version_nodes(obj) if obj.get('export_inventory_complete') is True and 'version_node_markers' not in obj else {}
     for sym in obj.get('exports', []):
-        if (sym['name'] in nodes and type(nodes[sym['name']].get('index')) is int and nodes[sym['name']]['index'] > 1
-                and sym.get('section') == 'ABS' and sym.get('type') == 'OBJECT'
-                and sym.get('size') == sym.get('value') == 0 and sym.get('binding') == 'GLOBAL'
-                and sym.get('visibility') == 'DEFAULT' and not sym.get('version')):
-            continue
-        yield sym
+        if not is_version_node_marker(sym,nodes):
+            yield sym
+
+
+def is_version_node_marker(symbol, nodes):
+    name = symbol['name']
+    base = name.split('@@',1)[0]
+    index = nodes.get(base,{}).get('index')
+    return (type(index) is int and index > 1 and name in (base, f'{base}@@{base}')
+            and symbol.get('section')=='ABS' and symbol.get('type')=='OBJECT'
+            and symbol.get('size')==symbol.get('value')==0 and symbol.get('binding')=='GLOBAL'
+            and symbol.get('visibility')=='DEFAULT')
+
+
+def symbol_multimap(symbols, *, by_provider=False):
+    grouped = defaultdict(list)
+    for symbol in symbols:
+        key = (symbol['name'],symbol.get('version_file')) if by_provider else symbol['name']
+        grouped[key].append(symbol)
+    return dict(grouped)
+
+
+def duplicate_dynsym_names(obj):
+    counts = Counter(s['name'] for s in dynamic_exports(obj))
+    counts.update(s['name'] for s in obj.get('imports',[]))
+    return {name for name,count in counts.items() if count > 1}
 
 
 def symbol_identity(name: str) -> dict[str, Any]:

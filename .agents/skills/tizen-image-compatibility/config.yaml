@@ -12,6 +12,7 @@ analysis:
   workers: 4
   timeout_seconds: 60
   max_text_bytes: 4194304
+  max_readelf_bytes: 536870912 # Combined capture cap per readelf invocation.
   max_extract_bytes: 107374182400
   max_extract_files: 2000000
   input_scope: {} # Example: {baseline: {ramdisk: false, xattrs: false, hardlinks: false}}

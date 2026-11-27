@@ -17,3 +17,18 @@ Default CRITICAL findings: ELF class/endian/machine mismatch; missing required d
 The finding confidence is high for direct complete symbol/contract evidence, medium for static contextual changes, low where tool/type coverage is insufficient. Explain evidence and recommended verification instead of treating confidence as a probability.
 
 Collector execution is reported independently of image compatibility and verification coverage. By default, a failed critical collector returns exit 3 after writing reports. Examples include failure on every detected ELF for a side or failure to query a recognized installed RPM database. Partial ELF collection keeps per-object UNKNOWN, records the failures and keeps the configured compatibility, strict and coverage thresholds in force. A missing RPM database, SDK, runtime adapter or optional debug tool leaves the corresponding coverage unavailable. To reproduce earlier exit semantics, set `ci.fail_on_collector_failure: false`. The report still records execution failures.
+
+## WP-1 dynamic symbol change reason codes
+
+| Observed change | Status | Severity | Reason code |
+| --- | --- | --- | --- |
+| FUNC and GNU indirect function transition | UNKNOWN | LOW | IFUNC_TRANSITION |
+| NOTYPE and FUNC or OBJECT transition | UNKNOWN | MEDIUM | NOTYPE_ANNOTATION |
+| OBJECT and function-kind transition | INCOMPATIBLE | HIGH | KIND_CHANGED |
+| Transition into or out of TLS | INCOMPATIBLE | HIGH | TLS_KIND_CHANGED |
+| Existing OBJECT or TLS size decreases | INCOMPATIBLE | HIGH | DATA_SIZE_DECREASED |
+| Existing OBJECT or TLS size increases | INCOMPATIBLE | HIGH | DATA_SIZE_INCREASED |
+| GNU_UNIQUE or UNIQUE becomes GLOBAL | UNKNOWN | MEDIUM | GNU_UNIQUE_DROPPED |
+| Other binding or visibility changes | UNKNOWN | HIGH | SYMBOL_BINDING_CHANGED or SYMBOL_VISIBILITY_CHANGED |
+
+Indirect function transitions need resolver and target evidence. Clang does not emit GCC's STB_GNU_UNIQUE binding; a GLOBAL replacement can change identity and lifetime with RTLD_LOCAL and dlclose. The observed binding change does not establish a runtime failure. Duplicate decorated identities are UNKNOWN with `DUPLICATE_DYNSYM_IDENTITY`. Incomplete candidate inventories keep symbol absence unconfirmed.

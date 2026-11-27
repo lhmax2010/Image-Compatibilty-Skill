@@ -231,7 +231,8 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
         m['limitations'].append(limitation('filesystem', f'Directory traversal failed: {error.strerror}', '*'))
     def elf_job(job: tuple[Path, str]) -> dict[str, Any]:
         path, virtual = job
-        key = digest(canonical([VERSION, CACHE_REVISION, ELF_INVENTORY_REVISION, mode, virtual, hash_file(path),
+        cap = tools.config['analysis']['max_readelf_bytes']
+        key = digest(canonical([VERSION, CACHE_REVISION, ELF_INVENTORY_REVISION, cap, mode, virtual, hash_file(path),
                                 tools.versions.get('readelf'), tools.versions.get('nm')]).encode())
         cache_file = cache / (key + '.json') if cache else None
         if cache_file:
@@ -246,7 +247,7 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
                 for ref in refs:
                     if not isinstance(ref, str) or not re.fullmatch(r'evidence/[a-f0-9]{64}\.txt', ref):
                         raise ValueError('Invalid cache evidence path')
-                    blob = read_cache_file(cache / Path(ref).name, DEFAULT_CAPTURE_BYTES)
+                    blob = read_cache_file(cache / Path(ref).name, max(cap, DEFAULT_CAPTURE_BYTES))
                     if digest(blob) != Path(ref).stem:
                         raise ValueError('Cache evidence digest mismatch')
                     with atomic_output(tools.output / ref) as output:
