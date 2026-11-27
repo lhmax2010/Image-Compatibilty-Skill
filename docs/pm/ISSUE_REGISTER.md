@@ -56,11 +56,11 @@ Owner: technical PM (Claude). Maintained by Codex from PM decisions. Baseline co
 | RPT-SIZE | ClineSR | P2 | CONFIRMED-exec | report.py | Repeated JSON whitespace inflates scale reports | Accept | Compact machine outputs and measured size breakdown | WP-3 | Verified (PM, 0c40d40) |
 | PROC-1 | Owner | P2 | CONFIRMED-exec | HANDOVER.md | A Codex work package was given to ClineSR | Accept | Audience banners and owner-only result relay | WP-3 | Verified (PM, 0c40d40) |
 
-| RC-INV | Codex | P1 | CONFIRMED-exec | findings | Missing stable reason codes | Record | See WP-3b and VD-1 evidence | WP-3b | Open |
-| EXP-RC | Codex | P1 | CONFIRMED-exec | elf.py | Incomplete exports lack explanation | Record | See WP-3b and VD-1 evidence | WP-3b | Open |
-| EXP-CTX | Codex | P1 | CONFIRMED-exec | ELF export findings | Missing removal and importer context | Record | See WP-3b and VD-1 evidence | WP-3b | Open |
-| LINK-AGG | Codex | P1 | CONFIRMED-exec | linker.py | Per-import observations dominate real reports | Record | See WP-3b and VD-1 evidence | WP-3b | Open |
-| RPT-SIZE-2 | Codex | P1 | CONFIRMED-exec | CSV and JSON output | Matched symbol rows and repeated inventories inflate reports | Record | See WP-3b and VD-1 evidence | WP-3b | Open |
+| RC-INV | Codex | P1 | CONFIRMED-exec | findings | Missing stable reason codes | Record | See WP-3b and VD-1 evidence | WP-3b | Implemented, awaiting PM review |
+| EXP-RC | Codex | P1 | CONFIRMED-exec | elf.py | Incomplete exports lack explanation | Record | See WP-3b and VD-1 evidence | WP-3b | Implemented, awaiting PM review |
+| EXP-CTX | Codex | P1 | CONFIRMED-exec | ELF export findings | Missing removal and importer context | Record | See WP-3b and VD-1 evidence | WP-3b | Implemented, awaiting PM review |
+| LINK-AGG | Codex | P1 | CONFIRMED-exec | linker.py | Per-import observations dominate real reports | Record | See WP-3b and VD-1 evidence | WP-3b | Implemented, awaiting PM review |
+| RPT-SIZE-2 | Codex | P1 | CONFIRMED-exec | CSV and JSON output | Matched symbol rows and repeated inventories inflate reports | Record | See WP-3b and VD-1 evidence | WP-3b | Implemented, awaiting PM review |
 | POL-REMOVED | PM | P1 | NEEDS_VERIFICATION | ABI policy | Assess real removed exports after VD-1 detail | Record | See WP-3b and VD-1 evidence | WP-4 | Blocked on ClineSR detail |
 | POL-BINDING | PM | P1 | NEEDS_VERIFICATION | ABI policy | Assess real binding changes after VD-1 detail | Record | See WP-3b and VD-1 evidence | WP-4 | Blocked on ClineSR detail |
 | VD-ASAN | PM | P2 | NOT_EXECUTED | real VD sample | Candidate sample contained no observed ASan objects | Record | See WP-3b and VD-1 evidence | VD-2 | Open |

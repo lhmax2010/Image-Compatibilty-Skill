@@ -41,3 +41,13 @@ ClineSR still owns actual VD acceptance. F-06, F-21, the internal Agent workflow
 ## WP-3 checkpoint
 
 The PM accepted the VD-1 kit at `d9aa080` and verified the WP-2 repository findings. WP-3 is implemented for independent review. Use the [WP-3 report](work-packages/WP-3/REPORT.md) for context-sensitive linking, timeout, Python and report evidence. WP-4 retains the Bubblewrap/EROFS and Python 3.10 runtime gates.
+
+## WP-3b checkpoint
+
+The PM accepted WP-3. Revision 5 is published for VD-1 follow-up. WP-3b is
+implemented and awaits independent PM review. The same SR inputs retained
+11,490 confirmed incompatibilities and 519,784 linking detail checks.
+Review the measured 103,753 linking findings, the 2.03 GiB RSS and the
+synthetic size gate in the [WP-3b report](work-packages/WP-3b/REPORT.md).
+POL-REMOVED and POL-BINDING wait for ClineSR detail. Real positive ASan
+evidence remains a VD-2 item.
