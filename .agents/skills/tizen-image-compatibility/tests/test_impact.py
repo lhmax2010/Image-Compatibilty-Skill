@@ -19,6 +19,7 @@ from test_static_fixes import elf, symbol
 from test_v12 import installed, inventory
 from compat.compare import finalize
 from compat.core import DEFAULTS, VERSION
+from compat.report_io import manifest_path, open_payload
 from compat.impact_browser import ImpactBrowser
 from compat.impact_source import group_rows, unpack_limited
 from compat.impact_store import DB_NAME, build
@@ -287,7 +288,10 @@ class ImpactTests(unittest.TestCase):
         import zlib
         with self.assertRaises(ValueError):
             unpack_limited(zlib.compress(b'x'*(33*1024*1024)))
-        a,b=[json.loads((self.source/(name+'-manifest.json')).read_text()) for name in ('baseline','candidate')]
+        def load(side):
+            with open_payload(manifest_path(self.source/(side+'-manifest.json'))) as stream:
+                return json.load(stream)
+        a,b=[load(side) for side in ('baseline','candidate')]
         root=[obj for obj in a['elf_objects'] if obj['path']=='/bin/alias']
         ticks=[]
         plain=dependency_checks(b,'baseline consumers on candidate',root,consumer_manifest=a)

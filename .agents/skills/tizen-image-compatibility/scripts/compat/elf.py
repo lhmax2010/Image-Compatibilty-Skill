@@ -10,7 +10,7 @@ from .profile import instrumentation
 
 HEADER_KEYS = {'Class': 'class', 'Data': 'endianness', 'OS/ABI': 'osabi',
                'ABI Version': 'abi_version', 'Type': 'type', 'Machine': 'machine', 'Flags': 'flags'}
-ELF_INVENTORY_REVISION = 6
+ELF_INVENTORY_REVISION = 7
 DYNAMIC_SYMBOL_ROW = re.compile(r'^[ \t]*(\d+):[ \t]+([0-9a-fA-F]+)[ \t]+(0[xX][0-9a-fA-F]+|\d+)[ \t]+(\S+)[ \t]+(\S+)'
                                 r'[ \t]+(\S+)[ \t]+(\S+)(?:[ \t](.*))?$')
 
@@ -94,7 +94,7 @@ def arm_inventory(obj, text, relocation_text, relocation_complete):
             'hardware_assessment': 'UNVERIFIED'}
 
 
-def parse_readelf(text: str) -> dict[str, Any]:
+def parse_readelf(text: str, relocation_text=None) -> dict[str, Any]:
     obj: dict[str, Any] = {'exports': [], 'imports': [], 'needed': [], 'soname': None,
         'rpath': [], 'runpath': [], 'interpreter': None, 'versions': [], 'sections': [], 'tls': [],
         'version_definitions': [], 'version_requirements': [], 'arm_attributes': {}, 'dynamic_flags': []}
@@ -109,7 +109,7 @@ def parse_readelf(text: str) -> dict[str, Any]:
         if in_dynamic and (match := DYNAMIC_SYMBOL_ROW.match(line)):
             _,value,size,kind,binding,visibility,section,name = match.groups()
             if name:
-                version_index = re.fullmatch(r'(.*@\S+) \((\d+)\)',name) if section=='UND' else None
+                version_index = re.fullmatch(r'(.*@\S+) \((\d+)\)',name)
                 if version_index:
                     name = version_index[1]
                 symbol = dict(name=name, value=int(value, 16), size=int(size, 16 if size.lower().startswith('0x') else 10), type=kind, binding=binding,
@@ -185,6 +185,20 @@ def parse_readelf(text: str) -> dict[str, Any]:
     for symbol in obj['imports']:
         identity = symbol.get('version_index'), symbol['version']
         symbol['version_file'] = requirements.get(identity, {}).get('file')
+    copies = set(re.findall(r'^\s*[0-9a-fA-F]+\s+[0-9a-fA-F]+\s+R_\w+_COPY\s+[0-9a-fA-F]+\s+(\S+)', relocation_text or '', re.M))
+    obj['copy_relocations'] = []
+    definition_indices = {v['index'] for v in obj['version_definitions']}
+    exported = []
+    for symbol in obj['exports']:
+        req = requirements.get((symbol['version_index'], symbol['version']))
+        if (symbol['type'] == 'OBJECT' and symbol['section'].isdigit() and req and req['file']
+                and symbol['version_index'] not in definition_indices
+                and (relocation_text is None or symbol['name'] in copies)):
+            obj['copy_relocations'].append({'name':symbol['name'], 'version':symbol['version'], 'size':symbol['size'],
+                                            'provider_soname':req['file']})
+        else:
+            exported.append(symbol)
+    obj['exports'] = exported
     obj['arm_abi'] = arm_abi(obj)
     return obj
 
@@ -215,7 +229,16 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str, *, bounded=Fa
         flags = ['-W', '-h', '-l', '-d', '--dyn-syms', '-V', '-S', '-A', '-n']
         cap = tools.config['analysis']['max_readelf_bytes']
         result = tools.run([tool, *flags, str(path)], max_capture_bytes=cap, full_output=True)
-        obj.update(parse_readelf(result['stdout']))
+        relocations = None
+        has_copy_candidate = bool(re.search(
+            r'^\s*\d+: +[0-9a-fA-F]+ +(?:0[xX][0-9a-fA-F]+|\d+) +OBJECT +\S+ +\S+ +\d+ +\S+@\S+ \(\d+\)$',
+            result['stdout'], re.M))
+        if mode != 'quick' and (has_copy_candidate or re.search(r'^\s*Machine:\s*ARM\s*$', result['stdout'], re.M)):
+            relocations = tools.run([tool, '-W', '-r', str(path)], max_capture_bytes=cap, full_output=True)
+        relocation_complete = bool(relocations and not relocations['returncode'] and not relocations.get('error')
+            and not relocations['stdout_truncated'] and not relocations.get('stderr_truncated') and not relocations['stderr'].strip())
+        obj.update(parse_readelf(result['stdout'], relocations['stdout'] if relocation_complete else
+                                 '' if relocations else None))
         obj['instrumentation'] = instrumentation(obj)
         obj['evidence'] = [result['stdout_evidence'], result['stderr_evidence']]
         obj['complete'] = result['returncode'] == 0 and not result.get('error') and not result['stdout_truncated'] and 'machine' in obj
@@ -298,12 +321,10 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str, *, bounded=Fa
             and 'Dynamic section at offset' in result['stdout'])
         obj['resolution_metadata_evidence'] = obj['evidence'] if obj['resolution_metadata_complete'] else []
         if obj.get('machine') == 'ARM':
-            relocations = tools.run([tool, '-W', '-r', str(path)], max_capture_bytes=cap, full_output=True) if mode!='quick' else None
             obj['arm_inventory'] = arm_inventory(obj, result['stdout'], relocations['stdout'] if relocations else None,
-                bool(relocations and relocations['returncode']==0 and not relocations.get('error') and
-                     not relocations['stdout_truncated'] and not relocations.get('stderr_truncated') and not relocations['stderr'].strip()))
-            if relocations:
-                obj['evidence'] = obj['evidence'] + [relocations['stdout_evidence'], relocations['stderr_evidence']]
+                                                 relocation_complete)
+        if relocations:
+            obj['evidence'] += [relocations['stdout_evidence'], relocations['stderr_evidence']]
         if not obj['complete']:
             obj['error'] = result['error'] or result['stderr'] or 'Incomplete ELF parse'
     else:
@@ -327,7 +348,7 @@ def collect_elf(path: Path, virtual: str, tools: Tools, mode: str, *, bounded=Fa
 
 def version_nodes(obj):
     """The BASE record identifies the ELF itself, not a provided symbol version."""
-    return {v['name']: v for v in obj.get('version_definitions', [])
+    return {normalize_version(v['name']): v for v in obj.get('version_definitions', [])
             if v.get('index') != 1 and 'BASE' not in (v.get('flags') or '').upper().split()}
 
 
@@ -341,6 +362,7 @@ def dynamic_exports(obj):
 
 def is_version_node_marker(symbol, nodes):
     name = symbol['name']
+    name = normalized_symbol_name(name)
     base = name.split('@@',1)[0]
     index = nodes.get(base,{}).get('index')
     return (type(index) is int and index > 1 and name in (base, f'{base}@@{base}')
@@ -352,18 +374,28 @@ def is_version_node_marker(symbol, nodes):
 def symbol_multimap(symbols, *, by_provider=False):
     grouped = defaultdict(list)
     for symbol in symbols:
-        key = (symbol['name'],symbol.get('version_file')) if by_provider else symbol['name']
+        name = normalized_symbol_name(symbol['name'])
+        key = (name,symbol.get('version_file')) if by_provider else name
         grouped[key].append(symbol)
     return dict(grouped)
 
 
 def duplicate_dynsym_names(obj):
-    counts = Counter(s['name'] for s in dynamic_exports(obj))
-    counts.update(s['name'] for s in obj.get('imports',[]))
+    counts = Counter(normalized_symbol_name(s['name']) for s in dynamic_exports(obj))
+    counts.update(normalized_symbol_name(s['name']) for s in obj.get('imports',[]))
     return {name for name,count in counts.items() if count > 1}
 
 
+def normalize_version(value):
+    return re.sub(r'(?<=\S) \(\d+\)$', '', value) if value and ' (' in value else value
+
+
+def normalized_symbol_name(name):
+    return normalize_version(name) if '@' in name else name
+
+
 def symbol_identity(name: str) -> dict[str, Any]:
+    name = normalized_symbol_name(name)
     base, separator, version = name.partition('@@' if '@@' in name else '@')
     return {'base_name': base, 'version': version or None, 'default_version': separator == '@@'}
 

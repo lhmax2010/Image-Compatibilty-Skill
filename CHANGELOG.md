@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.5.3-rc1
+
+- WP-1 reconciles complete GNU dynsym tables, handles large symbol sizes and bounds raw tool capture.
+- WP-2 compares RPM repository providers across package changes, checks available-set requirements and identifies instrumentation confounds.
+- WP-3 isolates loader context, preserves incomplete security evidence, aggregates repeated requirements and uses compact machine JSON.
+- WP-3b adds reason codes, export removal context and disk-backed directional linking details.
+- WP-4 distinguishes versioned copy relocations from exports, applies the defined binding rules and records weak C++ removals for owner review.
+- WP-4 groups non-breaking dependency observations and compresses evidence and manifests. Default symbol CSV output omits size-only code observations while retaining their counts.
+- WP-4 adds the older Bubblewrap disk-scratch path for standard EROFS and the ClineSR archived suite runner.
+
 ## v1.5.2
 
 - Added a configuration-driven offline controller and bounded Agent handoff.

@@ -5,10 +5,11 @@ Unknown environment/cache, unsupported tokens and shared-library caller scopes s
 from collections import OrderedDict, deque
 import posixpath
 from .core import finding, canonical, digest
-from .elf import dynamic_exports, runtime_metadata_complete, symbol_identity, target_abi_matches, version_nodes
+from .elf import dynamic_exports, normalize_version, runtime_metadata_complete, symbol_identity, target_abi_matches, version_nodes
 
 
 NEXT_ACTIONS = {
+    'COPY_RELOC_SIZE_CHANGED': 'Restore the consumed data size or rebuild the executable.',
     'LOADER_ENV_MISSING': 'Configure loader.environments for the affected image.',
     'UNKNOWN_SEARCH_ENVIRONMENT': 'Supply the loader search, preload, mode and capability evidence for the consumer.',
     'UNKNOWN_LOADER_ABI': 'Record the target interpreter and its complete ELF ABI inventory.',
@@ -110,7 +111,7 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
         status = status or ('COMPATIBLE' if state == 'verified' else 'UNKNOWN')
         image = 'baseline' if consumers is not None and obj is root else 'candidate'
         key = (image, obj['path'], interface, key if key is not None else canonical([before, after, state]))
-        symbolic = interface.startswith(('import:', 'version:'))
+        symbolic = interface.startswith(('import:', 'version:', 'DT_NEEDED:', 'copy relocation:'))
         detail = details is not None and (symbolic or status == 'INCOMPATIBLE')
         aggregate = detail and symbolic and status != 'INCOMPATIBLE'
         token = label, key
@@ -311,20 +312,38 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
             for req in obj.get('version_requirements', []):
                 if checkpoint:
                     checkpoint()
+                version_name = normalize_version(req['name'])
                 provider = edges.get((obj['path'], req['file'])) or loaded.get(req['file'])
                 weak = 'WEAK' in req.get('flags', '').upper()
                 key = (id(obj), requirement_key(req), id(provider), bool(scope_known))
                 def check_version():
-                    present = req['name'] in version_nodes(provider or {})
+                    present = version_name in version_nodes(provider or {})
                     state = ('verified' if present and scope_known else 'missing_version'
                              if scope_known and provider and not weak else 'unknown_version_requirement')
                     return present, state
                 present, state = decision(key, check_version)
                 if not present:
-                    failed_requirements.add((req['file'], req['name']))
+                    failed_requirements.add((req['file'], version_name))
                 emit(obj, 'version:' + str(req['file']) + ':' + req['name'], req, provider['path'] if provider else None, state,
                      'INCOMPATIBLE' if state == 'missing_version' else None, key=key,
                      context={'scope_proven': bool(scope_known), 'provider': provider_identity(provider)})
+            for copy in obj.get('copy_relocations', []):
+                file = copy.get('provider_soname')
+                provider = edges.get((obj['path'], file)) or loaded.get(file)
+                identity = symbol_identity(copy['name'])
+                version = normalize_version(copy['version'])
+                entries = [sym for _, sym, exp in provider_exports(provider).get(identity['base_name'], ())
+                           if exp['version'] == version and sym.get('type') == 'OBJECT'] if provider else []
+                other_entries = any(sym['version'] in (None, version)
+                                    for other in closure if other is not provider and other is not obj
+                                    for _, _, sym in provider_exports(other).get(identity['base_name'], ()))
+                proven = bool(scope_known and symbol_scope_known and provider and not other_entries)
+                state = ('unknown_symbol_scope' if not proven or len(entries) > 1 else 'missing_symbol' if not entries else
+                         'copy_reloc_size_changed' if entries[0]['size'] != copy['size'] else 'verified')
+                emit(obj, 'copy relocation:' + copy['name'], copy, {'provider': provider['path'], 'export': entries[0]}
+                     if len(entries) == 1 else None, state,
+                     'INCOMPATIBLE' if state in ('copy_reloc_size_changed', 'missing_symbol') else None,
+                     context={'scope_proven':proven, 'provider':provider_identity(provider)})
             for symbol in obj.get('imports', []):
                 if checkpoint:
                     checkpoint()

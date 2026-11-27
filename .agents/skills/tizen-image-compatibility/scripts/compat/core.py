@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import copy
 from contextlib import contextmanager
+import gzip
 import hashlib
 import json
 import os
@@ -41,6 +42,7 @@ DEFAULTS: dict[str, Any] = {
     'preparation': {'platform_partition': 'pltf_t.img', 'xz_memory_mib': 256,
                     'adapter_timeout_seconds': 1800, 'vdfs_adapter': {}, 'erofs_adapter': {},
                     'erofs_scratch_mib': 1024},
+    'policy': {'weak_cxx_export_removal': 'review'},
     'loader': {'environments': {}},
     'debuginfo': {'roots': {}},
     'runtime': {'enabled': False, 'authorized': False, 'timeout_seconds': 60,
@@ -50,7 +52,8 @@ DEFAULTS: dict[str, Any] = {
                           'sysroots': {}, 'compilers': {}, 'header_limit': 50,
                           'include_dirs': ['usr/include'], 'probes': [], 'builds': {}, 'semantic_headers': False, 'target_abis': {}, 'runtime_objects': {}, 'sdk_package_manifests': {}},
     'performance': {'enabled': False, 'tolerance_percent': 10},
-    'report': {'html': True, 'json': True, 'markdown': True, 'csv': True, 'symbol_differences': 'changes'},
+    'report': {'html': True, 'json': True, 'markdown': True, 'csv': True, 'symbol_differences': 'changes',
+               'compress_manifests': True, 'include_satisfied_requirements': False},
     'ci': {'fail_on': 'HIGH', 'strict': False, 'minimum_coverage': {}, 'fail_on_collector_failure': True},
     'severity_overrides': {},
 }
@@ -87,7 +90,8 @@ def canonical(obj: Any) -> str:
 def write_json(path: Path, obj: Any, *, compact=False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     # Stream large inventories rather than retaining a second full JSON copy.
-    with path.open('w', encoding='utf-8') as stream:
+    writer = gzip.open(path, 'wt', encoding='utf-8', compresslevel=3) if path.suffix == '.gz' else path.open('w', encoding='utf-8')
+    with writer as stream:
         json.dump(obj, stream, ensure_ascii=False, sort_keys=True,
                   indent=None if compact else 2, separators=(',', ':') if compact else None)
         stream.write('\n')
@@ -157,6 +161,9 @@ def validate_config(c: dict[str, Any]) -> None:
     require(type(c['analysis']['workers']) is int and type(c['cross_compilation']['header_limit']) is int,
             'workers and header_limit must be integers')
     require(c['ci']['fail_on'] in SEVERITIES, 'Invalid fail_on severity')
+    require(c['policy']['weak_cxx_export_removal'] in ('review', 'incompatible'), 'Invalid weak C++ export removal policy')
+    require(all(type(c['report'][key]) is bool for key in ('compress_manifests', 'include_satisfied_requirements')),
+            'Report compression and satisfied requirement settings must be boolean')
     require(c['report']['symbol_differences'] in ('changes', 'all'),
             'report.symbol_differences must be changes or all')
     require(all(k in DIMENSIONS and v in SEVERITIES for k, v in c['severity_overrides'].items()),
@@ -237,11 +244,11 @@ def validate_config(c: dict[str, Any]) -> None:
         require(dim in DIMENSIONS and type(threshold) in (int, float) and 0 <= threshold <= 100, 'Coverage threshold must be dimension: percentage (0..100)')
     for label, env in c['loader']['environments'].items():
         require(label in ('baseline', 'candidate') and isinstance(env, dict), 'Invalid loader environment')
-        require(set(env) <= {'model', 'default_dirs', 'library_path', 'cache', 'cache_complete', 'environment_complete', 'symbol_scope', 'namespace'}, 'Unknown loader environment key')
+        require(set(env) <= {'model', 'default_dirs', 'library_path', 'cache', 'cache_complete', 'environment_complete', 'symbol_scope', 'namespace', 'ld_dynamic_weak'}, 'Unknown loader environment key')
         require(env.get('symbol_scope', 'unknown') in ('unknown', 'startup'), 'Invalid symbol_scope')
         require(isinstance(env.get('namespace', 'base'), str), 'Invalid loader namespace')
         require(env.get('model', 'unknown') in ('unknown', 'glibc'), 'Unsupported loader model')
-        require(all(type(env.get(k, False)) is bool for k in ('cache_complete', 'environment_complete')), 'Loader completeness must be boolean')
+        require(all(type(env.get(k, False)) is bool for k in ('cache_complete', 'environment_complete', 'ld_dynamic_weak')), 'Loader completeness must be boolean')
         for key in ('default_dirs', 'library_path'):
             require(isinstance(env.get(key, []), list) and all(isinstance(v, str) and v.startswith('/') and '$' not in v and '..' not in Path(v).parts for v in env.get(key, [])), 'Loader directories must be absolute virtual paths')
         cache = env.get('cache', {})
@@ -315,8 +322,9 @@ def live_group_members(group):
 
 class Tools:
     """Never uses a shell. Tool output is persisted even on error or timeout."""
-    def __init__(self, output: Path, config: dict[str, Any]):
+    def __init__(self, output: Path, config: dict[str, Any], *, compress_evidence=False):
         self.output = output
+        self.compress_evidence = compress_evidence
         self.raw = output / 'evidence'
         self.raw.mkdir(parents=True, exist_ok=True)
         self.config = config
@@ -329,13 +337,25 @@ class Tools:
         override = self.config['tools'].get(name, name)
         return shutil.which(override) if override else None
 
+    def store_evidence(self, source, raw_id):
+        name = raw_id + '.txt'
+        path = self.raw / (name + '.gz' if self.compress_evidence else name)
+        if not path.is_file():
+            with atomic_output(path) as out:
+                if self.compress_evidence:
+                    with gzip.GzipFile(fileobj=out, mode='wb', filename='', mtime=0, compresslevel=3) as compressed:
+                        shutil.copyfileobj(source, compressed, 1024 * 1024)
+                else:
+                    shutil.copyfileobj(source, out, 1024 * 1024)
+        return 'evidence/' + name
+
     def normalize(self, text: str) -> str:
         for path, label in sorted(self.aliases.items(), key=lambda x: -len(x[0])):
             text = text.replace(path, label)
         return text
 
     def run(self, argv: list[str], timeout: float | None = None, *, max_capture_bytes: int | None = None,
-            cwd: Path | None = None, keep_interrupt=False, full_output=False) -> dict[str, Any]:
+            cwd: Path | None = None, keep_interrupt=False, full_output=False, stdin=None) -> dict[str, Any]:
         timeout = timeout or self.config['analysis']['timeout_seconds']
         limit = DEFAULT_CAPTURE_BYTES if max_capture_bytes is None else max_capture_bytes
         env = os.environ.copy()
@@ -346,7 +366,7 @@ class Tools:
         local_group = 'NOT_VERIFIED'
         with tempfile.TemporaryFile(dir=self.raw) as stdout, tempfile.TemporaryFile(dir=self.raw) as stderr:
             try:
-                code, error, local_group = self.capture_bounded(argv, env, stdout, stderr, timeout, limit, cwd)
+                code, error, local_group = self.capture_bounded(argv, env, stdout, stderr, timeout, limit, cwd, **({"stdin": stdin} if stdin is not None else {}))
             except KeyboardInterrupt:
                 code, error = -1, 'interrupted'
             except OSError as exc:
@@ -365,14 +385,13 @@ class Tools:
                     h.update(block)
                 raw_id = h.hexdigest()
                 stream.seek(0)
-                with atomic_output(self.raw / f'{raw_id}.txt') as evidence:
-                    shutil.copyfileobj(stream, evidence, 1024 * 1024)
+                ref = self.store_evidence(stream, raw_id)
                 stream.seek(0)
                 preview = limit if full_output else DEFAULT_CAPTURE_BYTES
                 data = stream.read(preview + 1)
                 result[name] = self.normalize(data[:preview].decode('utf-8', 'replace'))
                 result[f'{name}_truncated'] = len(data) > preview or result['reason_code']=='OUTPUT_LIMIT'
-                result[f'{name}_evidence'] = f'evidence/{raw_id}.txt'
+                result[f'{name}_evidence'] = ref
                 hashes.append(raw_id)
             result['evidence_id'] = digest(canonical([result['argv'], code, hashes, error]).encode())
             with self.lock:
@@ -382,17 +401,17 @@ class Tools:
             return result
 
     @staticmethod
-    def capture_bounded(argv, env, stdout, stderr, timeout, limit, cwd=None):
+    def capture_bounded(argv, env, stdout, stderr, timeout, limit, cwd=None, *, stdin=None, keep_running=None):
         deadline = time.monotonic() + timeout
         proc, clean = None, False
         try:
             with defer_console_interrupt() as launching:
-                proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL if stdin is None else stdin, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                         env=env, cwd=cwd, start_new_session=True)
             if launching():
                 raise KeyboardInterrupt
             with selectors.DefaultSelector() as selector:
-                error = Tools.drain_bounded(proc, selector, stdout, stderr, deadline, limit)
+                error = Tools.drain_bounded(proc, selector, stdout, stderr, deadline, limit, keep_running)
         except KeyboardInterrupt:
             error = 'interrupted'
         finally:
@@ -440,7 +459,7 @@ class Tools:
         return clean
 
     @staticmethod
-    def drain_bounded(proc, selector, stdout, stderr, deadline, remaining):
+    def drain_bounded(proc, selector, stdout, stderr, deadline, remaining, keep_running=None):
         selector.register(proc.stdout, selectors.EVENT_READ, stdout)
         selector.register(proc.stderr, selectors.EVENT_READ, stderr)
         error = ''
@@ -449,7 +468,9 @@ class Tools:
             if wait <= 0:
                 error = 'timeout'
                 break
-            for key, _ in selector.select(wait):
+            if keep_running is not None and not keep_running():
+                return 'storage reserve exhausted'
+            for key, _ in selector.select(min(wait, 0.1) if keep_running is not None else wait):
                 # Once a read removes pipe bytes, commit them before handling SIGINT.
                 with defer_console_interrupt() as reading:
                     block = os.read(key.fd, min(65536, remaining + 1))
@@ -468,6 +489,8 @@ class Tools:
                 break
         if not error:
             while not os.waitid(os.P_PID, proc.pid, os.WEXITED | os.WNOWAIT | os.WNOHANG):
+                if keep_running is not None and not keep_running():
+                    return 'storage reserve exhausted'
                 wait = deadline - time.monotonic()
                 if wait <= 0:
                     return 'timeout'
@@ -523,7 +546,9 @@ def limitation(dimension: str, reason: str, component: str = '*') -> dict[str, s
 
 def read_manifest(path: Path) -> dict[str, Any]:
     try:
-        data = json.loads(path.read_text())
+        from .report_io import manifest_path, open_payload
+        with open_payload(manifest_path(path)) as stream:
+            data = json.load(stream)
         if data['schema_version'] not in ('1.0', '1.1', SCHEMA) or not isinstance(data['image'], dict):
             raise ValueError('unsupported schema')
         if not isinstance(data['image'].get('name'), str):
@@ -560,6 +585,13 @@ def read_manifest(path: Path) -> dict[str, Any]:
             for key in ('arm_abi', 'arm_attributes'):
                 if key in obj and not isinstance(obj[key], dict):
                     raise ValueError('invalid ARM ABI metadata')
+            copies = obj.get('copy_relocations', [])
+            if not isinstance(copies, list) or any(
+                    not isinstance(item, dict) or not all(isinstance(item.get(k), str) and item[k] for k in ('name','version'))
+                    or type(item.get('size')) is not int or item['size'] < 0
+                    or item.get('provider_soname') is not None and not isinstance(item['provider_soname'], str)
+                    for item in copies):
+                raise ValueError('invalid copy relocation requirements')
             if 'needed' in obj and (not isinstance(obj['needed'], list) or any(not isinstance(x, str) for x in obj['needed'])):
                 raise ValueError('invalid ELF dependencies')
         for obj in data['public_headers']:

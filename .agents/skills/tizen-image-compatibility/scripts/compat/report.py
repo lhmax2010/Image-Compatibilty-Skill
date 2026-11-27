@@ -13,6 +13,7 @@ from .package_analysis import analyze_packages
 from .profile import comparison_profile
 from .observation import incomplete_exports, removed_exports, valid_reason_code
 from .linker import summarize_unknowns
+from . import weak_review
 from .report_io import FINDING_DETAIL_COLUMNS, finding_cells
 from .core import DIMENSIONS, SCHEMA, STATUSES, canonical, expected_collectors, write_json
 
@@ -116,11 +117,16 @@ def build_results(a: dict[str, Any], b: dict[str, Any], findings: list[dict[str,
 
 
 def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[str, Any], config: dict[str, Any],
-             *, objective=None, reused=False) -> None:
-    write_json(output / 'baseline-manifest.json', a, compact=True)
-    write_json(output / 'candidate-manifest.json', b, compact=True)
+             *, objective=None, reused=False, tools=None) -> None:
     report = config['report']
+    suffix = '.json.gz' if report['compress_manifests'] else '.json'
+    for side, manifest in (('baseline', a), ('candidate', b)):
+        write_json(output / (side+'-manifest'+suffix), manifest, compact=True)
+    results['manifest_files'] = {side:side+'-manifest'+suffix for side in ('baseline','candidate')}
     results['symbol_differences_mode'] = report.get('symbol_differences', 'changes')
+    review_groups = weak_review.export(output, results['findings'], tools, write_csv=report['csv'])
+    review_classes = Counter(row['cxx_class'] for rows in review_groups.values() for row in rows)
+    review_libraries = sorted(review_groups, key=lambda key: (-len(review_groups[key]), key))
     if report['csv']:
         with (output / 'findings.csv').open('w', newline='') as stream:
             writer = csv.DictWriter(stream, fieldnames=FINDING_DETAIL_COLUMNS)
@@ -159,7 +165,8 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
         from .run_summary import make_summary
         results['run_summary'] = make_summary(a, b, results, config, objective, reused)
     if report['json']:
-        write_json(output / 'results.json', results, compact=True)
+        from .symbol_references import compact_findings
+        write_json(output / 'results.json', results | {'findings':compact_findings(a, b, results)}, compact=True)
     def esc(value: Any) -> str:
         return html.escape(value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, sort_keys=True))
     def table(rows: list[list[Any]], headers: list[str]) -> str:
@@ -219,6 +226,13 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
             if repo.get('requirements'):
                 lines += ['Available-set requirements: '+canonical(repo['requirements']),
                           'See requirement-findings.csv for all failed and unknown requirements when CSV is enabled.']
+        if results.get('review', {}).get('pending'):
+            lines += ['', '## '+weak_review.TITLE, '', weak_review.RATIONALE, '',
+                      'Counts by C++ class: '+canonical(review_classes), '',
+                      ('Top 20 libraries by pending count. See weak-export-review.csv for individual decisions.'
+                       if report['csv'] else 'Top 20 libraries by pending count. CSV output is disabled.')]
+            lines += ['- '+esc((pkg+' ' if pkg else '')+lib.replace('\n',' '))+' — '+str(len(review_groups[pkg,lib]))
+                      for pkg,lib in review_libraries[:20]]
         lines += ['', '## Cross-compatibility matrix', '', '| Compiler | Image | Compile | Link | Deploy | Execute | Behavior | Overall |', '|---|---|---|---|---|---|---|---|']
         for cell in results['matrix']:
             lines.append('| ' + ' | '.join(esc(cell.get(k, 'UNKNOWN')) for k in ('compiler', 'image', 'compile_status', 'link_status',
@@ -268,6 +282,19 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
             content += table([[p[k] for k in ('name','arch','inventory_status','baseline_nevra','candidate_nevra','status')]
                                for p in repo['packages'][:200]],['Package','Arch','Inventory','Baseline','Candidate','ABI result'])
             content += '<p>Package rows: '+str(len(repo['packages']))+'; preview: '+str(min(200,len(repo['packages'])))+'.</p>'
+        if results.get('review', {}).get('pending'):
+            content += '<h2>'+esc(weak_review.TITLE)+'</h2><p>'+esc(weak_review.RATIONALE)+'</p>'
+            content += '<p>Counts by C++ class: '+esc(review_classes)+'</p>'
+            if report['csv']:
+                content += '<p><a href="weak-export-review.csv">Full review table</a></p>'
+            for pkg, lib in review_libraries:
+                rows = review_groups[pkg,lib]
+                content += '<details><summary>'+esc(f'{pkg} {lib} ({len(rows)})')+'</summary>'
+                content += table([[r[k] for k in ('review_id','symbol','demangled','cxx_class')] for r in rows[:100]],
+                                 ['Review ID','Symbol','Demangled','C++ class'])
+                if len(rows) > 100:
+                    content += '<p>First 100 shown. Remaining symbols are in the machine-readable report.</p>'
+                content += '</details>'
         content += '<h2>Package compatibility</h2><p>Installed package counts: baseline=' + esc(inventory['baseline_package_count']) + '; candidate=' + esc(inventory['candidate_package_count']) + '. null means UNKNOWN. First 1000 packages shown; full records in JSON/CSV.</p>'
         content += '<input id="package-filter" aria-label="Filter packages" placeholder="Filter packages…">'
         for package in results['package_results'][:1000]:

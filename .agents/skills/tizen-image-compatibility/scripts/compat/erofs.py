@@ -1,5 +1,6 @@
 """Identify an EROFS superblock and stage extraction with trusted host tools."""
 from pathlib import Path
+import io
 import re
 import shutil
 import struct
@@ -80,29 +81,47 @@ def extract(source,work,tools,record,info):
     if limit <= 0:
         raise PreparationError('EROFS_STORAGE_LIMIT','Insufficient space for staged TAR')
     size = min(tools.config['preparation']['erofs_scratch_mib']*1024**2,limit)
-    # Use a fresh root with host tools/libraries and the selected image only.
-    # Extraction writes to private tmpfs. The original image is never mounted.
-    command = '"$1" --extract="$2" --no-preserve "$3" >&2 && "$4" -cf - -C "$2" .'
-    argv = [tools.path('bwrap'),'--unshare-user','--unshare-net','--unshare-pid','--die-with-parent',
-            '--ro-bind','/usr','/usr','--ro-bind-try','/bin','/bin','--ro-bind-try','/lib','/lib',
-            '--ro-bind-try','/lib64','/lib64','--dev','/dev','--proc','/proc',
+    # Expose only trusted host tooling, the selected image and private scratch.
+    sandbox = [tools.path('bwrap'),'--unshare-user','--unshare-net','--unshare-pid','--die-with-parent',
+               '--cap-drop','ALL','--ro-bind','/usr','/usr','--ro-bind-try','/bin','/bin',
+               '--ro-bind-try','/lib','/lib','--ro-bind-try','/lib64','/lib64','--dev','/dev','--proc','/proc']
+    probe = tools.run(sandbox+['--size','65536','--tmpfs','/work','--','/bin/true'],
+                      max_capture_bytes=64*1024)
+    unsupported = (probe['returncode'] and not probe.get('error')
+                   and re.search(r'(?:unknown|unrecognized|unsupported|invalid) (?:command.line )?option[^\n]*--size',
+                                 probe['stderr'], re.I))
+    record['extractor']['scratch_probe_evidence'] = [probe['stdout_evidence'],probe['stderr_evidence']]
+    if probe['returncode'] and not unsupported:
+        raise PreparationError('EROFS_SANDBOX_UNAVAILABLE','Bubblewrap tmpfs feature probe failed. See scratch probe evidence')
+    if unsupported and shutil.disk_usage(work).free < 3*source.stat().st_size + reserve:
+        raise PreparationError('EROFS_STORAGE_LIMIT','Disk scratch requires three times the image size plus reserve')
+    with tempfile.TemporaryDirectory(prefix='erofs-scratch-', dir=work) as scratch:
+        storage = ['--bind',scratch,'/work'] if unsupported else ['--size',str(size),'--tmpfs','/work']
+        record['extractor']['scratch'] = 'DISK' if unsupported else 'TMPFS'
+        command = '"$1" --extract="$2" --no-preserve "$3" >&2 && "$4" -cf - -C "$2" .'
+        argv = sandbox + [
             '--ro-bind',str(binary),'/input/fsck.erofs','--ro-bind',str(source),'/input/image',
-            '--ro-bind',tools.path('tar'),'/input/tar','--size',str(size),'--tmpfs','/work',
-            '--chdir','/work','--','/bin/sh','-c',command,'erofs','/input/fsck.erofs','/work','/input/image','/input/tar']
-    env = {'LC_ALL':'C','TZ':'UTC','TMPDIR':'/work','PATH':'/usr/bin:/bin'}
-    with archive.open('x+b') as stdout,tempfile.TemporaryFile(dir=work) as stderr:
-        code,error,cleanup = Tools.capture_bounded(argv,env,stdout,stderr,tools.config['analysis']['extract_timeout_seconds'],limit,work)
-        stderr.seek(0)
-        proof = canonical({'argv':argv,'exit_code':code,'reason':error,'cleanup':cleanup,'tar_bytes':stdout.tell()}).encode()+b'\n'+stderr.read(128*1024)
-    name = digest(proof)+'.txt'
-    (tools.raw/name).write_bytes(proof)
+            '--ro-bind',tools.path('tar'),'/input/tar',*storage,'--chdir','/work',
+            '--','/bin/sh','-c',command,'erofs','/input/fsck.erofs','/work','/input/image','/input/tar']
+        env = {'LC_ALL':'C','TZ':'UTC','TMPDIR':'/work','PATH':'/usr/bin:/bin'}
+        with archive.open('x+b') as stdout,tempfile.TemporaryFile(dir=work) as stderr:
+            def check_space():
+                return shutil.disk_usage(work).free >= reserve
+            options = {'keep_running':check_space} if unsupported else {}
+            code,error,cleanup = Tools.capture_bounded(argv,env,stdout,stderr,
+                tools.config['analysis']['extract_timeout_seconds'],limit,work,**options)
+            stderr.seek(0)
+            proof = canonical({'argv':argv,'exit_code':code,'reason':error,'cleanup':cleanup,'tar_bytes':stdout.tell()}).encode()+b'\n'+stderr.read(128*1024)
+    ref = tools.store_evidence(io.BytesIO(proof), digest(proof))
     record['extractor'].update(status='COMPLETE' if not (code or error) else 'FAILED',
-                               exit_code=code,stderr_evidence='evidence/'+name)
+                               exit_code=code,stderr_evidence=ref)
     if error == 'interrupted':
         raise KeyboardInterrupt
     if error == 'timeout':
         record['extractor'].update(reason_code='TOOL_TIMEOUT', tool='fsck.erofs')
         raise PreparationError('TOOL_TIMEOUT', 'fsck.erofs')
+    if error == 'storage reserve exhausted':
+        raise PreparationError('EROFS_STORAGE_LIMIT','Private disk extraction exhausted the storage reserve.')
     if code or error:
         raise PreparationError('EROFS_EXTRACTION_FAILED','fsck.erofs or the confined TAR stage failed. See stderr evidence')
     record['layers'].append({'format':'tar','role':'standard-erofs-output','sha256':hash_file(archive)})

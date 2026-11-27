@@ -35,6 +35,9 @@ preparation:
   vdfs_adapter: {} # Optional trusted host adapter. See references/image_preparation.md.
   erofs_adapter: {} # Optional trusted vendor extractor.
   erofs_scratch_mib: 1024 # Private tmpfs cap for standard fsck.erofs.
+policy:
+  weak_cxx_export_removal: review # Use incompatible for legacy grading.
+
 loader:
   environments: {} # Unknown by default; see references/correctness.md before asserting completeness.
 debuginfo:
@@ -67,7 +70,9 @@ report:
   json: true
   markdown: true
   csv: true
-  symbol_differences: changes # Use all to include MATCHED rows. Summary counts always include them.
+  symbol_differences: changes # Use all to retain every collected row.
+  compress_manifests: true # Reuse reads both compressed and legacy manifests.
+  include_satisfied_requirements: false # Count these in the summary and optionally include their CSV rows.
 ci:
   fail_on: HIGH
   strict: false

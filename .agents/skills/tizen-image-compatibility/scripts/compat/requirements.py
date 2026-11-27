@@ -2,7 +2,7 @@
 from collections import Counter, defaultdict, deque
 
 from .core import canonical, finding
-from .elf import duplicate_dynsym_names, dynamic_exports, symbol_identity, version_nodes
+from .elf import duplicate_dynsym_names, dynamic_exports, normalize_version, symbol_identity, version_nodes
 from .profile import runtime_object
 from .report_io import csv_rows
 from .repository_pairing import abi_key
@@ -12,9 +12,9 @@ EXAMPLE_LIMIT = 1000
 DEPTH_LIMIT = 32
 CSV_COLUMNS = ('id','scope','consumer','package_id','package_nevra','kind','soname','version','symbol',
                'status','severity','reason_code','baseline','candidate','evidence','potential_impact',
-               'suppressed_by','suppressed_dependents')
+               'suppressed_by','suppressed_dependents','copy_size')
 REASONS = {'DT_NEEDED':'NEEDED_SONAME_UNAVAILABLE', 'VERSION_NODE':'VERSION_NODE_UNAVAILABLE',
-           'VERSIONED_IMPORT':'VERSIONED_SYMBOL_UNAVAILABLE', 'UNVERSIONED_IMPORT':'UNVERSIONED_SYMBOL_NOT_IN_CLOSURE'}
+           'VERSIONED_IMPORT':'VERSIONED_SYMBOL_UNAVAILABLE', 'UNVERSIONED_IMPORT':'UNVERSIONED_SYMBOL_NOT_IN_CLOSURE', 'COPY_RELOCATION':'VERSIONED_SYMBOL_UNAVAILABLE'}
 
 
 class Providers:
@@ -23,6 +23,9 @@ class Providers:
         self.total, self.complete = Counter(), Counter()
         self.nodes, self.qualified = Counter(), Counter()
         self.fallback = Counter()
+        self.copy_sizes = Counter()
+        self.copy_objects = Counter()
+        self.ambiguous_copy_objects = set()
         self.default_by_provider = defaultdict(Counter)
         self.edges = defaultdict(set)
         self.closures = {}
@@ -47,6 +50,16 @@ class Providers:
                 self.qualified.update({(key, s['base_name'], s['version']) for s in identities if s['version']})
             else:
                 self.fallback.update({(key,s['base_name']) for s in identities})
+            sizes = defaultdict(list)
+            for row, sym in zip(dynamic_exports(obj), identities):
+                if row.get('type') == 'OBJECT' and sym['version']:
+                    sizes[key, sym['base_name'], sym['version']].append(row.get('size'))
+            for identity, size_values in sizes.items():
+                if len(size_values) != 1:
+                    self.ambiguous_copy_objects.add(identity)
+                else:
+                    self.copy_sizes[(*identity, size_values[0])] += 1
+                    self.copy_objects[identity] += 1
             self.default_by_provider[key].update({s['base_name'] for s in identities
                                                   if not s['version'] or s['default_version']})
 
@@ -74,7 +87,7 @@ class Providers:
         return self.closures[key]
 
     def evaluate(self, abi, needed, requirement):
-        kind, soname, version, name, _ = requirement
+        kind, soname, version, name, criterion = requirement
         bucket = abi, soname
         total = self.total[bucket]
         if kind == 'DT_NEEDED':
@@ -87,6 +100,15 @@ class Providers:
             if not total:
                 return 'NO_PROVIDER'
             present = self.nodes[bucket,version]
+        elif kind == 'COPY_RELOCATION':
+            if (bucket,name,version) in self.ambiguous_copy_objects:
+                return 'AMBIGUOUS'
+            present = self.copy_sizes[bucket,name,version,criterion]
+            if (total and total == self.complete[bucket] == self.copy_objects[bucket,name,version]
+                    and not present):
+                return 'SIZE_MISMATCH'
+            if self.copy_objects[bucket,name,version] > present:
+                return 'AMBIGUOUS'
         else:
             present = self.qualified[bucket,name,version] + self.fallback[bucket,name]
         return ('SATISFIED' if total and present == total else 'AMBIGUOUS' if present else
@@ -95,7 +117,7 @@ class Providers:
 
 def obligations(obj):
     rows = {('DT_NEEDED',soname,None,None,False) for soname in obj.get('needed', [])}
-    rows.update(('VERSION_NODE',r['file'],r['name'],None,False) for r in obj.get('version_requirements', []))
+    rows.update(('VERSION_NODE',r['file'],normalize_version(r['name']),None,False) for r in obj.get('version_requirements', []))
     for sym in obj.get('imports', []):
         ident = symbol_identity(sym['name'])
         weak = sym.get('binding') == 'WEAK'
@@ -103,6 +125,8 @@ def obligations(obj):
             rows.add(('VERSIONED_IMPORT',sym.get('version_file'),ident['version'],ident['base_name'],weak))
         elif not weak:
             rows.add(('UNVERSIONED_IMPORT',None,None,ident['base_name'],False))
+    rows.update(('COPY_RELOCATION', item.get('provider_soname'), normalize_version(item['version']),
+                 symbol_identity(item['name'])['base_name'], item['size']) for item in obj.get('copy_relocations', []))
     # None values are valid for unqualified slots, so compare display keys.
     return sorted(rows, key=lambda row: tuple(str(value) for value in row))
 
@@ -115,7 +139,7 @@ def classify(requirement, before, after, candidate_complete):
         return None
     if after == 'AMBIGUOUS':
         return 'UNKNOWN','MEDIUM','PROVIDER_AMBIGUOUS'
-    if weak:
+    if kind != 'COPY_RELOCATION' and weak:
         return 'UNKNOWN','LOW','WEAK_REFERENCE_UNSATISFIED'
     if kind == 'UNVERSIONED_IMPORT':
         return 'UNKNOWN','MEDIUM','UNVERSIONED_SYMBOL_NOT_IN_CLOSURE'
@@ -123,7 +147,7 @@ def classify(requirement, before, after, candidate_complete):
         return 'UNKNOWN','MEDIUM','VERSION_PROVIDER_UNAVAILABLE'
     if after == 'INCOMPLETE' or not candidate_complete:
         return 'UNKNOWN','MEDIUM','REQUIREMENT_INVENTORY_INCOMPLETE'
-    return 'INCOMPATIBLE','HIGH',REASONS[kind]
+    return 'INCOMPATIBLE','HIGH','COPY_RELOC_SIZE_CHANGED' if after == 'SIZE_MISMATCH' else REASONS[kind]
 
 
 def aggregate_consumer(rows):
@@ -136,7 +160,7 @@ def aggregate_consumer(rows):
         if row['reason_code'] == reason:
             baseline.setdefault(row['soname'], row)
     for row in rows:
-        anchor = missing.get(row['soname']) if row['kind'] in ('VERSION_NODE', 'VERSIONED_IMPORT') else None
+        anchor = missing.get(row['soname']) if row['kind'] in ('VERSION_NODE', 'VERSIONED_IMPORT', 'COPY_RELOCATION') else None
         if anchor is None and row['reason_code'] == reason:
             anchor = baseline[row['soname']]
         row['suppressed_by'] = ''
@@ -145,14 +169,16 @@ def aggregate_consumer(rows):
             anchor['suppressed_dependents'] = anchor.get('suppressed_dependents', 0) + 1
 
 
-def check_available_set(dictionaries, owners, components, complete, output=None):
+def check_available_set(dictionaries, owners, components, complete, output=None, *, include_satisfied=False):
     left, right = (Providers(objects.values()) for objects in dictionaries)
     examples, by_reason, by_kind = [], Counter(), defaultdict(Counter)
     emitted_by_reason = Counter()
+    satisfied_written = 0
     limitation = ('AVAILABLE_SET checks only objects present in the repository payloads. '
                   'Installed sets, loader scope and runtime resolution remain unverified.')
 
     def rows():
+        nonlocal satisfied_written
         for path,obj in dictionaries[0].items():
             if not runtime_object(obj):
                 continue
@@ -164,7 +190,7 @@ def check_available_set(dictionaries, owners, components, complete, output=None)
             requirements = obligations(obj) if usable else [('CONSUMER_INVENTORY',None,None,None,False)]
             details = []
             for req in requirements:
-                kind, soname, version, symbol, _ = req
+                kind, soname, version, symbol, criterion = req
                 if usable:
                     needed = obj.get('needed', [])
                     before = left.evaluate(abi, needed, req)
@@ -175,10 +201,22 @@ def check_available_set(dictionaries, owners, components, complete, output=None)
                     outcome = 'UNKNOWN','MEDIUM','CONSUMER_INVENTORY_INCOMPLETE'
                 if outcome is None:
                     by_kind[kind]['satisfied'] += 1
+                    if include_satisfied and output is not None:
+                        satisfied_written += 1
+                        identity = {'soname':soname,'version':version,'symbol':symbol}
+                        if kind == 'COPY_RELOCATION':
+                            identity['copy_size'] = criterion
+                        item = finding('linking', components[path], 'AVAILABLE_SET '+kind+' '+canonical(list(identity.values())),
+                                       before, after, 'COMPATIBLE','INFO','repository available-set requirement comparison',
+                                       obj.get('evidence'),limitation,reason_code='REQUIREMENT_SATISFIED')
+                        yield item | dict(scope='AVAILABLE_SET',consumer=path,package_id=package_id,
+                                          package_nevra=nevra,kind=kind,**identity)
                     continue
                 status, severity, code = outcome
                 by_kind[kind]['failed' if status=='INCOMPATIBLE' else 'unknown'] += 1
                 identity = {'soname':soname,'version':version,'symbol':symbol}
+                if kind == 'COPY_RELOCATION':
+                    identity['copy_size'] = criterion
                 label = 'AVAILABLE_SET '+kind+' '+canonical(list(identity.values()))
                 item = finding('linking',components[path],label,before,after,status,severity,
                                'repository available-set requirement comparison',obj.get('evidence'),limitation,
@@ -205,6 +243,6 @@ def check_available_set(dictionaries, owners, components, complete, output=None)
                                                   for kind,counts in sorted(by_kind.items())},
                'by_reason':dict(sorted(by_reason.items())), 'finding_count':sum(by_reason.values()),
                'emitted_count':sum(emitted_by_reason.values()),
-               'stored_examples':len(examples), 'example_limit_per_reason':EXAMPLE_LIMIT,
+               'satisfied_rows_written':satisfied_written, 'stored_examples':len(examples), 'example_limit_per_reason':EXAMPLE_LIMIT,
                'limitations':limitation}
     return summary, examples

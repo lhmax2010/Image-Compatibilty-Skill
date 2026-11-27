@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import gzip
 import hashlib
 import io
 import json
@@ -12,14 +13,29 @@ import time
 
 
 def evidence_path(source, ref):
-    """One boundary for indexed evidence presence and HTTP evidence reads."""
+    """Resolve legacy and gzip evidence inside the same report evidence root."""
     source = Path(source).resolve()
-    if not isinstance(ref, str) or not ref.startswith('evidence/'):
-        raise ValueError('Evidence reference must start with evidence/')
-    path = (source / ref).resolve()
-    if not path.is_relative_to(source) or not path.is_relative_to((source / 'evidence').resolve()):
-        raise ValueError('Evidence reference escapes evidence subtree')
-    return path
+    root = source / 'evidence'
+    if (not isinstance(ref, str) or not ref.startswith('evidence/')
+            or any(part in ('', '.', '..') for part in ref.split('/')) or root.is_symlink()):
+        raise ValueError('Invalid evidence reference')
+    relative = source / ref
+    for candidate in (relative, relative.with_name(relative.name + '.gz')):
+        path = candidate.resolve()
+        if not path.is_relative_to(root) or candidate.is_symlink():
+            raise ValueError('Evidence reference escapes evidence subtree')
+        if path.is_file():
+            return path
+    return relative.resolve()
+
+
+def open_payload(path):
+    return gzip.open(path, 'rb') if path.suffix == '.gz' else path.open('rb')
+
+
+def manifest_path(path):
+    compressed = path.with_suffix(path.suffix + '.gz')
+    return compressed if not path.exists() and path.suffix == '.json' and compressed.is_file() else path
 
 
 def canonical(value):
@@ -196,7 +212,9 @@ class ReportStream:
     def __init__(self, path, arrays, objects, callback, check=lambda: None,
                  chunk_chars=1024 * 1024, max_record_chars=64 * 1024 * 1024):
         self.reader = _HashReader(path)
-        self.stream = io.TextIOWrapper(io.BufferedReader(self.reader), encoding='utf-8')
+        self.buffered = io.BufferedReader(self.reader)
+        payload = gzip.GzipFile(fileobj=self.buffered) if Path(path).suffix == '.gz' else self.buffered
+        self.stream = io.TextIOWrapper(payload, encoding='utf-8')
         self.arrays, self.objects = set(arrays), set(objects)
         self.callback, self.check = callback, check
         self.chunk, self.limit = chunk_chars, max_record_chars
@@ -297,3 +315,4 @@ class ReportStream:
             return result, self.reader.hash.hexdigest()
         finally:
             self.stream.close()
+            self.buffered.close()

@@ -1,4 +1,5 @@
 """Bounded, read-only RPM archive inspection and newc payload collection."""
+import io
 import hashlib
 import os
 from pathlib import Path, PurePosixPath
@@ -11,6 +12,7 @@ from xml.etree import ElementTree
 from .core import Tools, canonical, digest, hash_file, limitation
 from .elf import collect_elf, dynamic_exports
 from .packages import parse_rpm_evidence
+from .report_io import evidence_path
 
 FIELDS = ('name', 'epoch', 'version', 'release', 'arch')
 CHUNK = 1024 * 1024
@@ -207,9 +209,7 @@ def extraction(rpm, record, tools, workspace, mode, scan_elf):
             diagnostic = stderr.read(64*1024)
             proof = canonical({'argv':argv,'rpm_sha256':record['sha256'],'exit_code':code,
                                'reason':error,'cpio_bytes':size,'cleanup':cleanup}).encode()+b'\n'+diagnostic
-            leaf = digest(proof)+'.txt'
-            (tools.raw/leaf).write_bytes(proof)
-            record['evidence'].append('evidence/'+leaf)
+            record['evidence'].append(tools.store_evidence(io.BytesIO(proof), digest(proof)))
             if error == 'interrupted':
                 raise KeyboardInterrupt
             if error == 'timeout':
@@ -262,7 +262,7 @@ def collect_repository(image, manifest, tools, workspace, mode, collectors):
                 row.update(reason_code=result['reason_code'], tool=result['tool'])
             if result['returncode'] or result['error']:
                 raise ValueError('RPM metadata query failed: '+(result['error'] or result['stderr'].strip()[:400]))
-            packages = parse_rpm_evidence(tools.output/result['stdout_evidence'])
+            packages = parse_rpm_evidence(evidence_path(tools.output,result['stdout_evidence']))
             if len(packages) != 1 or not all(packages[0].get(k) for k in FIELDS):
                 raise ValueError('Expected one complete RPM NEVRA')
             row['package'] = packages[0]

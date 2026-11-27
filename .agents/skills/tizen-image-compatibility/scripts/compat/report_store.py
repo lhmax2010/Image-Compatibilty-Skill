@@ -3,14 +3,17 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 import csv
+from functools import lru_cache
 import json
 from pathlib import Path
 import posixpath
 import sqlite3
 import zlib
 
+from .elf import symbol_identity
+from .symbol_references import resolve_finding
 from .report_io import (FINDING_COLUMNS, FINDING_DETAIL_COLUMNS, ReportStream, canonical, digest,
-                        evidence_path, finding_cells)
+                        evidence_path, finding_cells, manifest_path)
 
 
 def pack(value):
@@ -22,13 +25,8 @@ def unpack(value):
 
 
 def symbol_name(name):
-    if '@@' in name:
-        base, version = name.split('@@', 1)
-        return base, version, True
-    if '@' in name:
-        base, version = name.split('@', 1)
-        return base, version, False
-    return name, None, False
+    identity = symbol_identity(name)
+    return identity['base_name'], identity['version'], identity['default_version']
 
 
 def source_status(statuses):
@@ -160,7 +158,7 @@ class Store:
                 self.db.execute('INSERT INTO raw_elf VALUES(?,?,?,?,?)',
                                 (side, scope, value['path'], pack(value), fingerprint))
             self.check()
-        path = self.source / (side + '-manifest.json')
+        path = manifest_path(self.source / (side + '-manifest.json'))
         metadata, sha = ReportStream(path, arrays, {('sdk_package_manifest',)}, record, self.check).read()
         self.manifests[side] = metadata
         self.source_hashes[path.name] = sha
@@ -309,9 +307,15 @@ class Store:
         arrays |= {('coverage', dim, 'units') for dim in dims}
         arrays |= {('package_inventory', key) for key in inventory_arrays}
         objects = {('coverage',), ('package_inventory',)} | {('coverage', dim) for dim in dims}
+        @lru_cache(maxsize=32)
+        def lookup(side, path):
+            row = self.db.execute('SELECT payload FROM raw_elf WHERE side=? AND scope=? AND path=?',
+                                  (side, 'runtime', path)).fetchone()
+            return {sym['name']:sym for sym in unpack(row[0]).get('exports', [])} if row else {}
+
         def record(path, value):
             if path == ('findings',):
-                self._finding(value)
+                self._finding(resolve_finding(value, lookup))
             elif path == ('package_results',):
                 self._package('baseline', value)
             elif path == ('package_inventory', 'candidate_assessments'):

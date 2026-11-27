@@ -98,7 +98,7 @@ class WP3Tests(Environment):
                     compact.extend(details.finish(detail_csv))
                 with detail_csv.open() as stream:
                     detail = list(csv.DictReader(stream))
-                expected_rows = {f['id']:f for f in rows if f['check_id'].startswith(('import:', 'version:'))
+                expected_rows = {f['id']:f for f in rows if f['check_id'].startswith(('import:', 'version:', 'DT_NEEDED:', 'copy relocation:'))
                                  or f['status']=='INCOMPATIBLE'}
                 self.assertSetEqual({row['id'] for row in detail}, set(expected_rows))
                 self.assertTrue(all(int(row['roots_count']) == expected_rows[row['id']]['roots']['count'] for row in detail))

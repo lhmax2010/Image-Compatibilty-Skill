@@ -11,6 +11,7 @@ import unittest
 
 from test_rpm_payload import SCRIPTS
 from compat.compare import compare_elf
+from compat.core import read_manifest
 from compat.profile import comparison_profile
 from compat.repository_pairing import reconcile
 from compat.requirements import Providers, check_available_set, classify
@@ -169,7 +170,7 @@ class RepositoryFixtures(unittest.TestCase):
         self.assertEqual(result['repository']['elf_pairs'][0]['match'],'CROSS_PACKAGE_SONAME')
         self.assertTrue(any(f['interface']=='b@@V1' and f['status']=='INCOMPATIBLE' for f in result['findings']))
         for side in ('baseline','candidate'):
-            (obj,)=json.loads((report/(side+'-manifest.json')).read_text())['elf_objects']
+            (obj,)=read_manifest(report/(side+'-manifest.json'))['elf_objects']
             self.assertEqual((obj['machine'],obj['class']),('ARM','ELF32'))
 
     def test_t06b_ambiguous_soname(self):
@@ -269,7 +270,7 @@ class RepositoryFixtures(unittest.TestCase):
         for repo in (left,right):
             self.rpm(repo,'debug-demo',{'/usr/lib/debug/demo.debug':split})
         report,result,_=self.run_case(left,right,'t12',expected=0)
-        manifest=json.loads((report/'baseline-manifest.json').read_text())
+        manifest=read_manifest(report/'baseline-manifest.json')
         self.assertEqual(manifest['elf_objects'][0]['elf_runtime_role'],'DEBUG_ONLY')
         self.assertIsNone(result['repository']['baseline']['export_coverage_percent'])
         self.assertFalse(any(f['severity']=='HIGH' for f in result['findings']))

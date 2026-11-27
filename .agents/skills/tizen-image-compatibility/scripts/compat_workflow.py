@@ -13,6 +13,7 @@ import sys
 from compat.core import InputError, load_config
 from compat.flash import PROBE_BYTES, identify
 from compat.preparation import looks_like_root
+from compat.report_io import manifest_path
 from compat.run_summary import OBJECTIVES, SCHEMA, blocked_summary, save
 import tizen_compat
 
@@ -107,6 +108,8 @@ def tool_state(config):
 
 
 def identify_input(path, manifest=False):
+    if manifest:
+        path = manifest_path(path)
     if not path.exists():
         return 'MISSING'
     if manifest:

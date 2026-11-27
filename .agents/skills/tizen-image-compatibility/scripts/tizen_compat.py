@@ -18,8 +18,10 @@ from compat.core import (DIMENSIONS, SEVERITIES, InfrastructureError, InputError
 from compat.images import Image
 from compat.flash import PreparationError
 from compat.preparation import identity, prepared_input
+from compat.report_io import open_payload
 from compat.report import build_results, generate
 from compat.run_summary import OBJECTIVES, blocked_summary, save
+from compat.weak_review import Review
 from compat.testing import run_matrix
 from compat.matrix_manifest import reconcile
 
@@ -44,6 +46,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument('--candidate', type=Path, help='Candidate rootfs, supported image, prepared bundle or RPM collection')
     p.add_argument('--baseline-manifest', type=Path, help='Reuse collected baseline JSON')
     p.add_argument('--candidate-manifest', type=Path, help='Reuse collected candidate JSON')
+    p.add_argument('--reuse', type=Path, help='Reuse both manifests from a previous report directory')
     p.add_argument('--mode', choices=('quick', 'static', 'runtime', 'full'), default='static')
     p.add_argument('--rpm-mode', choices=('payload','metadata'), help='RPM payload analysis (default) or archive metadata only')
     p.add_argument('--objective', choices=OBJECTIVES, help='Objective to track in the compact run summary')
@@ -51,6 +54,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument('--candidate-rpm-fallback', type=Path, help='Candidate RPM input if EROFS preparation fails')
     p.add_argument('--output', type=Path, default=Path('compat-report'))
     p.add_argument('--config', type=Path)
+    p.add_argument('--review-decisions', type=Path, help='Apply owner decisions to matched weak export review IDs')
     p.add_argument('--cache', type=Path, help='Optional incremental ELF cache outside source images')
     p.add_argument('--strict', action='store_true', help='Also fail on UNKNOWN checks, irrespective of severity')
     p.add_argument('--fail-on', choices=SEVERITIES)
@@ -72,7 +76,13 @@ def main(argv: list[str] | None = None) -> int:
     finalized = False
     failure = None
     try:
+        if args.reuse:
+            if any((args.baseline, args.candidate, args.baseline_manifest, args.candidate_manifest)):
+                raise InputError('Choose --reuse or an explicit input pair')
+            args.baseline_manifest = args.reuse / 'baseline-manifest.json'
+            args.candidate_manifest = args.reuse / 'candidate-manifest.json'
         config = load_config(args.config)
+        review = Review(args.review_decisions)
         if args.rpm_mode:
             config['rpm_payload']['mode'] = args.rpm_mode
         excluded = {x.strip() for x in args.exclude.split(',') if x.strip()}
@@ -122,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
             raise InputError('Output directory was claimed by another run; choose a new directory') from exc
         claimed = True
         save(output, blocked_summary(args.objective, 'RUNNING', 'Analysis is in progress; no completion receipt yet.'))
-        tools = Tools(output, config)
+        tools = Tools(output, config, compress_evidence=True)
         tools.discover()
         if args.list_tools:
             print(json.dumps(tools.versions, indent=2))
@@ -144,10 +154,17 @@ def main(argv: list[str] | None = None) -> int:
                 for label, manifest_path, manifest in zip(('baseline', 'candidate'),
                                                            (args.baseline_manifest, args.candidate_manifest), (a, b)):
                     original = manifest_path.parent / 'evidence'
-                    if original.is_dir():
-                        for item in original.glob('*.txt'):
-                            if item.is_file() and not item.is_symlink():
-                                shutil.copyfile(item, tools.raw / item.name)
+                    if original.is_dir() and not original.is_symlink():
+                        for item in original.iterdir():
+                            name = item.name.removesuffix('.gz')
+                            if (len(name) == 68 and name.endswith('.txt')
+                                    and all(c in '0123456789abcdef' for c in name[:-4])
+                                    and item.is_file() and not item.is_symlink()):
+                                if item.suffix == '.gz':
+                                    shutil.copyfile(item, tools.raw / item.name)
+                                else:
+                                    with open_payload(item) as stream:
+                                        tools.store_evidence(stream, name[:-4])
                     receipt = manifest['image'].get('extraction_manifest')
                     if receipt in ('baseline-extraction-manifest.json', 'candidate-extraction-manifest.json'):
                         original_receipt = manifest_path.parent / receipt
@@ -190,12 +207,12 @@ def main(argv: list[str] | None = None) -> int:
                 raise InputError('Compare two RPM repositories or two runtime Rootfs inputs; their scopes differ')
             if all(repo_inputs):
                 from compat.repository import compare_repository
-                repo,findings = compare_repository(a,b,config,output)
+                repo,findings = compare_repository(a,b,config,output,review=review)
             else:
                 if 'linking' in config['analysis']['modes']:
                     from compat.linking_details import LinkingDetails
                     linking_details = resources.enter_context(LinkingDetails(workspace / 'linking-details.sqlite'))
-                findings = compare_static(a, b, config, linking_details=linking_details)
+                findings = compare_static(a, b, config, linking_details=linking_details, review=review)
                 if linking_details is not None:
                     csv_path = output / 'linking-details.csv' if config['report']['csv'] else None
                     findings.extend(linking_details.finish(csv_path))
@@ -233,10 +250,11 @@ def main(argv: list[str] | None = None) -> int:
             findings = finalize(findings, config)
             a['cross_matrix'] = b['cross_matrix'] = matrix
             result = build_results(a, b, findings, tests, matrix, config, repository=repo, linking_details=linking_details)
+            result['review'] = review.summary(findings)
             result['scope'] = repo['scope'] if repo else 'RUNTIME_ROOTFS'
             if repo:
                 result['repository'] = repo
-            generate(output, a, b, result, config, objective=args.objective, reused=bool(args.baseline_manifest))
+            generate(output, a, b, result, config, objective=args.objective, reused=bool(args.baseline_manifest), tools=tools)
             save(output, result['run_summary'])
             finalized = True
             print(f"{result['status']}: {len(findings)} findings; execution {result['execution']['status']}; quality gate {result['quality_gate']['status']} (compatibility={result['quality_gate']['compatibility_status']}, coverage={result['quality_gate']['coverage_status']}, execution={result['quality_gate']['execution_status']}); report {output / 'index.html'}")

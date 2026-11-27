@@ -2,6 +2,8 @@
 from collections import Counter, defaultdict
 import re
 
+from .elf import normalize_version
+
 
 COVERAGE_CODES = {
     'Installed loader coverage': 'DIMENSION_NOT_EXECUTED',
@@ -41,7 +43,7 @@ def identity(symbol):
     # Preserve the version explicitly carried by the parsed symbol or display name.
     name = symbol['name']
     base, sep, version = name.partition('@')
-    return symbol.get('base_name') or base, symbol.get('version') or (version.lstrip('@').split(' ', 1)[0] if sep else None)
+    return symbol.get('base_name') or base, normalize_version(symbol.get('version') or (version.lstrip('@') if sep else None))
 
 
 def cxx_class(name):
@@ -62,7 +64,7 @@ class Importers:
             index = defaultdict(set)
             for obj in objects:
                 if obj.get('elf_runtime_role') != 'DEBUG_ONLY':
-                    for symbol in obj.get('imports', []):
+                    for symbol in (*obj.get('imports', []), *obj.get('copy_relocations', [])):
                         index[identity(symbol)].add(obj['path'])
             self.sides[side] = index
 
@@ -70,7 +72,9 @@ class Importers:
         key = identity(symbol)
         counts = {}
         for side, provider in (('baseline', baseline_path), ('candidate', candidate_path)):
-            paths = self.sides[side].get(key, ())
+            paths = self.sides[side].get(key, set())
+            if key[1] is not None and '@@' in symbol['name']:
+                paths = paths | self.sides[side].get((key[0], None), set())
             counts[side] = len(paths) - (provider in paths)
         return {'binding': symbol.get('binding'), 'type': symbol.get('type'), 'versioned': key[1] is not None,
                 'cxx_class': cxx_class(key[0]), 'observed_importers': counts}

@@ -20,6 +20,7 @@ SCRIPTS = Path(__file__).resolve().parents[1]/'scripts'
 sys.path.insert(0,str(SCRIPTS))
 from compat import erofs, repository
 from compat.core import DEFAULTS, Tools
+from compat.core import read_manifest
 from compat.rpm_payload import scan_cpio
 
 
@@ -241,7 +242,7 @@ touch "{cls.root}/SCRIPTLET-RAN"
         self.assertGreaterEqual(result['repository']['baseline']['exports'],10)
         self.assertEqual(result['repository']['candidate']['rpm_total'],9)
         self.assertTrue(any(Path(row['archive']).name=='broken.rpm' for row in result['repository']['errors']))
-        baseline = json.loads((self.output/'baseline-manifest.json').read_text())
+        baseline = read_manifest(self.output/'baseline-manifest.json')
         objects = baseline['elf_objects']
         self.assertEqual({o['package_path'] for o in objects},{'/usr/lib/shared.payload'})
         self.assertEqual(len({o['path'] for o in objects}),2)
@@ -325,10 +326,13 @@ touch "{cls.root}/SCRIPTLET-RAN"
         self.assertEqual(result.returncode,1,result.stderr)
         reused = json.loads((output/'results.json').read_text())
         self.assertEqual(reused['scope'],'RPM_REPOSITORY_PAYLOAD')
-        self.assertEqual(reused['repository']['symbol_differences'],self.results['repository']['symbol_differences'])
+        stats = reused['repository']['symbol_differences']
+        self.assertEqual(stats['by_role'],self.results['repository']['symbol_differences']['by_role'])
+        self.assertEqual(stats['by_change'],self.results['repository']['symbol_differences']['by_change'])
         self.assertEqual(reused['finding_integrity']['missing_reason_codes'], 0)
         with (self.output/'symbol-differences.csv').open() as stream:
-            expected = [r for r in csv.DictReader(stream) if r['change'] != 'MATCHED']
+            expected = [row for row in csv.DictReader(stream) if row['change'] not in ('MATCHED', 'CHANGED')
+                        or row['change'] == 'CHANGED' and set(json.loads(row['details'])) - {'CODE_SIZE_CHANGED', 'SIZE_CHANGED_UNKNOWN'}]
         with (output/'symbol-differences.csv').open() as stream:
             self.assertEqual(list(csv.DictReader(stream)), expected)
         self.assertEqual({row['id'] for row in reused['findings']},{row['id'] for row in self.results['findings']})
@@ -340,7 +344,7 @@ touch "{cls.root}/SCRIPTLET-RAN"
         self.assertEqual(replay_all.returncode,1,replay_all.stderr)
         self.assertEqual((all_output/'symbol-differences.csv').read_bytes(),(self.output/'symbol-differences.csv').read_bytes())
 
-        data = json.loads(candidate.read_text())
+        data = read_manifest(candidate)
         data['repository']['archives'][0]['objects'].append('/no/such/ELF')
         malformed = self.root/'invalid-replay-manifest.json'
         malformed.write_text(json.dumps(data))

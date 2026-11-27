@@ -1,6 +1,7 @@
 """Disk-backed detail rows for directional static linking checks."""
 from collections import Counter, OrderedDict, defaultdict
 import os
+import posixpath
 import sqlite3
 
 from .core import canonical, digest, finding
@@ -77,14 +78,21 @@ class LinkingDetails:
         entry_id = item['id']
         if aggregate:
             group = group_context(context)
+            if item['check_id'].startswith('DT_NEEDED:'):
+                needed = item['check_id'].split(':',1)[1]
+                if '/' not in needed:
+                    group['search_paths'] = [posixpath.dirname(p) if isinstance(p,str) and posixpath.basename(p)==needed
+                                             else p for p in group.get('search_paths', [])]
             key_fields = [direction, image, item['component'], item['resolution'], group]
             anchor = 'TC-' + digest(canonical(['linking detail group', *key_fields]).encode())[:16]
             if anchor not in self.records:
-                record = finding('linking', item['component'], item['interface'].split(':', 1)[0] + ':symbol checks',
+                record = finding('linking', item['component'], item['interface'].split(':', 1)[0] +
+                                 (':dependency checks' if item['check_id'].startswith('DT_NEEDED:') else ':symbol checks'),
                                  None, None, item['status'], item['severity'], item['detection_method'],
                                  item['evidence'], item['potential_impact'], item['recommended_action'],
                                  reason_code=item['reason_code'])
-                record.update(id=anchor, check_id='symbol checks', consumer_path=item['consumer_path'],
+                record.update(id=anchor, check_id='dependency checks' if item['check_id'].startswith('DT_NEEDED:')
+                              else 'symbol checks', consumer_path=item['consumer_path'],
                               consumer_image=image, root_consumer_image=direction, resolution=item['resolution'],
                               search_context=group, provider_path=None)
                 self.records[anchor] = record
@@ -134,7 +142,8 @@ class LinkingDetails:
                     WHEN sum(status='UNKNOWN') THEN 'UNKNOWN'
                     ELSE 'COMPATIBLE' END status
                 FROM checks WHERE direction='baseline' AND image='baseline' AND direct
-                    AND (check_id LIKE 'import:%' OR check_id LIKE 'version:%')
+                    AND (check_id LIKE 'import:%' OR check_id LIKE 'version:%'
+                         OR check_id LIKE 'DT_NEEDED:%' OR check_id LIKE 'copy relocation:%')
                 GROUP BY consumer, check_id
             ) GROUP BY consumer, status
         """):

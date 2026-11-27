@@ -152,3 +152,36 @@ collector gates and can report more than one failure.
 Removal context records the binding, type, version flag and the C++ category
 inferred from Itanium name markers. Importer counts describe the analyzed set.
 A zero count includes the possibility of unsampled consumers.
+
+
+## WP-4 export and copy relocation policy
+
+### Weak C++ symbols no longer exported — pending owner review
+
+C++ template instantiations, inline functions, and the vtables, typeinfo and thunks of classes without a key function have *vague linkage*. Every object file that uses one emits its own weak copy, and the dynamic linker binds all users to one of the available copies. A program compiled against the same headers therefore normally carries its own copy and does not need this library to export it. Clang and GCC make different inlining, instantiation and visibility decisions, so a library built with Clang often exports fewer of these copies. No analyzed program or library imports any of the listed symbols. The remaining risk is a consumer outside the analyzed set that was built to import the library's copy instead of emitting its own, for example through `extern template` declarations or explicit instantiation in the library. That cannot be checked statically here, so each entry waits for owner review.
+
+Both export inventories must be complete. A weak C++ export with zero observed
+importers on either side is `UNKNOWN LOW` with
+`WEAK_CXX_EXPORT_REMOVED_UNREFERENCED` until the owner reviews it. C exports,
+GLOBAL or UNIQUE exports and observed imports retain their applicable grading.
+Owner decisions change only an eligible matching review ID. The CSV retains the
+original export and decision evidence.
+
+### Defined dynamic binding
+
+Default glibc lookup treats a weak definition as global. GLOBAL to WEAK and
+WEAK to GLOBAL give `COMPATIBLE INFO` with `SYMBOL_BINDING_WEAKENED` and
+`SYMBOL_BINDING_STRENGTHENED`. A recorded `ld_dynamic_weak: true` profile gives
+`UNKNOWN MEDIUM` and `DYNAMIC_WEAK_SEMANTICS`. GNU UNIQUE to WEAK or GLOBAL
+gives `UNKNOWN MEDIUM` and `GNU_UNIQUE_DROPPED` because the process-wide
+identity guarantee can matter to RTLD_LOCAL users.
+
+### Versioned copy relocations
+
+A defined dynamic object with a verneed index can be consumer storage for a
+copy relocation. Static collection cross-checks the relocation and keeps the
+raw readelf version suffix in Evidence. Matching the provider's exact version
+and copied size satisfies this requirement. A proven mismatch gives
+`COPY_RELOC_SIZE_CHANGED`. Missing or ambiguous provider and loader evidence
+use the existing conservative requirement rules. Recollect old incomplete ELF
+inventories to obtain the new relocation evidence.

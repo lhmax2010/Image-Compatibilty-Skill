@@ -136,7 +136,7 @@ def unpaired_finding(obj, component, complete, alternatives, scope):
                    reason_code=code) | {'scope':scope}
 
 
-def compare_repository(a,b,config,output=None):
+def compare_repository(a,b,config,output=None,*,review=None):
     repos = (a['repository'],b['repository'])
     return_scope = ('RPM_REPOSITORY_PAYLOAD' if all(r['scope']=='RPM_REPOSITORY_PAYLOAD' for r in repos)
                     else 'RPM_REPOSITORY_METADATA')
@@ -196,6 +196,13 @@ def compare_repository(a,b,config,output=None):
             packages.append(row)
     payload_complete = [complete_payload(repo, list(objects.values())) for repo,objects in zip(repos,dictionaries)]
     pairs, ambiguous = reconcile(pairs,dictionaries)
+    if config['policy']['weak_cxx_export_removal'] == 'incompatible':
+        review = None
+    elif review is None:
+        from .weak_review import Review
+        review = Review()
+    package_names = {row['id']:row['name'] for row in packages}
+    loader = config['loader']['environments'].get('candidate', {})
     importers = Importers(a['elf_objects'], b['elf_objects'])
     downgrades = Counter()
     components = {}
@@ -209,7 +216,9 @@ def compare_repository(a,b,config,output=None):
         if o and ((p and safe_pair) or o.get('elf_runtime_role')=='DEBUG_ONLY'):
             comparisons = compare_elf({'elf_objects':[o | {'path':component, 'inventory_path':o['path']}]},
                                       {'elf_objects':[p | {'path':component, 'inventory_path':p['path']}] if p else []},
-                                      importers=importers)
+                                      importers=importers, review=review,
+                                      package_for=lambda _: package_names[pair['package_id']],
+                                      dynamic_weak=loader.get('ld_dynamic_weak') is True)
         elif o:
             comparisons = [unpaired_finding(o,component,all(payload_complete) and p is None and o.get('complete'),
                                             ambiguous.get(o['path'],[]),return_scope)]
@@ -241,7 +250,8 @@ def compare_repository(a,b,config,output=None):
     if return_scope=='RPM_REPOSITORY_PAYLOAD' and 'linking' in config['analysis']['modes']:
         from .requirements import check_available_set
         requirements, examples = check_available_set(dictionaries, owners[0], components, payload_complete,
-                                                      output if config['report']['csv'] else None)
+                                                      output if config['report']['csv'] else None,
+                                                      include_satisfied=config['report']['include_satisfied_requirements'])
         out.extend(examples)
     stats = [r['counts'] | symbol_counts(m['elf_objects']) for m,r in zip((a,b),repos)]
     for counts, complete, manifest in zip(stats,payload_complete,(a,b)):
@@ -397,17 +407,32 @@ def symbol_differences(results, objects, mode='all'):
             by_component[f['component']][label].append(f)
     changes = Counter()
     roles = {'EXPORT':Counter(),'IMPORT':Counter()}
-    unsatisfied = 0
+    unsatisfied = written = 0
+    omitted = Counter()
+    address_only = 0
     for pair in results['repository']['elf_pairs']:
         o,p = (objects[i].get(pair[side+'_object'],{}) for i,side in enumerate(('baseline','candidate')))
         for row in symbol_rows(pair,o,p,by_component[pair['component']]):
             changes[row['change']] += 1
             roles[row['role']][row['change']] += 1
             unsatisfied += row.get('baseline_identity_satisfied')=='false'
-            if mode == 'all' or row['change'] != 'MATCHED':
+            details = set(row['details'])
+            if row['change'] == 'MATCHED':
+                address_only += row['baseline'].get('value') != row['candidate'].get('value')
+            data_size = any(s and s.get('type') in ('OBJECT','TLS','COMMON')
+                            for s in (row['baseline'],row['candidate']))
+            relevant = bool(details & {'TYPE_CHANGED','BINDING_CHANGED','VISIBILITY_CHANGED','VERSION_CHANGED',
+                                        'DEFAULT_LOOKUP_CHANGED','REQUIRED_PROVIDER_CHANGED'}) or (
+                       data_size and bool(details & {'DATA_SIZE_CHANGED','SIZE_CHANGED_UNKNOWN'}))
+            if (mode == 'all' or row['change'] not in ('MATCHED','CHANGED')
+                    or row['change'] == 'CHANGED' and relevant):
+                written += 1
                 yield row
+            else:
+                omitted.update(details or {'MATCHED'})
     results['repository']['symbol_differences'] = {
         'rows':sum(changes.values()),'by_change':dict(sorted(changes.items())),
+        'written_rows':written,'address_only_changes':address_only,'omitted_by_detail':dict(sorted(omitted.items())),
         'exports_baseline_unsatisfied':unsatisfied,
         'by_role':{role:{'rows':sum(counts.values()),'by_change':dict(sorted(counts.items()))}
                    for role,counts in roles.items()}}

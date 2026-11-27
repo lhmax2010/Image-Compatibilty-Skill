@@ -5,6 +5,7 @@ from pathlib import Path
 import shutil
 import xml.etree.ElementTree as ET
 from typing import Any
+from .report_io import evidence_path, open_payload
 from .core import Tools, limitation, canonical, digest
 from .images import Image
 
@@ -41,7 +42,7 @@ def parse_rpm_evidence(path: Path) -> list[dict[str, Any]]:
     parser = ET.XMLPullParser(events=('end',))
     parser.feed(b'<packages>')
     records = []
-    with path.open('rb') as stream:
+    with open_payload(path) as stream:
         while chunk := stream.read(64 * 1024):
             parser.feed(chunk)
             for _, element in parser.read_events():
@@ -90,7 +91,7 @@ def collect_package_inventory(image: Image, tools: Tools, workspace: Path):
             if result['returncode']:
                 raise ValueError('query failed: ' + (result.get('error') or result['stderr'] or
                                                      f"exit {result['returncode']}"))
-            raw = tools.output / result['stdout_evidence']
+            raw = evidence_path(tools.output, result['stdout_evidence'])
             if raw.is_file():
                 parsed = parse_rpm_evidence(raw)
             elif result['stdout_truncated']:

@@ -127,7 +127,7 @@ class LinkingDetailTests(Environment):
             findings = compare_static(a,a,self.config,linking_details=details)
             findings.extend(details.finish(self.output/'linking-details.csv'))
             result = build_results(a,a,finalize(findings,self.config),[],[],self.config,linking_details=details)
-            self.assertEqual(details.counts['rows'], 6)
+            self.assertEqual(details.counts['rows'], 8)
         with (self.output/'linking-details.csv').open() as stream:
             rows = list(csv.DictReader(stream))
         broken = [f for f in result['findings'] if f.get('resolution')=='missing_symbol']
@@ -135,15 +135,15 @@ class LinkingDetailTests(Environment):
         self.assertTrue(all(f['status']=='INCOMPATIBLE' and f['check_id']=='import:missing' for f in broken))
         self.assertTrue(all(row['id']==row['anchor_finding_id'] for row in rows if row['check_id']=='import:missing'))
         good = [f for f in result['findings'] if f.get('aggregated_checks')]
-        self.assertEqual([f['aggregated_checks'] for f in good],[2,2])
+        self.assertEqual(sorted(f['aggregated_checks'] for f in good),[1,1,2,2])
         self.assertEqual({f['consumer_image'] for f in good},{'baseline','candidate'})
         unit = next(u for u in result['coverage']['linking']['units'] if u['interface']==app['path'])
-        check = next(c for c in unit['required_checks'] if c['id']=='imports and version requirements')
-        self.assertEqual((check['status'],check['complete_count'],check['required_count']),('INCOMPATIBLE',3,3))
+        check = next(c for c in unit['required_checks'] if c['id']=='direct dependency and symbol requirements')
+        self.assertEqual((check['status'],check['complete_count'],check['required_count']),('INCOMPATIBLE',4,4))
         self.assertEqual(result['finding_integrity']['missing_reason_codes'],0)
         generate(self.output,a,a,result | {'scope':'RUNTIME_ROOTFS'},self.config)
         run = json.loads((self.output/'results.json').read_text())['run_summary']
-        self.assertEqual(run['linking_detail_counts']['rows'],6)
+        self.assertEqual(run['linking_detail_counts']['rows'],8)
 
     def test_anchor_keeps_states_consumers_images_and_search_contexts_distinct(self):
         launch = {'consumer':'/lib/dso','image':'candidate','state':'unknown_symbol_semantics','path':'/lib/provider'}

@@ -93,3 +93,35 @@ findings. `export_incomplete_by_reason` separates incomplete export inventories
 from ABI conclusions. `removed_exports` counts removal observations by reason,
 binding, type and C++ class. Importer counts cover distinct sampled objects
 with exact name and version identities, excluding the provider itself.
+
+
+## Owner review and report settings
+
+The static CLI writes `weak-export-review.csv`. Copy it, enter `ACCEPT` or
+`REJECT` with a reviewer and note, and run another comparison in an empty output
+directory with `--review-decisions path/to/review.csv`. Empty rows remain pending.
+The run summary records the input SHA-256 and review counts. The results list
+unmatched review IDs. Decisions apply only to the matching eligible review ID.
+An owner should check package variants and the full consumer set before accepting
+one. Set `policy.weak_cxx_export_removal: incompatible` for legacy grading.
+
+Loader profiles may set `ld_dynamic_weak: true` when the recorded loader context
+enables that glibc behavior. See [the comparison rules](correctness.md#wp-4-export-and-copy-relocation-policy).
+
+- `report.compress_manifests` defaults to true. Use the emitted
+  `baseline-manifest.json.gz` and `candidate-manifest.json.gz` with the manifest
+  arguments, `--reuse path/to/report`, or the workflow reuse pair. Legacy `.json` manifests remain readable.
+- Evidence retains its logical `evidence/<raw-sha256>.txt` reference. The CLI
+  stores `.txt.gz` and the enhanced browser serves the original content.
+- `report.symbol_differences: changes` omits MATCHED and code-size/address-only
+  rows from the CSV. Counts remain in the summary. `all` emits the full CSV.
+- `report.include_satisfied_requirements: true` includes requirements satisfied
+  on both sides in the available-set CSV. The default counts them in the summary.
+- A symbol in `results.json` may use `{"$symbol": [object_path, decorated_name]}`.
+  Resolve it against the indicated baseline or candidate manifest's export list.
+  The enhanced index and `compat.symbol_references.resolve_findings` restore the
+  full record. The original findings CSV still carries the complete fields.
+- When a confined Bubblewrap lacks `--size`, standard EROFS extraction needs
+  private disk scratch with three times the image size plus a free-space reserve.
+  On a host with `mkfs.erofs`, create standard fixtures using
+  `bash "$SKILL/scripts/make_erofs_fixture.sh" .local-work/erofs-fixtures`.

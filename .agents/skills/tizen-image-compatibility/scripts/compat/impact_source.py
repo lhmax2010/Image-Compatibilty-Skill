@@ -131,8 +131,8 @@ class Source:
         self.manifests = []
         if replay:
             for side in SIDES:
-                name = side + '-manifest.json'
-                path = self.original / name
+                from .report_io import manifest_path
+                path = manifest_path(self.original / (side + '-manifest.json'))
                 if file_version(path)[2] > 48 * 1024 * 1024:
                     raise ValueError('Replay manifest exceeds 48 MiB input budget')
                 self.manifests.append(path)

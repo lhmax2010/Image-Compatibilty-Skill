@@ -104,8 +104,11 @@ def make_summary(a, b, result, config, objective=None, reused=False):
             paths['requirement-findings.csv'] = 'requirement-findings.csv'
     if detail:
         paths.update({name:name for name in ('elf-symbol-summary.csv','symbol-differences.csv')})
+    if config['report']['csv'] and 'review' in result:
+        paths['weak-export-review.csv'] = 'weak-export-review.csv'
     if result.get('linking_detail_counts', {}).get('csv_written'):
         paths['linking-details.csv'] = 'linking-details.csv'
+    paths.update({name:name for name in result.get('manifest_files', {}).values()})
     paths.update({'run-summary.json':'run-summary.json','evidence':'evidence/'})
     summary = {'schema':SCHEMA, 'scope':scope, 'requested_objective':objective, 'objective_completion':completion,
             'execution_status':execution, 'compatibility_status':result['status'], 'coverage_status':coverage,
@@ -115,6 +118,7 @@ def make_summary(a, b, result, config, objective=None, reused=False):
             'linking_detail_counts':result.get('linking_detail_counts', {}),
             'export_incomplete_by_reason':result.get('export_incomplete_by_reason', {}),
             'removed_exports':result.get('removed_exports', {}),
+            'review':{k:v for k,v in result.get('review', {}).items() if k != 'review_unmatched'},
             'missing_reason_codes':result.get('finding_integrity', {}).get('missing_reason_codes', 0),
             'high_risk_findings':[{key: str(f[key])[:240] for key in ('id','dimension','component','interface','status','severity')}
                                   for f in high], 'report_paths':paths,

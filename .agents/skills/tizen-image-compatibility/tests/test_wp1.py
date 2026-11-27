@@ -197,7 +197,7 @@ class WorkPackageTests(unittest.TestCase):
             ('size',4,8,('INCOMPATIBLE','HIGH','DATA_SIZE_INCREASED')),
             ('binding','UNIQUE','GLOBAL',('UNKNOWN','MEDIUM','GNU_UNIQUE_DROPPED')),
             ('binding','GNU_UNIQUE','GLOBAL',('UNKNOWN','MEDIUM','GNU_UNIQUE_DROPPED')),
-            ('binding','GLOBAL','WEAK',('UNKNOWN','HIGH','SYMBOL_BINDING_CHANGED')),
+            ('binding','GLOBAL','WEAK',('COMPATIBLE','INFO','SYMBOL_BINDING_WEAKENED')),
             ('visibility','PROTECTED','DEFAULT',('UNKNOWN','HIGH','SYMBOL_VISIBILITY_CHANGED'))):
             with self.subTest(field=field,before=before,after=after):
                 self.assertEqual(classify_symbol_change(field,before,after),expected)

@@ -10,6 +10,7 @@ from .linker import dependency_checks, loader_missing
 from .profile import INSTRUMENTATION_EXPORTS, instrumentation
 from .debuginfo import advanced_abi
 from .source import declaration_reachability, header_inventory_complete
+from .elf import normalized_symbol_name
 from .symbol_rules import classify_symbol_change
 from .observation import Importers
 
@@ -49,7 +50,7 @@ def runtime_requirements(obj):
             'unwind_sections': obj.get('unwind_sections', [])}
 
 
-def compare_elf(a: dict[str, Any], b: dict[str, Any], *, importers=None) -> list[dict[str, Any]]:
+def compare_elf(a: dict[str, Any], b: dict[str, Any], *, importers=None, dynamic_weak=False, review=None, package_for=None) -> list[dict[str, Any]]:
     if importers is None:
         importers = Importers(a['elf_objects'], b['elf_objects'])
     findings = []
@@ -139,7 +140,7 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any], *, importers=None) -> list
                 if not default_candidates:
                     findings.append(finding('abi', path, identity['base_name'] + ':default lookup', name, None,
                         'INCOMPATIBLE' if new_exports_complete else 'UNKNOWN', 'HIGH', 'ELF default-version lookup', ev))
-                elif default_candidates[0]['name'] != name:
+                elif normalized_symbol_name(default_candidates[0]['name']) != name:
                     findings.append(finding('abi', path, identity['base_name'] + ':default lookup', name, default_candidates[0]['name'],
                         'UNKNOWN', 'HIGH', 'ELF default-version lookup', ev) |
                         {'reason_code': 'DEFAULT_VERSION_CHANGED'})
@@ -150,6 +151,8 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any], *, importers=None) -> list
                     {'reason_code': 'EXPORT_REMOVED' if new_exports_complete else 'EXPORT_NOT_OBSERVED',
                      'removal_context': importers.removal(symbol, obj.get('inventory_path', obj['path']),
                                                          other.get('inventory_path', other['path']))})
+                if review is not None and old_exports_complete and new_exports_complete:
+                    review.grade(findings[-1], obj, package_for(path) if package_for else '')
             else:
                 if '@' not in name and symbol['name'] != next_symbol['name']:
                     findings.append(finding('abi', path, name + ':default symbol version', symbol['name'], next_symbol['name'],
@@ -158,7 +161,7 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any], *, importers=None) -> list
                 for key in keys:
                     before, after = symbol.get(key), next_symbol.get(key)
                     if before != after:
-                        status,severity,reason = classify_symbol_change(key,before,after)
+                        status,severity,reason = classify_symbol_change(key,before,after,dynamic_weak=dynamic_weak)
                         impact = ('GNU unique binding changes process-wide identity and may affect RTLD_LOCAL and dlclose.'
                                   if reason=='GNU_UNIQUE_DROPPED' else '')
                         if key=='size' and instrumented:
@@ -256,11 +259,26 @@ def compare_packages(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any
     return findings
 
 
-def compare_static(a: dict[str, Any], b: dict[str, Any], config: dict[str, Any], *, linking_details=None) -> list[dict[str, Any]]:
+def compare_static(a: dict[str, Any], b: dict[str, Any], config: dict[str, Any], *, linking_details=None, review=None) -> list[dict[str, Any]]:
     if 'repository' in a and 'repository' in b:
         from .repository import compare_repository
-        return compare_repository(a,b,config)[1]
-    out = compare_elf(a, b) + compare_api(a, b) + compare_packages(a, b)
+        return compare_repository(a,b,config,review=review)[1]
+    profiles = config['loader']['environments']
+    candidate = profiles.get('candidate', b.get('loader_environment')) or {}
+    if config['policy']['weak_cxx_export_removal'] == 'incompatible':
+        review = None
+    elif review is None:
+        from .weak_review import Review
+        review = Review()
+    from .package_analysis import Ownership
+    owners = Ownership(a) if review is not None else None
+
+    def package_for(path):
+        matches = owners.lookup(path)['owners']
+        return owners.records[matches[0]]['name'] if len(matches) == 1 else ''
+
+    out = compare_elf(a, b, review=review, package_for=package_for,
+                      dynamic_weak=candidate.get('ld_dynamic_weak') is True) + compare_api(a, b) + compare_packages(a, b)
     if not config['analysis']['ignore_build_ids']:
         other = index(b['elf_objects'])
         for obj in a['elf_objects']:

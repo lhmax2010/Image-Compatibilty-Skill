@@ -134,13 +134,17 @@ def coverage_report(a, b, findings, tests, matrix, config, *, linking_details=No
                 slots = defaultdict(list)
                 for f in applicable:
                     name = f.get('check_id', f['interface'])
-                    if linking_details is None or not (f.get('aggregated_checks') or name.startswith(('import:', 'version:'))):
+                    if linking_details is None or not (f.get('aggregated_checks') or name.startswith(('import:', 'version:', 'DT_NEEDED:', 'copy relocation:'))):
                         slots[name].append(f)
                 required = {'DT_NEEDED:' + n for n in obj.get('needed', [])}
                 symbolic = {'import:' + s['name'] for s in obj.get('imports', [])}
                 symbolic |= {'version:' + r['file'] + ':' + r['name'] for r in obj.get('version_requirements', [])}
+                symbolic |= {'copy relocation:' + r['name'] for r in obj.get('copy_relocations', [])}
                 if linking_details is None:
                     required |= symbolic
+                else:
+                    symbolic |= required
+                    required = set()
                 if obj.get('interpreter'): required.add('dynamic loader')
                 required |= set(slots)
                 checks = [finding_check(k, slots[k]) for k in sorted(required)]
@@ -151,7 +155,7 @@ def coverage_report(a, b, findings, tests, matrix, config, *, linking_details=No
                     complete = counts.get('COMPATIBLE', 0) + counts.get('INCOMPATIBLE', 0)
                     status = ('INCOMPATIBLE' if counts.get('INCOMPATIBLE') else
                               'COMPATIBLE' if complete == expected else 'UNKNOWN')
-                    slot = check('imports and version requirements', status, executed=bool(observed))
+                    slot = check('direct dependency and symbol requirements', status, executed=bool(observed))
                     if complete != expected:
                         slot['verification'] = 'PARTIAL' if observed else 'NOT_EXECUTED'
                     slot.update(required_count=expected, observed_count=observed, complete_count=complete)

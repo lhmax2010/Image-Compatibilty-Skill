@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+import io
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ import stat
 import xml.etree.ElementTree as ET
 from typing import Any
 
+from .report_io import evidence_path, open_payload
 from .core import (DEFAULT_CAPTURE_BYTES, VERSION, SCHEMA, Tools, atomic_output, canonical, digest, expected_collectors,
                    hash_file, limitation)
 from .elf import ELF_INVENTORY_REVISION, collect_elf
@@ -204,8 +206,7 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
                     header_failures.append(virtual)
                     m['limitations'].append(limitation('api', 'Header decode failed; replacement text is observation only', virtual))
             normalized = normalize_text(text, tools.config['analysis']['normalize_build_paths'])
-            evidence = 'evidence/' + digest(raw) + '.txt'
-            (tools.output / evidence).write_bytes(raw)
+            evidence = tools.store_evidence(io.BytesIO(raw), digest(raw))
             if is_header:
                 m['public_headers'].append({'origin': 'runtime_image', 'path': virtual, 'sha256': digest(raw), 'evidence': [evidence], **parse_header(normalized)})
             if is_config:
@@ -250,8 +251,7 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
                     blob = read_cache_file(cache / Path(ref).name, max(cap, DEFAULT_CAPTURE_BYTES))
                     if digest(blob) != Path(ref).stem:
                         raise ValueError('Cache evidence digest mismatch')
-                    with atomic_output(tools.output / ref) as output:
-                        output.write(blob)
+                    tools.store_evidence(io.BytesIO(blob), Path(ref).stem)
                 return stored
             except (OSError, ValueError):
                 pass
@@ -259,7 +259,7 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
         if cache_file and obj['complete']:
             try:
                 for ref in obj.get('evidence', []):
-                    with (tools.output / ref).open('rb') as source, atomic_output(cache / Path(ref).name) as output:
+                    with open_payload(evidence_path(tools.output, ref)) as source, atomic_output(cache / Path(ref).name) as output:
                         while block := source.read(1024 * 1024):
                             output.write(block)
                 with atomic_output(cache_file, 'w', encoding='utf-8') as output:

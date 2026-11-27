@@ -8,7 +8,7 @@ import time
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from .report_store import unpack
-from .report_io import evidence_path
+from .report_io import evidence_path, open_payload
 
 
 class ReportBrowser:
@@ -193,9 +193,9 @@ class ReportBrowser:
                             self.send_error(403)
                             return
                         content_type = mimetypes.guess_type(name)[0] or 'application/octet-stream'
-                    with path.open('rb') as stream:
+                    with open_payload(path) as stream:
                         self.send_response(200)
-                        self.headers_for(content_type, path.stat().st_size)
+                        self.headers_for(content_type, None if path.suffix == '.gz' else path.stat().st_size)
                         while True:
                             block = stream.read(65536)
                             if not block:
@@ -210,7 +210,8 @@ class ReportBrowser:
 
             def headers_for(self, content_type, size):
                 self.send_header('Content-Type', content_type)
-                self.send_header('Content-Length', str(size))
+                if size is not None:
+                    self.send_header('Content-Length', str(size))
                 self.send_header('X-Content-Type-Options', 'nosniff')
                 self.send_header('Cache-Control', 'no-store')
                 self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'")

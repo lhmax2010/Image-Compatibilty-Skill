@@ -9,7 +9,7 @@ import resource
 import shlex
 import time
 
-from .report_io import ResourceGuard, canonical, csv_rows, digest, hash_file, write_json
+from .report_io import ResourceGuard, canonical, csv_rows, digest, hash_file, write_json, manifest_path, open_payload
 from .report_store import Store, COUNTS, unpack
 from .report_symbols import build_pairs, compare_symbols, summarize_packages
 from .report_groups import build_groups
@@ -29,12 +29,15 @@ def flatten(value, prefix=''):
 def export(store):
     db, output, check = store.db, store.output, store.check
     counts = {}
+    differences = 'SELECT row_json FROM differences'
+    if store.metadata.get('symbol_differences_mode') == 'changes':
+        legacy = not store.metadata.get('manifest_files')
+        omitted = "('MATCHED')" if legacy else "('MATCHED','CODE_SIZE_CHANGED','SIZE_CHANGED_UNKNOWN')"
+        differences += ' WHERE difference_type NOT IN ' + omitted
     specs = {
         'package-symbol-summary.csv': 'SELECT summary FROM packages ORDER BY side,name,id',
         'elf-symbol-summary.csv': 'SELECT summary FROM pairs ORDER BY id',
-        'symbol-differences.csv': ('SELECT row_json FROM differences WHERE difference_type <> \'MATCHED\' ORDER BY n'
-                                  if store.metadata.get('symbol_differences_mode') == 'changes'
-                                  else 'SELECT row_json FROM differences ORDER BY n'),
+        'symbol-differences.csv': differences + ' ORDER BY n',
         'linking-findings-groups.csv': 'SELECT summary FROM groups ORDER BY id',
     }
     for filename, query in specs.items():
@@ -228,15 +231,23 @@ def build(source, output, guard_factory=ResourceGuard):
     if source == output or source in output.parents or output in source.parents:
         raise ValueError('Output must be separate from the immutable source report')
     required = ('baseline-manifest.json', 'candidate-manifest.json', 'results.json', 'findings.csv', 'packages.csv')
-    for name in required:
-        if not (source / name).is_file():
-            raise ValueError('Required source report missing: ' + name)
+    inputs = [manifest_path(source / name) for name in required]
+    for path in inputs:
+        if not path.is_file():
+            raise ValueError('Required source report missing: ' + path.name)
     output.mkdir(parents=True, exist_ok=False)
     started = time.monotonic()
     # A prior real report allocated 6.58 GiB for a report of this general scale.
     # Budget twice the indexed input bytes plus 1 GiB for indexes/journals, and
     # enforce an additional 1 GiB free-space reserve throughout the build.
-    budget = 2 * sum((source / name).stat().st_size for name in required) + 1024**3
+    input_bytes = 0
+    for path in inputs:
+        if path.suffix == '.gz':
+            with open_payload(path) as stream:
+                input_bytes += sum(len(block) for block in iter(lambda: stream.read(1024**2), b''))
+        else:
+            input_bytes += path.stat().st_size
+    budget = 2 * input_bytes + 1024**3
     guard = ResourceGuard(output, disk_budget=budget) if guard_factory is ResourceGuard else guard_factory(output)
     store = None
     stage = 'preflight'
