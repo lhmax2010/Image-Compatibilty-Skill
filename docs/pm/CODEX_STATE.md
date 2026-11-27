@@ -9,8 +9,11 @@ WP-4 RC1 was independently accepted. Addendum B packages v1.5.3-rc2.
   A follow-up documentation commit records both digests.
 - REV-HEAD and the COPY-REL base-name fix passed. The full local suite
   ran 392 tests with 386 passed, six existing skips and zero failures.
-- The synthetic MEM-SCALE slope fell 71.24%, with full report and evidence
-  reconciliation. Native Python 3.10.22 and the actual VD memory and
-  output budgets remain open. No Addendum B local jobs remain.
+- ClineSR passed the RC1 suite on Python 3.10.22 with 391 run, 13 skipped,
+  zero failures, and zero errors. PORT-310 and the Python 3.10 gate are closed.
+- The reconciled synthetic MEM-SCALE slope fell 71.24%. The PM lowered
+  MEM-SCALE to P2 after confirming 72 GB available on the VD-2 server
+  against a 14 GB projection. Native RSS is a measurement and native
+  report sizing remains open. No Addendum B local jobs remain.
 - Backups and raw benchmark evidence remain workspace-local.
   The final verified backup is selected by `.local-backups/LATEST`.

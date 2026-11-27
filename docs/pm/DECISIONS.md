@@ -90,8 +90,6 @@ previously reported export removals are versioned copy relocations.
 
 The PM accepted RC1 at `da37925`. The PM suite ran 391 tests with 29 tool-dependent skips. The SR Linking and size deviations were accepted for RC1. The native VD measurement determines RPT-SIZE-3. [PM verification](work-packages/WP-4/PM_REVIEW.md)
 
-The ClineSR server runs **Python 3.10.22**.
-
 VD-1c covers 600 packages per side (1.8 GB each) with tool `2633672`:
 
 | Metric | 150 packages | 600 packages | Linear projection to 5,693 |
@@ -107,9 +105,12 @@ VD-1c covers 600 packages per side (1.8 GB each) with tool `2633672`:
   - This symmetric group is **unexplained**. It is not split debug files in the PM's x86 reproduction. Kit revision 7 will classify its shape. Do not change classification for it yet.
 - **Extraction errors:** `extraction-errors.csv` is 2.3 MB, cause unknown. Revision 7 counts it.
 
-REV-HEAD and MEM-SCALE are RC2 work. The unexplained symmetric export-inventory group and extraction failures remain under observation.
+The unexplained symmetric export-inventory group and extraction failures remain under observation.
 
+## WP-4 Addendum B priority update
 
-Addendum B RC2 passed the local 392-test suite. Synthetic memory slope
-fell from 1,079.52 to 310.50 KiB per package. Native RSS and report sizing
-still determine VD-2 admission. [Addendum B verification](work-packages/WP-4/ADDENDUM_B_REPORT.md)
+The PM reports that ClineSR ran `run_suite.sh` on `da3792506c99e2b437957cf883c04480f65a5ace` with Python 3.10.22. The receipt was `run=391 failures=0 errors=0 skips=13` and `SUITE OK`. PORT-310 and the Python 3.10 gate are closed on this RC1 evidence.
+
+The VD-2 server has 94 GB RAM, 72 GB available RAM, 32 cores, and 146 GB free disk. The approximately 14 GB peak RSS projected from VD-1c fits the available memory. The PM lowered MEM-SCALE to P2 and removed it from the RC2 gates. Native peak RSS remains a measurement. RPT-SIZE-3 still needs native report sizing.
+
+B1 kit revision 7 and B3 REV-HEAD remain required and were delivered. RC2 passed the local 392-test suite. The reconciled compact symbol storage reduced the synthetic RSS slope from 1,079.52 to 310.50 KiB per package per side. Larger memory changes are deferred. If native profiling identifies coverage assembly as a bottleneck, evaluate streaming coverage rows with exact JSON, CSV, finding ID, and evidence reconciliation. [Addendum B verification](work-packages/WP-4/ADDENDUM_B_REPORT.md)

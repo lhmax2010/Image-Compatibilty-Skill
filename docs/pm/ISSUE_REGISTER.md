@@ -52,7 +52,7 @@ Owner: technical PM (Claude). Maintained by Codex from PM decisions. Baseline co
 | PUB-2 | PM | P3 | CONFIRMED-static | references/implementation.md L38; examples/synthetic-report/* | Personal paths in tracked files; packaging regex misses /opt/*/<user>/ | Accept | Sanitize; widen scanner | WP-6 | Open |
 | REQ-AGG | PM WP-2 | P1 | CONFIRMED-exec | requirements.py | Missing SONAME and baseline-unsatisfied detail floods Findings | Accept | Group by consumer and SONAME; preserve each CSV detail and counts | WP-3 | Verified (PM, 0c40d40) |
 | F-07b | PM WP-2 | P1 | CONFIRMED-exec | compare.py; report.py | Rootfs comparison omitted instrumentation profiling | Accept | Share image profile and per-pair size rules | WP-3 | Closed (PM accepted 0c40d40) |
-| PORT-310 | ClineSR | P1 | CONFIRMED-exec | manage.py; demo generator | Python 3.11-only hashing on a Python 3.10 support claim | Accept | Chunk hashing; complete interpreter regression in WP-4 | WP-3 | Verified (PM, 0c40d40) |
+| PORT-310 | ClineSR | P1 | CONFIRMED-exec | manage.py; demo generator | Python 3.11-only hashing on a Python 3.10 support claim | Accept | Chunk hashing; complete interpreter regression in WP-4 | WP-3 | Closed. ClineSR Python 3.10.22 suite passed on da37925 |
 | RPT-SIZE | ClineSR | P2 | CONFIRMED-exec | report.py | Repeated JSON whitespace inflates scale reports | Accept | Compact machine outputs and measured size breakdown | WP-3 | Verified (PM, 0c40d40) |
 | PROC-1 | Owner | P2 | CONFIRMED-exec | HANDOVER.md | A Codex work package was given to ClineSR | Accept | Audience banners and owner-only result relay | WP-3 | Verified (PM, 0c40d40) |
 
@@ -67,12 +67,12 @@ Owner: technical PM (Claude). Maintained by Codex from PM decisions. Baseline co
 | COPY-REL | PM VD-1b | P1 | CONFIRMED-exec | elf.py | Executable copy relocation uses verneed | Accept | Classify import and check provider size | WP-4 | Verified on real x86-64 and ARMv7 fixtures. Awaiting PM review |
 | DT-AGG | PM | P1 | CONFIRMED-exec | linker.py | Individual non-breaking DT_NEEDED findings | Accept | Group and retain detail | WP-4 | PM accepted 82,992 Linking findings for RC1 against the 80,000 target |
 | RPT-SIZE-3 | VD-1b | P1 | CONFIRMED-exec | reports | 15.5 GB full repository projection | Accept | Compression and compact rows | WP-4 | PM accepted the SR result for RC1. Native VD sizing remains the gate |
-| SUITE-ARM | PM | P1 | NEEDS_VERIFICATION | ClineSR | Python 3.10 test host needed | Accept | Publish a private-output suite runner | WP-4 | Runner published and host-tested. Native Python 3.10 blocked here |
+| SUITE-ARM | PM | P1 | CONFIRMED-exec | ClineSR | Python 3.10 test host needed | Accept | Publish a private-output suite runner | WP-4 | Closed. ClineSR Python 3.10.22 ran 391 tests with 13 skips and no failures or errors on da37925 |
 | VD-ASAN | Owner | P2 | CONFIRMED | VD QuickBuild | ASAN is a name only | Close | Fixture-only validation | N/A | Closed |
 | PERF-LINK | PM | P2 | CONFIRMED-exec | linker.py | Scale cost | Measure only | Defer optimisation | post-RC | Measured in WP-4. Optimisation deferred |
 
 | REV-HEAD | PM WP-4 RC1 | P1 | CONFIRMED-exec | Report and CLI headlines | Owner review pending was hidden below the headline | Accept | Pending notices and a separate review gate | WP-4 B | Implemented. Local PENDING, NONE and COMPLETE tests pass |
-| MEM-SCALE | VD-1c | P1 | CONFIRMED-exec | RPM ELF inventory retention | Full repository RSS projects to about 14 GB under WP-3b | Accept | Compact live collected symbol arrays per ELF object | WP-4 B | Synthetic slope target passed. Native VD memory budget pending |
+| MEM-SCALE | VD-1c | P2 | CONFIRMED-exec | RPM ELF inventory retention | Full repository RSS projects to about 14 GB under WP-3b | Measure. Fits VD-2 server capacity | Compact live collected symbol arrays per ELF object | WP-4 B | Synthetic reduction reconciled. Native RSS measurement and larger changes are non-blocking |
 
 ## Deferred / owner-decided
 

@@ -41,7 +41,7 @@ so the extrapolation below is specific to the fixture workload.
 | COPY-REL | PASS. The real x86-64 non-PIE fixture collected `optind` with its separate version. The existing decorated fixture still exercised rootfs provider-size checks. |
 | MEM-SCALE | PASS on the synthetic slope target and output reconciliation at both sizes. |
 | Full suite | PASS. Python 3.12.3 ran 392 tests in 237.584 seconds. 386 passed, six existing optional skips, zero failures and zero errors. Compileall, shell syntax and diff checks passed. |
-| Native VD server and Python 3.10.22 | PENDING. The Python version and VD-1c values are PM-supplied evidence. |
+| Native Python 3.10.22 gate | CLOSED. PM-supplied ClineSR evidence for RC1 `da37925` records `run=391 failures=0 errors=0 skips=13` and `SUITE OK`. RC2's suite result above is from the local Python 3.12.3 run. |
 | Real standard EROFS | BLOCKED locally by the existing missing tools. |
 
 ## 5. Policy and evidence reconciliation
@@ -76,7 +76,10 @@ imports. The median decorated C++ name is 117 characters. The peak-RSS
 slope is **1,079.52 → 310.50 KiB per package per side**, a **71.24%**
 reduction. Linear extrapolation from the RC2 fixture to 5,693 packages per
 side is **1.71 GiB**. The historical VD-1c projection of about 14 GB uses
-different data, so the 7 GB native limit still requires a VD run.
+different data. The PM reports 94 GB total RAM, 72 GB available RAM, 32 cores,
+and 146 GB free disk on the VD-2 server. The 14 GB projection fits that
+capacity, so the PM lowered MEM-SCALE to P2 and removed it from the RC2 gates.
+The actual native peak RSS remains to be measured.
 
 ### Allocation attribution
 
@@ -129,14 +132,16 @@ checksum verification. The final workspace-local backup is selected by
 
 ## 10. Open risks
 
-MEM-SCALE remains open for native evidence at VD scale. The synthetic
-fixtures reuse provider shapes and have fewer distinct requirements.
-ClineSR still needs to measure the server's capacity, rerun the suite
-under Python 3.10.22 and review the compressed report's diagnostics.
+The synthetic fixtures reuse provider shapes and have fewer distinct
+requirements. Native peak RSS is a P2 measurement. The reconciled packed-array
+change already shipped in RC2. Larger changes go to the backlog. If native
+profiling shows that coverage assembly dominates memory, evaluate streaming
+coverage rows and require exact reconciliation of JSON, CSV, finding IDs,
+and evidence before adopting it. Native report sizing remains open.
 
 ## 11. Recommended next step
 
-Run the suite and the same 600-package VD-1c sample on ClineSR at the RC2
-commit. Use revision 7 to report aggregate RSS, output size and the
-unexplained diagnostic shapes. Use that evidence before committing to the
-full 5,693-RPM-per-side run.
+Repeat the 600-package VD-1c sample on ClineSR at the RC2 commit. Use
+revision 7 to report output size, aggregate RSS, and the unexplained
+diagnostic shapes. Use the native report-size measurement for the
+full 5,693-RPM-per-side run decision.
