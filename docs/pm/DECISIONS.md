@@ -42,3 +42,28 @@ ClineSR independently ran the WP-2 checks on a second Linux host. Python 3.11.18
 ## WP-3 Addendum A acceptance
 
 The PM reviewed and accepted `d9aa0803a3465f83b5d93cd2c15706c329b6cf4c`, including the delegated changes to VD-1 revision 4.2. The accepted script SHA256 is `ee9b0b6c109f67b9dd27bb70bce053b542364cc7a8f27017382be9a6cdb49a1a`. WP-3 starts from that documentation-only child of `323e0e1`.
+
+## WP-3 acceptance and VD-1 measurement
+
+The technical PM accepted WP-3 at `853cadc` and `0c40d40`. [Independent PM checks](work-packages/WP-3/PM_REVIEW.md)
+
+ClineSR ran revision 4.2 on 150 common ARM ELF32 package names per side. Baseline GCC was 214 MB, candidate LLVM 191 MB. Both sides contained 243 ELF objects and ran static payload analysis.
+
+| Measurement | v1.5.1 2d43c58 | WP-2 323e0e1 |
+| --- | --- | --- |
+| Wall time and peak RSS | 54.4 s / 360 MB | 54.3 s / 380 MB |
+| Report size | 467.8 MB | 535.6 MB |
+| ELF complete, baseline / candidate | 242 / 242 | 243 / 243 |
+| Export inventories complete | 228 / 240 | 230 / 242 |
+| Unknown exports without reason | 14 / 2 | 13 / 1 |
+| Findings / INCOMPATIBLE / UNKNOWN | 13,605 / 4,849 / 7,739 | 14,657 / 4,924 / 8,609 |
+| SYMBOL_BINDING_CHANGED, UNKNOWN HIGH | — | 6,939 |
+| EXPORT MISSING / CHANGED / ADDED | — | 4,828 / 29,218 / 826 |
+| Candidate failures among baseline-satisfied requirements | — | 0 / 14,668 |
+| Baseline-unsatisfied requirements | — | 26,198 |
+| Comparison validity and ASan counts | — | COMPARABLE, 0 / 0 |
+
+1. **D-WP3b-1** keeps F-10 after the release candidate, subject to the full-repository projection from VD-1 detail.
+2. **D-WP3b-2** prioritizes report size. VD data reached about 3.6 MB per sampled RPM. SR reports reached 1.24 GB without a profile and 5.5 GB with partial profiles, with 6.5 GB peak RSS.
+3. **D-WP3b-3** freezes removal and binding statuses and severities for WP-3b. All 4,924 confirmed findings lacked a reason code in VD-1, nearly all were removed exports, and none of 14,668 baseline-satisfied sampled requirements broke. WP-4 policy review depends on the ClineSR detail breakdown.
+4. **D-WP3b-4** records COMPARABLE and zero observed ASan objects. The two import totals were 40,616 and 40,427. VD-2 owns real ASan positive validation.
