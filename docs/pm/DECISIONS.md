@@ -67,3 +67,11 @@ ClineSR ran revision 4.2 on 150 common ARM ELF32 package names per side. Baselin
 2. **D-WP3b-2** prioritizes report size. VD data reached about 3.6 MB per sampled RPM. SR reports reached 1.24 GB without a profile and 5.5 GB with partial profiles, with 6.5 GB peak RSS.
 3. **D-WP3b-3** freezes removal and binding statuses and severities for WP-3b. All 4,924 confirmed findings lacked a reason code in VD-1, nearly all were removed exports, and none of 14,668 baseline-satisfied sampled requirements broke. WP-4 policy review depends on the ClineSR detail breakdown.
 4. **D-WP3b-4** records COMPARABLE and zero observed ASan objects. The two import totals were 40,616 and 40,427. VD-2 owns real ASan positive validation.
+
+## WP-3b acceptance and WP-4 decisions (2026-11-27)
+
+The PM accepted WP-3b at `2633672`, including all 381 tests on the PM host, the published kit revision 5 privacy changes and end-to-end retest, zero missing reason codes and the removal context. The 10,000 Linking target conflicted with retaining individual DT_NEEDED checks. PERF-LINK is P2.
+
+VD-1b measured 324.9 MB at WP-3b on 150 ARM packages per side. The PM projects about 40 minutes and 15.5 GB for 5,693 RPMs per side (about 10.2 GB of inputs each), making RPT-SIZE-3 a VD-2 blocker. The owner confirmed the candidate QuickBuild name contains ASAN but the build uses no ASan. VD-ASAN closes with fixture-only detection evidence.
+
+D-POL-WEAK sends qualifying unreferenced weak C++ removals to UNKNOWN LOW owner review. D-POL-BINDING treats defined GLOBAL and WEAK exports as equivalent under default glibc lookup, with an exception for LD_DYNAMIC_WEAK. UNIQUE to WEAK retains the GNU unique loss risk. [Full VD-1b counts and PM evidence](work-packages/WP-3b/PM_REVIEW.md)

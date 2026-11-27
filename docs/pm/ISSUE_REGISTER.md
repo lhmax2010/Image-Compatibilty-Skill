@@ -28,7 +28,7 @@ Owner: technical PM (Claude). Maintained by Codex from PM decisions. Baseline co
 | K-06 | Kimi K-F06 | P1 | CONFIRMED-static | core.py L305-318 | Unbounded stdout/stderr written to disk | Accept | Bounded capture for all tools; OUTPUT_LIMIT reason | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
 | K-09 | Kimi K-F09 | P1 | CONFIRMED-static | report_io.py L111 | /proc/pressure/memory read unconditionally | Accept | NOT_AVAILABLE + meminfo/cgroup fallback | WP-1 | Verified (PM, 2026-11-27, ae4d269) |
 | VD-1 | Handover | P0 | NOT_EXECUTED | VD workstation | Real VD sample measurement (v1.5.1) | Accept | ClineSR prompt docs/pm/clinesr/VD-1_PROMPT.md | VD-1 | Open |
-| VD-2 | Handover | P0 | NOT_EXECUTED | VD workstation | Real VD full acceptance | Accept | With v1.5.2-rc1 and the confound flag | VD-2 | Blocked on WP-1..WP-3 |
+| VD-2 | Handover | P0 | NOT_EXECUTED | VD workstation | Real VD full acceptance | Accept | With v1.5.2-rc1 and the confound flag | VD-2 | Blocked on WP-4 RPT-SIZE-3 |
 
 ## Important, scheduled
 
@@ -56,14 +56,20 @@ Owner: technical PM (Claude). Maintained by Codex from PM decisions. Baseline co
 | RPT-SIZE | ClineSR | P2 | CONFIRMED-exec | report.py | Repeated JSON whitespace inflates scale reports | Accept | Compact machine outputs and measured size breakdown | WP-3 | Verified (PM, 0c40d40) |
 | PROC-1 | Owner | P2 | CONFIRMED-exec | HANDOVER.md | A Codex work package was given to ClineSR | Accept | Audience banners and owner-only result relay | WP-3 | Verified (PM, 0c40d40) |
 
-| RC-INV | Codex | P1 | CONFIRMED-exec | findings | Missing stable reason codes | Record | See WP-3b and VD-1 evidence | WP-3b | Implemented, awaiting PM review |
-| EXP-RC | Codex | P1 | CONFIRMED-exec | elf.py | Incomplete exports lack explanation | Record | See WP-3b and VD-1 evidence | WP-3b | Implemented, awaiting PM review |
-| EXP-CTX | Codex | P1 | CONFIRMED-exec | ELF export findings | Missing removal and importer context | Record | See WP-3b and VD-1 evidence | WP-3b | Implemented, awaiting PM review |
-| LINK-AGG | Codex | P1 | CONFIRMED-exec | linker.py | Per-import observations dominate real reports | Record | See WP-3b and VD-1 evidence | WP-3b | Implemented, awaiting PM review |
-| RPT-SIZE-2 | Codex | P1 | CONFIRMED-exec | CSV and JSON output | Matched symbol rows and repeated inventories inflate reports | Record | See WP-3b and VD-1 evidence | WP-3b | Implemented, awaiting PM review |
-| POL-REMOVED | PM | P1 | NEEDS_VERIFICATION | ABI policy | Assess real removed exports after VD-1 detail | Record | See WP-3b and VD-1 evidence | WP-4 | Blocked on ClineSR detail |
-| POL-BINDING | PM | P1 | NEEDS_VERIFICATION | ABI policy | Assess real binding changes after VD-1 detail | Record | See WP-3b and VD-1 evidence | WP-4 | Blocked on ClineSR detail |
-| VD-ASAN | PM | P2 | NOT_EXECUTED | real VD sample | Candidate sample contained no observed ASan objects | Record | See WP-3b and VD-1 evidence | VD-2 | Open |
+| RC-INV | Codex | P1 | CONFIRMED-exec | findings | Missing stable reason codes | Record | See WP-3b and VD-1 evidence | WP-3b | Verified (PM, 2633672) |
+| EXP-RC | Codex | P1 | CONFIRMED-exec | elf.py | Incomplete exports lack explanation | Record | See WP-3b and VD-1 evidence | WP-3b | Verified (PM, 2633672) |
+| EXP-CTX | Codex | P1 | CONFIRMED-exec | ELF export findings | Missing removal and importer context | Record | See WP-3b and VD-1 evidence | WP-3b | Verified (PM, 2633672) |
+| LINK-AGG | Codex | P1 | CONFIRMED-exec | linker.py | Per-import observations dominate real reports | Record | See WP-3b and VD-1 evidence | WP-3b | Verified (PM, 2633672) |
+| RPT-SIZE-2 | Codex | P1 | CONFIRMED-exec | CSV and JSON output | Matched symbol rows and repeated inventories inflate reports | Record | See WP-3b and VD-1 evidence | WP-3b | Verified (PM, 2633672) |
+
+| POL-WEAK | Owner VD-1b | P1 | CONFIRMED-exec | compare.py | Weak C++ removals dominate | D-POL-WEAK | UNKNOWN LOW pending owner review | WP-4 | Open |
+| POL-BINDING | PM VD-1b | P1 | CONFIRMED-exec | compare.py | Defined weak/global changes have overstated risk | D-POL-BINDING | Loader-aware binding policy | WP-4 | Open |
+| COPY-REL | PM VD-1b | P1 | CONFIRMED-exec | elf.py | Executable copy relocation uses verneed | Accept | Classify import and check provider size | WP-4 | Open |
+| DT-AGG | PM | P1 | CONFIRMED-exec | linker.py | Individual non-breaking DT_NEEDED findings | Accept | Group and retain detail | WP-4 | Open |
+| RPT-SIZE-3 | VD-1b | P1 | CONFIRMED-exec | reports | 15.5 GB full repository projection | Accept | Compression and compact rows | WP-4 | Open |
+| SUITE-ARM | PM | P1 | NEEDS_VERIFICATION | ClineSR | Python 3.10 test host needed | Accept | Publish a private-output suite runner | WP-4 | Open |
+| VD-ASAN | Owner | P2 | CONFIRMED | VD QuickBuild | ASAN is a name only | Close | Fixture-only validation | N/A | Closed |
+| PERF-LINK | PM | P2 | CONFIRMED-exec | linker.py | Scale cost | Measure only | Defer optimisation | post-RC | Open |
 
 ## Deferred / owner-decided
 
