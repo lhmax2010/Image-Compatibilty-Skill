@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import Any
 from .coverage import coverage_report
 from .package_analysis import analyze_packages
+from .profile import comparison_profile
+from .linker import summarize_unknowns
+from .report_io import FINDING_DETAIL_COLUMNS, finding_cells
 from .core import DIMENSIONS, SCHEMA, STATUSES, canonical, expected_collectors, write_json
 
 
@@ -71,11 +74,15 @@ def build_results(a: dict[str, Any], b: dict[str, Any], findings: list[dict[str,
     if status == 'COMPATIBLE' and any(x['unknown'] for x in coverage.values()):
         status = 'UNKNOWN'
     package_inventory, package_results = analyze_packages(a, b, findings, coverage)
+    for item in findings:
+        item.pop('_root_paths', None)
     if (any(c['confirmed_incompatible'] for c in coverage.values()) or any(t['status'] == 'INCOMPATIBLE' for t in tests)
             or any(p['overall'] == 'INCOMPATIBLE' for p in package_results)):
         status = 'INCOMPATIBLE'
+    profile = repository if repository is not None else comparison_profile(a['elf_objects'], b['elf_objects'])
     return {'package_inventory': package_inventory, 'package_results': package_results,
-        'execution': execution,
+        **{key: profile[key] for key in ('comparison_validity', 'confounders', 'build_profile')},
+        'execution': execution, 'linking_summary': summarize_unknowns(findings),
         'finding_integrity': {'unique_findings': len(findings), 'source_occurrences': sum(f.get('occurrences', 1) for f in findings),
                               'deduplicated': [{'id': f['id'], 'occurrences': f['occurrences']} for f in findings if f.get('occurrences', 1) > 1]},
         'expected_tests': a.get('expected_tests', []) + b.get('expected_tests', []),
@@ -102,19 +109,15 @@ def build_results(a: dict[str, Any], b: dict[str, Any], findings: list[dict[str,
 
 def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[str, Any], config: dict[str, Any],
              *, objective=None, reused=False) -> None:
-    write_json(output / 'baseline-manifest.json', a)
-    write_json(output / 'candidate-manifest.json', b)
+    write_json(output / 'baseline-manifest.json', a, compact=True)
+    write_json(output / 'candidate-manifest.json', b, compact=True)
     report = config['report']
     if report['csv']:
-        columns = ['id', 'dimension', 'component', 'interface', 'baseline', 'candidate', 'status', 'severity',
-                   'confidence', 'evidence', 'detection_method', 'potential_impact', 'recommended_action']
         with (output / 'findings.csv').open('w', newline='') as stream:
-            writer = csv.DictWriter(stream, fieldnames=columns)
+            writer = csv.DictWriter(stream, fieldnames=FINDING_DETAIL_COLUMNS)
             writer.writeheader()
             for finding in results['findings']:
-                row = {k: canonical(finding[k]) if isinstance(finding[k], (dict, list)) else str(finding[k]) for k in columns}
-                # Avoid spreadsheet formula injection from image-controlled paths and strings.
-                writer.writerow({k: "'" + v if v.startswith(('=', '+', '-', '@', '\t', '\r')) else v for k, v in row.items()})
+                writer.writerow(finding_cells(finding, FINDING_DETAIL_COLUMNS))
         test_columns = ('id', 'logical_id', 'name', 'compiler', 'image', 'kind', 'status', 'compile_status',
                         'link_status', 'deployment_status', 'execution_status', 'behavior_status', 'reference_image',
                         'returncode', 'runtime_reason', 'evidence')
@@ -147,7 +150,7 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
         from .run_summary import make_summary
         results['run_summary'] = make_summary(a, b, results, config, objective, reused)
     if report['json']:
-        write_json(output / 'results.json', results)
+        write_json(output / 'results.json', results, compact=True)
     def esc(value: Any) -> str:
         return html.escape(value if isinstance(value, str) else json.dumps(value, ensure_ascii=False, sort_keys=True))
     def table(rows: list[list[Any]], headers: list[str]) -> str:
@@ -174,6 +177,12 @@ def generate(output: Path, a: dict[str, Any], b: dict[str, Any], results: dict[s
         if handoff:
             lines += [f'- **{label}** {esc(handoff[key])}' for label, key in headline] + ['']
             lines += ['See `run-summary.json` for the compact machine-readable handoff.', '']
+        linking = results.get('linking_summary', {})
+        if linking:
+            lines += ['## Linking UNKNOWN by reason', '',
+                      '| Reason | Findings | Next action |', '| --- | ---: | --- |']
+            lines += [f"| {esc(code)} | {entry['count']} | {esc(entry['next_action'])} |"
+                      for code, entry in sorted(linking.items())] + ['']
         lines += ['## Collector execution', '', '**' + results['execution']['status'] + '**', '']
         for side, collectors in results['execution']['collectors'].items():
             for tool, entry in collectors.items():

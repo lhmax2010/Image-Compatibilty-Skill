@@ -84,3 +84,22 @@ Collector policy `1.3.1-phase7a` retains manifest schema 1.2 and invalidates old
 - Baseline-consumer checks receive the baseline manifest explicitly; candidate checks use candidate metadata. Per-object `execution_metadata` is refreshed outside the ELF content cache. Missing permissions/capability observations, setuid/setgid, file capabilities or archive metadata loss cannot establish a normal secure-execution context. Actual credentials, mount policy and AT_SECURE still require target evidence.
 
 The v1.3 report schema, APIs, role definitions and raw findings remain unchanged. Its existing symbol completeness gate now requires the new export marker: old/incomplete manifests retain observed counts but complete totals become null. Rebuilding an old report projection never recomputes detector conclusions. To obtain corrected conclusions, recollect/recompare into a new analysis directory and then build a separate enhanced report. New finding payloads/statuses can produce new content-derived IDs; historical IDs/reports are never rewritten and no equal-count guarantee applies across policies.
+
+## Rootfs linking context and instrumentation
+
+DT_NEEDED analysis preserves per-process loading order. Resolution is reused
+only for the same requiring object, effective expanded search inputs, observed
+loaded-object evidence and completeness. Import checking also includes the
+ordered observations for that symbol, the required provider and version
+constraints. Findings with different effective contexts retain separate IDs.
+A root count is a relation count, independent of compatibility or coverage.
+An indexed group can report a lower bound from root examples when its
+underlying root relations are truncated. Comparison of install-tree metadata,
+including set-ID and file capabilities, does not prove runtime AT_SECURE.
+Linking collects this evidence even when standalone security findings are excluded.
+
+Rootfs and repository reports use the same per-side instrumentation profiles.
+An instrumentation share of at least 20% on one side and at most 2% on the other
+flags a CONFOUNDED comparison. A particular pair with different instrumentation
+can downgrade an OBJECT or TLS size change even below the image-wide threshold.
+Complete evidence for a removed ordinary export still supports INCOMPATIBLE.

@@ -8,6 +8,37 @@ from .core import finding, canonical, digest
 from .elf import dynamic_exports, runtime_metadata_complete, symbol_identity, target_abi_matches, version_nodes
 
 
+NEXT_ACTIONS = {
+    'LOADER_ENV_MISSING': 'Configure loader.environments for the affected image.',
+    'UNKNOWN_SEARCH_ENVIRONMENT': 'Supply the loader search, preload, mode and capability evidence for the consumer.',
+    'UNKNOWN_LOADER_ABI': 'Record the target interpreter and its complete ELF ABI inventory.',
+    'UNKNOWN_LOADER_FEATURE': 'Validate the loader flags with the matching target loader.',
+    'UNKNOWN_SYMBOL_SEMANTICS': 'Validate the actual binding with the correct provider and loader scope.',
+    'UNKNOWN_SYMBOL_SCOPE': 'Record the complete startup symbol scope or validate on the authorized target.',
+    'UNKNOWN_VERSION_REQUIREMENT': 'Record the provider and its complete GNU version definitions.',
+    'UNKNOWN_COLLECTION': 'Repeat collection with complete ELF and filesystem evidence.',
+}
+
+
+def loader_missing(side):
+    return finding('linking', side, 'loader environment', None, None, 'UNKNOWN', 'MEDIUM',
+                   'offline glibc dependency closure', impact='Linking checks were not executed for this side.',
+                   action=NEXT_ACTIONS['LOADER_ENV_MISSING'], reason_code='LOADER_ENV_MISSING')
+
+
+def summarize_unknowns(findings):
+    summary = {}
+    for item in findings:
+        if item['dimension'] == 'linking' and item['status'] == 'UNKNOWN':
+            code = item.get('reason_code', 'LINKING_STATIC_DIFFERENCE')
+            group = summary.setdefault(code, {'count': 0, 'example_finding_ids': [],
+                'next_action': NEXT_ACTIONS.get(code, item['recommended_action'])})
+            group['count'] += 1
+            if len(group['example_finding_ids']) < 20:
+                group['example_finding_ids'].append(item['id'])
+    return summary
+
+
 def alias(path, files):
     for _ in range(40):
         parts = path.split('/')
@@ -45,22 +76,78 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
         inventory = manifest.get('collection_complete') is True and all(o.get('complete') for o in objects.values())
     inventory = inventory is True
     global_names = {posixpath.basename(p) for p in objects} | {o.get('soname') for o in objects.values()}
-    out = []
-    def emit(obj, interface, before, after, state, status=None, severity='HIGH'):
+    grouped = {}
+    search_cache, requirement_cache, export_indexes, shared_scopes = {}, {}, {}, {}
+    requirement_keys = {}
+
+    def requirement_key(data):
+        key = id(data)
+        if key not in requirement_keys:
+            requirement_keys[key] = canonical(data)
+        return requirement_keys[key]
+
+    def provider_identity(provider):
+        if provider is None:
+            return None
+        # In a directional replay the baseline root itself can export symbols.
+        # An identically named candidate object is a different scope member.
+        return {'path': provider['path'], 'image': 'baseline' if consumers is not None and provider is root else 'candidate'}
+
+    def emit(obj, interface, before, after, state, status=None, severity='HIGH', *, key=None, context=None):
         status = status or ('COMPATIBLE' if state == 'verified' else 'UNKNOWN')
+        image = 'baseline' if consumers is not None and obj is root else 'candidate'
+        key = (image, obj['path'], interface, key if key is not None else canonical([before, after, state]))
+        entry = grouped.get(key)
+        if entry is not None:
+            entry[1].add(root['path'])
+            return
         item = finding('linking', obj['path'], label + ':' + interface, before, after, status,
                        'INFO' if status == 'COMPATIBLE' else severity, 'offline glibc dependency closure',
-                       obj.get('evidence'), impact='Resolution state: ' + state + '. Conditional on recorded loader environment; runtime interposition/dlopen/IFUNC behavior is separate.')
+                       obj.get('evidence'), impact='Resolution state: ' + state + '. Conditional on recorded loader environment; runtime interposition/dlopen/IFUNC behavior is separate.',
+                       reason_code=state.upper(), action=NEXT_ACTIONS.get(state.upper(), ''))
         item['resolution'] = state
         item['check_id'] = interface
         item['consumer_path'] = obj['path']
-        item['consumer_image'] = 'baseline' if consumers is not None and obj is root else 'candidate'
-        item['root_consumer'] = root['path']
+        item['consumer_image'] = image
         item['root_consumer_image'] = 'baseline' if consumers is not None else 'candidate'
         item['provider_path'] = after.get('provider') if isinstance(after, dict) else after if isinstance(after, str) and after.startswith('/') else None
-        # A transitive failure reached from different entry points is distinct evidence.
+        if context is not None:
+            item['search_context'] = context() if callable(context) else context
         item['id'] = 'TC-' + digest(canonical({k: v for k, v in item.items() if k != 'id'}).encode())[:16]
-        out.append(item)
+        grouped[key] = (item, {root['path']})
+
+    def lookup(obj, paths, provider, proven, ambiguous):
+        if provider and (not proven or not provider.get('complete') or not target_abi_matches(obj, provider)):
+            ambiguous = True
+        if provider:
+            return provider, ambiguous
+        for path in paths:
+            actual = alias(path, files) if path is not None else None
+            if actual is None or actual in debug_paths:
+                ambiguous = True
+                continue
+            hit = objects.get(actual)
+            if hit:
+                if not hit.get('complete') or (hit.get('type') and not hit['type'].startswith('DYN')) or not target_abi_matches(obj, hit):
+                    ambiguous = True
+                    continue
+                return hit, ambiguous
+            if files.get(actual, {}).get('type') == 'file':
+                ambiguous = True
+        return None, ambiguous
+
+    def provider_exports(provider):
+        key = id(provider)
+        if key not in export_indexes:
+            index = {}
+            for exported in dynamic_exports(provider):
+                if checkpoint:
+                    checkpoint()
+                exp = symbol_identity(exported['name'])
+                if not (exported.get('value') == 0 and exported.get('section') != 'ABS' and exported.get('type') != 'TLS') and exported.get('binding') in ('GLOBAL', 'WEAK', 'UNIQUE', 'GNU_UNIQUE') and exported.get('visibility') in ('DEFAULT', 'PROTECTED') and exported.get('section') != 'UND' and exported.get('type') in ('NOTYPE', 'OBJECT', 'FUNC', 'COMMON', 'TLS', 'IFUNC', 'GNU_IFUNC'):
+                    index.setdefault(exp['base_name'], []).append((provider, exported, exp))
+            export_indexes[key] = index
+        return export_indexes[key]
     for root in consumers if consumers is not None else objects.values():
         if root.get('elf_runtime_role') == 'DEBUG_ONLY':
             continue
@@ -149,30 +236,23 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
                     paths += cache
                     if not nodeflib:
                         paths += [posixpath.join(d, needed) for d in env.get('default_dirs', [])]
-                provider = loaded.get(needed)
-                if provider and (not loaded_proven.get(needed) or not provider.get('complete') or not target_abi_matches(obj, provider)):
-                    ambiguous = True
-                for path in ([] if provider else paths):
-                    if path is None:
-                        ambiguous = True
-                        continue
-                    actual = alias(path, files)
-                    if actual is None or actual in debug_paths:
-                        ambiguous = True
-                        continue
-                    hit = objects.get(actual)
-                    if hit:
-                        if not hit.get('complete') or (hit.get('type') and not hit['type'].startswith('DYN')) or not target_abi_matches(obj, hit):
-                            ambiguous = True
-                            continue
-                        provider = hit
-                        break
-                    if actual in files and files[actual].get('type') == 'file':
-                        ambiguous = True  # present but unparsed/not a usable ELF
-                verified = (object_known and inventory and not ambiguous and provider is not None
-                            and runtime_metadata_complete(provider) and provider.get('export_inventory_complete') is True)
+                preloaded = loaded.get(needed)
+                proven = bool(loaded_proven.get(needed))
+                context = {'search_paths': paths, 'loaded': provider_identity(preloaded),
+                           'loaded_proven': proven, 'collection_proven': object_known,
+                           'unsupported_flags': ambiguous}
+                key = (id(obj), needed, tuple(paths), id(preloaded), proven, ambiguous, object_known)
+                if key not in search_cache:
+                    provider, uncertain = lookup(obj, paths, preloaded, proven, ambiguous)
+                    verified = (object_known and inventory and not uncertain and provider is not None
+                                and runtime_metadata_complete(provider) and provider.get('export_inventory_complete') is True)
+                    if provider or not object_known or uncertain or not inventory:
+                        state = 'verified' if verified else 'unknown_search_environment'
+                    else:
+                        state = 'unresolvable_provider' if needed in global_names else 'missing_provider'
+                    search_cache[key] = provider, verified, state
+                provider, verified, state = search_cache[key]
                 if provider:
-                    state = 'verified' if verified else 'unknown_search_environment'
                     loaded.setdefault(needed, provider)
                     loaded_proven.setdefault(needed, bool(verified))
                     # Only objects reached by this root's load order are reusable.
@@ -183,26 +263,20 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
                         loaded_proven.setdefault(soname, bool(verified))
                     edges[(obj['path'], needed)] = provider
                     queue.append((provider, inherited_next))
-                else:
-                    state = 'unresolvable_provider' if needed in global_names else 'missing_provider'
-                    if not object_known or ambiguous or not inventory:
-                        state = 'unknown_search_environment'
                 emit(obj, 'DT_NEEDED:' + needed, needed, provider['path'] if provider else None, state,
-                     'INCOMPATIBLE' if state in ('missing_provider', 'unresolvable_provider') else None)
+                     'INCOMPATIBLE' if state in ('missing_provider', 'unresolvable_provider') else None,
+                     key=key, context=context)
                 scope_known &= verified
         if loader_obj and loader_obj['path'] not in seen:
             closure.append(loader_obj)
             # Nonstandard interpreters with their own dependencies need a full
             # loader adapter; do not infer a closed symbol scope from this subset.
             scope_known &= not loader_obj.get('needed')
-        export_scope = {}
-        for provider in closure:
-            for exported in dynamic_exports(provider):
-                if checkpoint:
-                    checkpoint()
-                exp = symbol_identity(exported['name'])
-                if not (exported.get('value') == 0 and exported.get('section') != 'ABS' and exported.get('type') != 'TLS') and exported.get('binding') in ('GLOBAL', 'WEAK', 'UNIQUE', 'GNU_UNIQUE') and exported.get('visibility') in ('DEFAULT', 'PROTECTED') and exported.get('section') != 'UND' and exported.get('type') in ('NOTYPE', 'OBJECT', 'FUNC', 'COMMON', 'TLS', 'IFUNC', 'GNU_IFUNC'):
-                    export_scope.setdefault(exp['base_name'], []).append((provider, exported, exp))
+        # The non-root providers and their order can be identical across many roots.
+        shared = [p for p in closure if p is not root]
+        scope_key = tuple(map(id, shared))
+        export_scope = shared_scopes.setdefault(scope_key, {})
+        root_exports = provider_exports(root)
         # Requirements refer to a particular dependency, in addition to symbol lookup scope.
         for obj in closure:
             failed_requirements = set()
@@ -210,41 +284,80 @@ def dependency_checks(manifest, label, consumers=None, consumer_manifest=None, c
                 if checkpoint:
                     checkpoint()
                 provider = edges.get((obj['path'], req['file'])) or loaded.get(req['file'])
-                names = version_nodes(provider or {})
-                present = req['name'] in names
+                weak = 'WEAK' in req.get('flags', '').upper()
+                key = (id(obj), requirement_key(req), id(provider), bool(scope_known))
+                if key not in requirement_cache:
+                    present = req['name'] in version_nodes(provider or {})
+                    state = ('verified' if present and scope_known else 'missing_version'
+                             if scope_known and provider and not weak else 'unknown_version_requirement')
+                    requirement_cache[key] = present, state
+                present, state = requirement_cache[key]
                 if not present:
                     failed_requirements.add((req['file'], req['name']))
-                weak = 'WEAK' in req.get('flags', '').upper()
-                state = 'verified' if present and scope_known else 'missing_version' if scope_known and provider and not weak else 'unknown_version_requirement'
                 emit(obj, 'version:' + str(req['file']) + ':' + req['name'], req, provider['path'] if provider else None, state,
-                     'INCOMPATIBLE' if state == 'missing_version' else None)
+                     'INCOMPATIBLE' if state == 'missing_version' else None, key=key,
+                     context={'scope_proven': bool(scope_known), 'provider': provider_identity(provider)})
             for symbol in obj.get('imports', []):
                 if checkpoint:
                     checkpoint()
                 identity = symbol_identity(symbol['name'])
-                matches = []
-                for provider, exported, exp in export_scope.get(identity['base_name'], []):
-                    version_ok = (identity['version'] == exp['version'] if identity['version'] else (exp['version'] is None or exp['default_version']))
-                    if version_ok:
-                        matches.append((provider, exported))
+                name = identity['base_name']
+                if name not in export_scope:
+                    export_scope[name] = tuple(entry for provider in shared for entry in
+                                               provider_exports(provider).get(name, ()))
+                entries = (*root_exports.get(name, ()), *export_scope[name])
                 required_file = symbol.get('version_file')
+                required_provider = edges.get((obj['path'], required_file)) or loaded.get(required_file)
                 constraint_failed = (required_file, identity['version']) in failed_requirements
-                constraint_unknown = bool(required_file and not (edges.get((obj['path'], required_file)) or loaded.get(required_file)))
-                # Unversioned interposition and legacy non-default fallback are not modeled.
-                fallback = any((identity['version'] and exp['version'] is None) or (identity['version'] is None and exp['version'] and not exp['default_version']) for _, _, exp in export_scope.get(identity['base_name'], []))
-                if matches:
-                    provider, exported = matches[0]
-                    types_ok = symbol.get('type') in ('NOTYPE', exported.get('type'))
-                    special = (any(x.get('type') in ('IFUNC', 'GNU_IFUNC') or x.get('binding') in ('UNIQUE', 'GNU_UNIQUE') or x.get('visibility') == 'PROTECTED' for _, x in matches)
-                               or symbol.get('binding') == 'WEAK' or len(matches) > 1 or fallback or constraint_failed or constraint_unknown)
-                    state = 'verified' if scope_known and symbol_scope_known and types_ok and not special else 'unknown_symbol_semantics'
-                    if scope_known and symbol_scope_known and not types_ok and not special:
-                        state = 'symbol_type_mismatch'
-                    emit(obj, 'import:' + symbol['name'], symbol, {'provider': provider['path'], 'export': exported, 'lookup_candidates': [{'provider': p['path'], 'export': x} for p, x in matches], 'scope_proven': bool(symbol_scope_known and scope_known), 'required_provider': required_file}, state,
-                         'INCOMPATIBLE' if state == 'symbol_type_mismatch' else None)
-                else:
-                    # A DSO can import from its executable/global namespace; weak absence is legal but behavior is unknown.
-                    broken = scope_known and symbol_scope_known and not fallback and not constraint_unknown and symbol.get('binding') != 'WEAK'
-                    emit(obj, 'import:' + symbol['name'], symbol, None, 'missing_symbol' if broken else 'unknown_symbol_scope',
-                         'INCOMPATIBLE' if broken else None)
+                constraint_unknown = bool(required_file and not required_provider)
+                complete_scope = bool(scope_known and symbol_scope_known)
+                key = (id(obj), requirement_key(symbol), tuple((id(p), id(e)) for p, e, _ in entries),
+                       bool(scope_known), bool(symbol_scope_known), id(required_provider), constraint_failed)
+                if key not in requirement_cache:
+                    requirement_cache[key] = check_import(symbol, identity, entries, complete_scope,
+                                                          constraint_failed, constraint_unknown)
+                state, after = requirement_cache[key]
+                def context():
+                    return {'scope_proven': bool(scope_known), 'startup_scope': bool(symbol_scope_known),
+                           'required_provider': provider_identity(required_provider),
+                           'version_constraint_failed': constraint_failed,
+                           'symbol_scope': [provider_identity(p) | {'name': e['name'], 'type': e.get('type'),
+                               'binding': e.get('binding'), 'visibility': e.get('visibility')}
+                               for p, e, _ in entries]}
+                emit(obj, 'import:' + symbol['name'], symbol, after, state,
+                     'INCOMPATIBLE' if state in ('symbol_type_mismatch', 'missing_symbol') else None,
+                     key=key, context=context)
+    out = []
+    for item, roots in grouped.values():
+        paths = sorted(roots)
+        item['root_consumer'] = item['consumer_path'] if item['consumer_path'] in roots else paths[0]
+        item['roots'] = {'count': len(paths), 'examples': paths[:20]}
+        item['_root_paths'] = paths
+        out.append(item)
     return out
+
+
+def check_import(symbol, identity, entries, scope_known, constraint_failed, constraint_unknown):
+    matches = []
+    for provider, exported, exp in entries:
+        version_ok = (identity['version'] == exp['version'] if identity['version']
+                      else exp['version'] is None or exp['default_version'])
+        if version_ok:
+            matches.append((provider, exported))
+    # Unversioned interposition and legacy non-default fallback are not modeled.
+    fallback = any((identity['version'] and exp['version'] is None) or
+                   (identity['version'] is None and exp['version'] and not exp['default_version'])
+                   for _, _, exp in entries)
+    if not matches:
+        broken = scope_known and not fallback and not constraint_unknown and symbol.get('binding') != 'WEAK'
+        return ('missing_symbol' if broken else 'unknown_symbol_scope'), None
+    provider, exported = matches[0]
+    types_ok = symbol.get('type') in ('NOTYPE', exported.get('type'))
+    special = (any(x.get('type') in ('IFUNC', 'GNU_IFUNC') or x.get('binding') in ('UNIQUE', 'GNU_UNIQUE')
+                   or x.get('visibility') == 'PROTECTED' for _, x in matches)
+               or symbol.get('binding') == 'WEAK' or len(matches) > 1 or fallback or constraint_failed or constraint_unknown)
+    state = ('unknown_symbol_semantics' if not scope_known or special else
+             'verified' if types_ok else 'symbol_type_mismatch')
+    return state, {'provider': provider['path'], 'export': exported,
+                   'lookup_candidates': [{'provider': p['path'], 'export': x} for p, x in matches],
+                   'scope_proven': scope_known, 'required_provider': symbol.get('version_file')}

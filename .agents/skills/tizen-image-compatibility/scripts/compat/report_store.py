@@ -2,13 +2,15 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+import csv
 import json
 from pathlib import Path
 import posixpath
 import sqlite3
 import zlib
 
-from .report_io import ReportStream, canonical, digest, evidence_path
+from .report_io import (FINDING_COLUMNS, FINDING_DETAIL_COLUMNS, ReportStream, canonical, digest,
+                        evidence_path, finding_cells)
 
 
 def pack(value):
@@ -79,6 +81,7 @@ class Store:
           evidence TEXT,payload BLOB,payload_hash TEXT,csv_hash TEXT,group_id TEXT,
           evidence_state TEXT,ownership_complete INTEGER);
         CREATE TABLE unassigned(id TEXT PRIMARY KEY);
+        CREATE TABLE finding_roots(finding_id TEXT,group_id TEXT,side TEXT,path TEXT,truncated INTEGER);
         CREATE TABLE groups(id TEXT PRIMARY KEY,key TEXT UNIQUE,reason TEXT,status TEXT,
           interface TEXT,provider TEXT,raw_count INTEGER DEFAULT 0,summary TEXT);
         CREATE TABLE pairs(id TEXT PRIMARY KEY,baseline TEXT,candidate TEXT,match_status TEXT,
@@ -96,6 +99,13 @@ class Store:
         self.metadata = {}
         self.elf_lookup = {}
         self.evidence_cache = {}
+        self.finding_columns = FINDING_COLUMNS
+        csv_path = self.source / 'findings.csv'
+        if csv_path.is_file():
+            with csv_path.open(newline='') as stream:
+                self.finding_columns = tuple(next(csv.reader(stream), ()))
+            if self.finding_columns not in (FINDING_COLUMNS, FINDING_DETAIL_COLUMNS):
+                raise ValueError('Unsupported original finding CSV columns')
 
     def evidence_exists(self, ref):
         if ref not in self.evidence_cache:
@@ -233,6 +243,8 @@ class Store:
         if value['dimension'] == 'linking':
             key = {key: value.get(key) for key in ('status', 'resolution', 'interface', 'check_id',
                    'provider_path', 'consumer_image', 'root_consumer_image', 'baseline', 'candidate')}
+            if 'search_context' in value:
+                key['search_context'] = value['search_context']
             encoded = canonical(key)
             group_id = 'LG-' + digest(key)[:32]
             self.db.execute('INSERT OR IGNORE INTO groups(id,key,reason,status,interface,provider) VALUES(?,?,?,?,?,?)',
@@ -241,16 +253,12 @@ class Store:
             # Collision checks use the full key; the short ID is never trusted alone.
             if self.db.execute('SELECT key FROM groups WHERE id=?', (group_id,)).fetchone()[0] != encoded:
                 raise ValueError('Linking group ID collision')
-        columns = ('id', 'dimension', 'component', 'interface', 'baseline', 'candidate', 'status', 'severity',
-                   'confidence', 'evidence', 'detection_method', 'potential_impact', 'recommended_action')
-        def original_cell(v):
-            text = canonical(v) if isinstance(v, (list, dict)) else str(v)
-            return "'" + text if text.startswith(('=', '+', '-', '@', '\t', '\r')) else text
-        csv_hash = digest({k: original_cell(value[k]) for k in columns})
+        csv_hash = digest(finding_cells(value, self.finding_columns))
         ownership = value.get('package_ownership', {})
         required = [ownership.get('consumer', {})]
+        roots = ownership.get('roots', [ownership.get('root_consumer', {})])
         if value.get('root_consumer'):
-            required.append(ownership.get('root_consumer', {}))
+            required.extend(roots)
         if value.get('provider_path'):
             required.append(ownership.get('candidate_provider', {}))
         refs = value.get('evidence', [])
@@ -265,16 +273,23 @@ class Store:
                          pack(value), digest(value), csv_hash, group_id, evidence_state,
                          all(x.get('status') == 'COMPLETE' for x in required)))
         associations = [(ownership.get('consumer_image', 'baseline'), 'consumer', ownership.get('consumer', {})),
-                        ('candidate', 'provider', ownership.get('candidate_provider', {})),
-                        (value.get('root_consumer_image', 'baseline'), 'root', ownership.get('root_consumer', {}))]
+                        ('candidate', 'provider', ownership.get('candidate_provider', {}))]
+        associations.extend((value.get('root_consumer_image', 'baseline'), 'root', owner) for owner in roots)
         for side, role, association in associations:
             for owner in association.get('owners', []):
                 self.db.execute('INSERT OR IGNORE INTO roles VALUES(?,?,?,?,?)',
                                 (value['id'], side, owner, role, association.get('status') == 'COMPLETE'))
         paths = [(value.get('consumer_image', 'baseline'), ownership.get('scope', 'runtime'),
                   value.get('consumer_path', value['component'].removeprefix('header:')), 'consumer'),
-                 (value.get('root_consumer_image', 'baseline'), 'runtime', value.get('root_consumer'), 'root'),
                  ('candidate', 'runtime', value.get('provider_path'), 'provider')]
+        root_side = value.get('root_consumer_image')
+        relation = value.get('roots', {})
+        root_paths = list(dict.fromkeys(relation.get('examples', [value.get('root_consumer')])))
+        paths.extend((root_side or 'baseline', 'runtime', path, 'root') for path in root_paths if path)
+        if group_id:
+            truncated = relation.get('count', len(root_paths)) > len(root_paths)
+            self.db.executemany('INSERT INTO finding_roots VALUES(?,?,?,?,?)',
+                ((value['id'], group_id, root_side, path, truncated) for path in root_paths or [None]))
         for side, scope, path, role in paths:
             resolved = self.resolve(side, scope, path)
             elf_id = self.elf_lookup.get((side, scope, path)) or self.elf_lookup.get((side, scope, resolved))

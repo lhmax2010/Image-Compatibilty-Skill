@@ -194,9 +194,14 @@ def extraction(rpm, record, tools, workspace, mode, scan_elf):
         argv = [program,str(rpm)]
         env = {key:val for key,val in os.environ.items() if key not in ('LD_PRELOAD','LD_LIBRARY_PATH','BASH_ENV','ENV')}
         env.update(LC_ALL='C',TZ='UTC',TMPDIR=str(scratch))
-        deadline = time.monotonic()+spec['timeout_seconds']
+        # Retain an explicitly different legacy ceiling for existing configurations.
+        legacy = spec['timeout_seconds']
+        timeout = tools.config['analysis']['extract_timeout_seconds']
+        if legacy != 3600:
+            timeout = min(legacy, timeout)
+        deadline = time.monotonic() + timeout
         with output.open('x+b') as stdout, tempfile.TemporaryFile(dir=scratch) as stderr:
-            code,error,cleanup = Tools.capture_bounded(argv,env,stdout,stderr,spec['timeout_seconds'],limit,scratch)
+            code,error,cleanup = Tools.capture_bounded(argv,env,stdout,stderr,timeout,limit,scratch)
             size = stdout.tell()
             stderr.seek(0)
             diagnostic = stderr.read(64*1024)
@@ -207,6 +212,8 @@ def extraction(rpm, record, tools, workspace, mode, scan_elf):
             record['evidence'].append('evidence/'+leaf)
             if error == 'interrupted':
                 raise KeyboardInterrupt
+            if error == 'timeout':
+                record.update(reason_code='TOOL_TIMEOUT', tool=Path(program).name)
             if code or error:
                 raise ValueError('rpm2cpio failed: '+(error or diagnostic.decode('utf-8','replace').strip()[:400] or str(code)))
             stdout.seek(0)
@@ -249,8 +256,10 @@ def collect_repository(image, manifest, tools, workspace, mode, collectors):
             row['id'] = 'RPM-'+digest(canonical([relative,row['sha256']]).encode())[:24]
             if not rpm_tool:
                 raise ValueError('rpm metadata tool unavailable')
-            result = tools.run([rpm_tool,'-qp','--xml',str(path)],max_capture_bytes=16*CHUNK)
+            result = tools.run([rpm_tool,'-qp','--xml',str(path)],max_capture_bytes=tools.config['rpm_payload']['max_metadata_bytes'])
             row['evidence'] = [result['stdout_evidence'],result['stderr_evidence']]
+            if result.get('reason_code'):
+                row.update(reason_code=result['reason_code'], tool=result['tool'])
             if result['returncode'] or result['error']:
                 raise ValueError('RPM metadata query failed: '+(result['error'] or result['stderr'].strip()[:400]))
             packages = parse_rpm_evidence(tools.output/result['stdout_evidence'])
@@ -281,7 +290,10 @@ def collect_repository(image, manifest, tools, workspace, mode, collectors):
             row['extraction_status'] = 'FAILED' if stage == 'payload' else 'NOT_EXECUTED'
             if 'source changed' in str(exc):
                 row.update(metadata_status='UNKNOWN',payload_files=[],objects=[],elf_count=0)
-            errors.append({'archive':relative,'stage':stage,'reason':str(exc),'evidence':row['evidence']})
+            error = {'archive':relative,'stage':stage,'reason':str(exc),'evidence':row['evidence']}
+            if row.get('reason_code'):
+                error.update(reason_code=row['reason_code'], tool=row['tool'])
+            errors.append(error)
     meta_ok = sum(r['metadata_status']=='COMPLETE' for r in rows)
     extracted = sum(r['extraction_status']=='COMPLETE' for r in rows)
     objects = manifest['elf_objects']

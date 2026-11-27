@@ -84,7 +84,7 @@ def collect_package_inventory(image: Image, tools: Tools, workspace: Path):
             inventory['execution'] = 'FAILED'
     archive_failures = 0
     for kind, source, command in commands:
-        result = tools.run(command)
+        result = tools.run(command, timeout=tools.config['analysis']['rpmdb_timeout_seconds']) if kind == 'installed_rpmdb' else tools.run(command)
         ev = [result['stdout_evidence'], result['stderr_evidence']]
         try:
             if result['returncode']:
@@ -108,6 +108,8 @@ def collect_package_inventory(image: Image, tools: Tools, workspace: Path):
         except (ET.ParseError, ValueError, IndexError, KeyError, OSError) as exc:
             if kind == 'installed_rpmdb':
                 inventory.update(reason='RPM installed inventory failed: ' + str(exc), evidence=ev, execution='FAILED')
+                if result.get('reason_code'):
+                    inventory.update(reason_code=result['reason_code'], tool=result['tool'])
             else: archive_failures += 1
             limits.append(limitation('packages', f'{kind} query/parse failed: {exc}', source))
     if inventory['status'] != 'COMPLETE': limits.append(limitation('packages', inventory['reason']))

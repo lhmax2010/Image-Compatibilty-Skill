@@ -6,7 +6,7 @@ from collections import defaultdict
 from typing import Any
 from .core import DIMENSIONS, SEVERITIES, Tools, canonical, digest, finding
 from .elf import duplicate_dynsym_names, dynamic_exports, symbol_identity, symbol_multimap, target_abi_matches, arm_abi, version_nodes
-from .linker import dependency_checks
+from .linker import dependency_checks, loader_missing
 from .profile import INSTRUMENTATION_EXPORTS, instrumentation
 from .debuginfo import advanced_abi
 from .source import declaration_reachability, header_inventory_complete
@@ -48,7 +48,7 @@ def runtime_requirements(obj):
             'unwind_sections': obj.get('unwind_sections', [])}
 
 
-def compare_elf(a: dict[str, Any], b: dict[str, Any], *, repository=False) -> list[dict[str, Any]]:
+def compare_elf(a: dict[str, Any], b: dict[str, Any]) -> list[dict[str, Any]]:
     findings = []
     old, new = index(a['elf_objects']), index(b['elf_objects'])
     for path, obj in old.items():
@@ -95,7 +95,7 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any], *, repository=False) -> li
             {k: other.get(k) for k in ('class', 'machine', 'endianness', 'arm_abi')},
             'COMPATIBLE' if target_abi_matches(obj, other) else 'UNKNOWN', 'INFO', 'ELF target ABI metadata only', ev))
         duplicates = [duplicate_dynsym_names(item) for item in (obj,other)]
-        instrumented = repository and instrumentation(obj) != instrumentation(other)
+        instrumented = instrumentation(obj) != instrumentation(other)
         ambiguous = duplicates[0] | duplicates[1]
         left, right = ({name:entries[0] for name,entries in exports(item).items() if name not in ambiguous}
                        for item in (obj,other))
@@ -160,7 +160,7 @@ def compare_elf(a: dict[str, Any], b: dict[str, Any], *, repository=False) -> li
                         findings.append(finding('abi',path,name+':'+key,before,after,status,severity,evidence=ev,
                                                 impact=impact,reason_code=reason))
         for name in sorted(set(right) - set(left)):
-            reason = 'INSTRUMENTATION_SYMBOL' if repository and name.startswith(INSTRUMENTATION_EXPORTS) else None
+            reason = 'INSTRUMENTATION_SYMBOL' if name.startswith(INSTRUMENTATION_EXPORTS) else None
             findings.append(finding('abi', path, name, None, right[name], 'COMPATIBLE' if old_exports_complete and not ambiguous else 'UNKNOWN', 'INFO', evidence=ev,
                                     impact='Additional exported interface; existing exports are compared separately.',reason_code=reason))
         if obj.get('needed') != other.get('needed'):
@@ -261,8 +261,18 @@ def compare_static(a: dict[str, Any], b: dict[str, Any], config: dict[str, Any])
             if obj.get('build_id') != peer.get('build_id'):
                 out.append(finding('elf', obj['path'], 'build ID (non-interface metadata)', obj.get('build_id'), peer.get('build_id'),
                     'COMPATIBLE', 'INFO', impact='Build ID differences do not establish ABI differences.'))
-    out += dependency_checks(b, 'candidate')
-    out += dependency_checks(b, 'baseline consumers on candidate', a['elf_objects'], consumer_manifest=a)
+    if 'linking' in config['analysis']['modes']:
+        profiles = config['loader']['environments']
+        baseline = profiles.get('baseline', a.get('loader_environment'))
+        candidate = profiles.get('candidate', b.get('loader_environment'))
+        for side, profile in (('baseline', baseline), ('candidate', candidate)):
+            if not profile:
+                out.append(loader_missing(side))
+        if candidate:
+            target = b | {'loader_environment': candidate}
+            out += dependency_checks(target, 'candidate')
+            if baseline:
+                out += dependency_checks(target, 'baseline consumers on candidate', a['elf_objects'], consumer_manifest=a)
     for dimension, key in [('filesystem', 'filesystem'), ('commands', 'commands'), ('services', 'services'),
         ('filesystem', 'configurations'), ('security', 'security_interfaces'), ('kernel', 'kernel'),
         ('hardware', 'hardware'), ('network', 'network'), ('packages', 'development'), ('compiler_runtime', 'runtime_libraries')]:

@@ -31,11 +31,13 @@ DEFAULTS: dict[str, Any] = {
     'analysis': {'modes': list(DIMENSIONS), 'ignore_build_ids': True,
                  'ignore_timestamps': True, 'normalize_build_paths': True,
                  'workers': 4, 'timeout_seconds': 60, 'max_text_bytes': 4194304,
+                 'extract_timeout_seconds': 3600, 'rpmdb_timeout_seconds': 900, 'abi_timeout_seconds': 1800,
                  'max_readelf_bytes': 512 * 1024**2,
                  'max_extract_bytes': 107374182400, 'max_extract_files': 2000000, 'input_scope': {}},
     'tools': {},
     'rpm_payload': {'mode': 'payload', 'max_bytes': 1073741824, 'max_elf_bytes': 268435456,
-                    'max_files': 100000, 'max_packages': 100000, 'timeout_seconds': 300},
+                    'max_files': 100000, 'max_packages': 100000, 'timeout_seconds': 3600,
+                    'max_metadata_bytes': 128 * 1024**2},
     'preparation': {'platform_partition': 'pltf_t.img', 'xz_memory_mib': 256,
                     'adapter_timeout_seconds': 1800, 'vdfs_adapter': {}, 'erofs_adapter': {},
                     'erofs_scratch_mib': 1024},
@@ -62,6 +64,18 @@ class InfrastructureError(RuntimeError):
     pass
 
 
+class ToolTimeout(InfrastructureError):
+    reason_code = 'TOOL_TIMEOUT'
+
+    def __init__(self, tool):
+        self.tool = Path(tool).name
+        super().__init__(f'{self.reason_code}: {self.tool}')
+
+
+def capture_reason(error):
+    return {'timeout': 'TOOL_TIMEOUT', 'adapter output limit exceeded': 'OUTPUT_LIMIT'}.get(error)
+
+
 def digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -70,11 +84,12 @@ def canonical(obj: Any) -> str:
     return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
 
 
-def write_json(path: Path, obj: Any) -> None:
+def write_json(path: Path, obj: Any, *, compact=False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     # Stream large inventories rather than retaining a second full JSON copy.
     with path.open('w', encoding='utf-8') as stream:
-        json.dump(obj, stream, ensure_ascii=False, sort_keys=True, indent=2)
+        json.dump(obj, stream, ensure_ascii=False, sort_keys=True,
+                  indent=None if compact else 2, separators=(',', ':') if compact else None)
         stream.write('\n')
 
 
@@ -124,6 +139,10 @@ def validate_config(c: dict[str, Any]) -> None:
                 require(value >= (0 if key in ('header_limit', 'tolerance_percent') else 1),
                         f'Invalid range: {section}.{key}')
     require(all(x in DIMENSIONS for x in c['analysis']['modes']), 'Unknown analysis dimension')
+    for key in ('extract_timeout_seconds', 'rpmdb_timeout_seconds', 'abi_timeout_seconds'):
+        value = c['analysis'][key]
+        require(type(value) is int and 1 <= value <= 86400,
+                f'analysis.{key} must be an integer between 1 and 86400')
     cap = c['analysis']['max_readelf_bytes']
     require(type(cap) is int and 1 <= cap <= 4 * 1024**3,
             'analysis.max_readelf_bytes must be an integer between 1 and 4294967296')
@@ -144,7 +163,7 @@ def validate_config(c: dict[str, Any]) -> None:
     rpm_payload = c['rpm_payload']
     require(rpm_payload['mode'] in ('payload','metadata'), 'Invalid RPM payload mode')
     for key, maximum in {'max_bytes': 16*1024**3, 'max_elf_bytes': 1024**3, 'max_files': 2000000,
-                         'max_packages': 250000, 'timeout_seconds': 7200}.items():
+                         'max_packages': 250000, 'timeout_seconds': 7200, 'max_metadata_bytes': 1024**3}.items():
         require(type(rpm_payload[key]) is int and 1 <= rpm_payload[key] <= maximum, 'Invalid RPM payload limit: '+key)
     prep = c['preparation']
     require(type(prep['xz_memory_mib']) is int and 1 <= prep['xz_memory_mib'] <= 1024, 'Invalid XZ memory cap')
@@ -331,7 +350,9 @@ class Tools:
             except OSError as exc:
                 code, error = -1, str(exc)
             result: dict[str, Any] = {'argv': [self.normalize(a) for a in argv], 'returncode': code, 'error': error}
-            result['reason_code'] = 'OUTPUT_LIMIT' if error == 'adapter output limit exceeded' else None
+            result['reason_code'] = capture_reason(error)
+            if result['reason_code']:
+                result['tool'] = Path(argv[0]).name
             result['local_process_group_status'] = local_group
             # Preserve bounded raw evidence even when the command failed or output was capped.
             hashes = []

@@ -206,7 +206,7 @@ def compare_repository(a,b,config,output=None):
         safe_pair = pair.pop('safe_pair')
         if o and ((p and safe_pair) or o.get('elf_runtime_role')=='DEBUG_ONLY'):
             comparisons = compare_elf({'elf_objects':[o | {'path':component}]},
-                                      {'elf_objects':[p | {'path':component}] if p else []}, repository=True)
+                                      {'elf_objects':[p | {'path':component}] if p else []})
         elif o:
             comparisons = [unpaired_finding(o,component,all(payload_complete) and p is None and o.get('complete'),
                                             ambiguous.get(o['path'],[]),return_scope)]
@@ -458,5 +458,5 @@ def export_repository(output,a,b,results):
     csv_rows(output/'symbol-differences.csv',('package_id','component','role','change','details','status',
              'baseline','candidate','finding_ids','baseline_sha256','candidate_sha256','evidence',
              'baseline_identity_satisfied'),symbol_differences(results,objects))
-    csv_rows(output/'extraction-errors.csv',('side','archive','stage','path','reason','evidence'),repo['errors'])
+    csv_rows(output/'extraction-errors.csv',('side','archive','stage','path','reason','evidence','reason_code','tool'),repo['errors'])
     write_json(output/'rpm-repository.json',{k:repo[k] for k in ('scope','baseline','candidate','inventory_states','symbol_differences')})

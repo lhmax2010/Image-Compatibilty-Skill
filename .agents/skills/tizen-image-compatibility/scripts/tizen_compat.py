@@ -26,11 +26,14 @@ from compat.matrix_manifest import reconcile
 def erofs_preparation_failed(error, output):
     if error.code.startswith('EROFS_'):
         return True
-    if error.code == 'ROOTFS_INCOMPLETE':
+    if error.code in ('ROOTFS_INCOMPLETE', 'TOOL_TIMEOUT'):
         for side in ('baseline','candidate'):
             marker = output/(side+'-extraction-manifest.json')
-            if marker.is_file() and any(layer['format']=='erofs' for layer in json.loads(marker.read_text())['layers']):
-                return True
+            if marker.is_file():
+                record = json.loads(marker.read_text())
+                if (record.get('failure', {}).get('code') == error.code
+                        and any(layer['format']=='erofs' for layer in record['layers'])):
+                    return True
     return False
 
 
@@ -226,7 +229,6 @@ def main(argv: list[str] | None = None) -> int:
             result['scope'] = repo['scope'] if repo else 'RUNTIME_ROOTFS'
             if repo:
                 result['repository'] = repo
-                result.update(comparison_validity=repo['comparison_validity'],confounders=repo['confounders'])
             generate(output, a, b, result, config, objective=args.objective, reused=bool(args.baseline_manifest))
             save(output, result['run_summary'])
             finalized = True

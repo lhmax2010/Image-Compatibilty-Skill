@@ -9,7 +9,7 @@ import stat
 import tarfile
 from typing import Any, Iterator
 
-from .core import InputError, InfrastructureError, Tools
+from .core import InputError, InfrastructureError, ToolTimeout, Tools
 from .flash import PROBE_BYTES, PreparationError, identify
 from .preparation import MANIFEST, _stamp, has_regular_file, is_tar_container, looks_like_root, prepare, prepared_input, tar_payload
 
@@ -54,7 +54,10 @@ class Image:
                 if not binary:
                     raise InputError('SquashFS requires unsquashfs. Extract to a separate rootfs directory and retry.')
                 self.root = workspace / label
-                result = tools.run([binary, '-no-progress', '-no-xattrs', '-d', str(self.root), str(self.source)])
+                result = tools.run([binary, '-no-progress', '-no-xattrs', '-d', str(self.root), str(self.source)],
+                                   timeout=tools.config['analysis']['extract_timeout_seconds'])
+                if result.get('reason_code') == 'TOOL_TIMEOUT':
+                    raise ToolTimeout(binary)
                 if result['returncode']:
                     raise InfrastructureError(f'SquashFS extraction failed: {result["stderr"]}')
             elif prepare_input and identify(prefix) in ('gpt', 'xz', 'vdfs', 'erofs'):

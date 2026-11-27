@@ -91,7 +91,7 @@ def extract(source,work,tools,record,info):
             '--chdir','/work','--','/bin/sh','-c',command,'erofs','/input/fsck.erofs','/work','/input/image','/input/tar']
     env = {'LC_ALL':'C','TZ':'UTC','TMPDIR':'/work','PATH':'/usr/bin:/bin'}
     with archive.open('x+b') as stdout,tempfile.TemporaryFile(dir=work) as stderr:
-        code,error,cleanup = Tools.capture_bounded(argv,env,stdout,stderr,tools.config['preparation']['adapter_timeout_seconds'],limit,work)
+        code,error,cleanup = Tools.capture_bounded(argv,env,stdout,stderr,tools.config['analysis']['extract_timeout_seconds'],limit,work)
         stderr.seek(0)
         proof = canonical({'argv':argv,'exit_code':code,'reason':error,'cleanup':cleanup,'tar_bytes':stdout.tell()}).encode()+b'\n'+stderr.read(128*1024)
     name = digest(proof)+'.txt'
@@ -100,6 +100,9 @@ def extract(source,work,tools,record,info):
                                exit_code=code,stderr_evidence='evidence/'+name)
     if error == 'interrupted':
         raise KeyboardInterrupt
+    if error == 'timeout':
+        record['extractor'].update(reason_code='TOOL_TIMEOUT', tool='fsck.erofs')
+        raise PreparationError('TOOL_TIMEOUT', 'fsck.erofs')
     if code or error:
         raise PreparationError('EROFS_EXTRACTION_FAILED','fsck.erofs or the confined TAR stage failed. See stderr evidence')
     record['layers'].append({'format':'tar','role':'standard-erofs-output','sha256':hash_file(archive)})

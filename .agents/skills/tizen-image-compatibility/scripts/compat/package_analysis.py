@@ -109,9 +109,19 @@ def analyze_packages(a, b, findings, coverage):
         associations = [(consumer_label, consumer)]
         if f.get('root_consumer'):
             root_label = f.get('root_consumer_image', 'baseline')
-            root_owner = scopes[(root_label, 'runtime')].lookup(f['root_consumer'])
+            ownership = scopes[(root_label, 'runtime')]
+            root_owner = ownership.lookup(f['root_consumer'])
             f['package_ownership']['root_consumer'] = root_owner
-            associations.append((root_label, root_owner))
+            root_paths = f.get('_root_paths', (f['root_consumer'],))
+            owners = {}
+            for root_path in root_paths:
+                association = ownership.lookup(root_path)
+                key = (association['status'], tuple(association['owners']))
+                owners.setdefault(key, association)
+            if len(root_paths) > 1:
+                f['package_ownership']['roots'] = [{'owners': item['owners'], 'status': item['status']}
+                                                     for item in owners.values()]
+            associations.extend((root_label, association) for association in owners.values())
         if f.get('provider_path'):
             for provider_id in provider['owners']:
                 for label, association in associations:
@@ -187,7 +197,8 @@ def analyze_packages(a, b, findings, coverage):
                 check_list = [check('applicability', 'NOT_APPLICABLE' if can_na else 'UNKNOWN', reason='' if can_na else 'Runtime/SDK interface evidence insufficient')]
             if interfaces['ambiguous'] or uncertain[ident]: check_list.append(check('ownership', reason='Multiple/incomplete owners; findings retained without definitive attribution'))
             # A provider finding is not the provider package's own dependency contract; retain its reference without transferring consumer failure.
-            associated = [f for f in associated if f['component'].removeprefix('header:') in path_set or f.get('consumer_path') in path_set or (name == 'linking' and f.get('root_consumer') in path_set)]
+            associated = [f for f in associated if f['component'].removeprefix('header:') in path_set or f.get('consumer_path') in path_set or (name == 'linking' and not path_set.isdisjoint(
+                f.get('_root_paths', (f.get('root_consumer'),))))]
             dimension = obligation(name, check_list, associated)
             dimension['coverage'] = summarize([obligation(c['id'], [c]) for c in check_list])
             dimensions[name] = dimension

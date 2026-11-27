@@ -77,13 +77,20 @@ def coverage_report(a, b, findings, tests, matrix, config):
     for f in findings:
         grouped[(f['dimension'], f['component'])].append(f)
         if f['dimension'] == 'linking' and (f.get('root_consumer_image') == 'baseline' or 'baseline consumers on candidate' in f['interface']):
-            root_findings[f.get('root_consumer', f['component'])].append(f)
+            for root in f.get('_root_paths', (f.get('root_consumer', f['component']),)):
+                root_findings[root].append(f)
     right = {key: {o.get('path', o.get('name')): o for o in b.get(key, [])} for key in set(SECTIONS.values())}
     output = {}
     for dim in DIMENSIONS:
         if dim not in config['analysis']['modes']:
             output[dim] = summarize([], True); continue
         units = []
+        if dim == 'linking':
+            missing = [f for f in findings if f.get('reason_code') == 'LOADER_ENV_MISSING']
+            if missing:
+                output[dim] = summarize(obligation(f['component'] + ':loader environment', [
+                    check('loader profile', reason=f['recommended_action'])], [f]) for f in missing)
+                continue
         for obj in a.get(SECTIONS.get(dim, ''), []):
             path = obj.get('path') or (obj['name'] + ':' + obj['arch'] if dim == 'packages' else obj.get('name'))
             fs = grouped[(dim, path)]
@@ -123,7 +130,7 @@ def coverage_report(a, b, findings, tests, matrix, config):
                     units.append(obligation(path, [check('runtime ELF role', 'NOT_APPLICABLE',
                         obj.get('evidence', []), 'File-backed runtime contents are absent in this split debug ELF')]))
                     continue
-                applicable = [f for f in fs if f.get('root_consumer', path) == path and ('baseline consumers on candidate' in f['interface'])]
+                applicable = [f for f in root_findings[path] if f.get('consumer_path', f['component']) == path]
                 slots = defaultdict(list)
                 for f in applicable: slots[f.get('check_id', f['interface'])].append(f)
                 required = {'DT_NEEDED:' + n for n in obj.get('needed', [])} | {'import:' + s['name'] for s in obj.get('imports', [])}

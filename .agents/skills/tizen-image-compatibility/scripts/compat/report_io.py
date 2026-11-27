@@ -50,6 +50,21 @@ def cell(value):
     return "'" + text if text.startswith(('=', '+', '-', '@', '\t', '\r')) else text
 
 
+FINDING_COLUMNS = ('id', 'dimension', 'component', 'interface', 'baseline', 'candidate', 'status',
+                   'severity', 'confidence', 'evidence', 'detection_method', 'potential_impact',
+                   'recommended_action')
+FINDING_DETAIL_COLUMNS = FINDING_COLUMNS + ('reason_code', 'roots', 'search_context')
+
+
+def finding_cells(finding, columns):
+    result = {}
+    for key in columns:
+        value = finding.get(key, '')
+        text = canonical(value) if isinstance(value, (dict, list)) else str(value)
+        result[key] = "'" + text if text.startswith(('=', '+', '-', '@', '\t', '\r')) else text
+    return result
+
+
 def csv_rows(path, columns, rows, check=lambda: None):
     with open(path, 'w', newline='') as stream:
         writer = csv.DictWriter(stream, fieldnames=columns)

@@ -29,3 +29,37 @@ A workflow exit 0 requires both the requested objective and configured CI gate t
 `comparison_validity` describes observed instrumentation comparability, and `confounders` lists the qualifying kinds and their baseline/candidate shares. Compatibility, coverage, and objective status remain independent. The statistics include instrumentation adjustments, available-set requirement counts, and unsatisfied baseline export identity counts.
 
 A confirmed missing library under complete inventories can finish the export objective with incompatibility and exit 1. An ambiguous or incompletely inventoried match can leave the objective partial and produce the controller's existing exit 3. A defect in a pre-existing baseline requirement remains UNKNOWN. The full available-set failure and uncertainty rows are in requirement-findings.csv with CSV reporting enabled.
+
+## WP-3 report fields and collector limits
+
+Rootfs linking requires the actual side profiles under `loader.environments`
+(or profiles recorded in reused manifests). Missing profiles produce one
+`LOADER_ENV_MISSING` per absent side and a NOT_EXECUTED linking obligation.
+Static SONAME and DT_NEEDED deltas can still appear. A configured but partial
+profile yields conditional observations and cannot establish a complete scope.
+
+`results.json` and `run-summary.json` contain `linking_summary` with UNKNOWN
+finding counts, up to 20 example IDs per reason and the next action.
+Linking findings retain the consumer, provider and representative root.
+`roots` holds the total and up to 20 examples. `search_context` records the
+relevant paths, loaded SONAME evidence or projected symbol lookup scope.
+Finding IDs for linking can change from older reports. Strict mode continues
+to fail when a required linking obligation is UNKNOWN or unexecuted.
+
+Repository `requirement-findings.csv` preserves the failed and unknown detail
+rows. A suppressed row points to the leading row by `suppressed_by`.
+`suppressed_dependents` is the number of represented detail rows.
+`by_kind`, `by_reason` and the legacy `finding_count` count individual
+requirements. `emitted_count` counts aggregate findings before the existing
+per-reason JSON preview limit. An anchor beyond that limit is still in CSV.
+
+The `analysis.timeout_seconds` short-tool default stays at 60 seconds.
+`extract_timeout_seconds` defaults to 3600 for SquashFS, RPM payloads and EROFS.
+`rpmdb_timeout_seconds` defaults to 900 for installed RPM queries.
+`abi_timeout_seconds` defaults to 1800 for abidiff. All three accept integer
+seconds from 1 to 86400. A legacy RPM-specific timeout ceiling can still
+limit payload extraction. The VDFS adapter keeps its separate setting.
+`rpm_payload.max_metadata_bytes` defaults to 128 MiB per archive with a
+1 GiB maximum. A timeout records `TOOL_TIMEOUT` and an exceeded capture cap
+records `OUTPUT_LIMIT`. The collector log retains bounded output evidence.
+The three large JSON files use compact serialization with the same data types.

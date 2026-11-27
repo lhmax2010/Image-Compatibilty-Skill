@@ -167,7 +167,7 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
             is_development = path.suffix == '.pc' or path.name.endswith(('Config.cmake', '-config.cmake'))
             is_kernel = virtual.startswith('/boot/config') or '/include/linux/' in virtual or '/include/asm' in virtual
             is_config = virtual.startswith('/etc/') or is_service or is_development or is_kernel or '/dbus-1/' in virtual or '/tmpfiles.d/' in virtual or '/udev/' in virtual
-            if kind == 'file' and ('security' in active):
+            if kind == 'file' and ('security' in active or ('linking' in active and magic == b'\x7fELF')):
                 xattrs = {}
                 metadata['security_metadata_complete'] = False
                 try:
@@ -179,7 +179,7 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
                     metadata['has_file_capabilities'] = 'security.capability' in xattrs
                 except OSError as exc:
                     m['limitations'].append(limitation('security', f'xattr unreadable: {exc.strerror}', virtual))
-                if xattrs or int(metadata['mode'], 8) & 0o6000:
+                if 'security' in active and (xattrs or int(metadata['mode'], 8) & 0o6000):
                     m['security_interfaces'].append({'path': virtual, 'mode': metadata['mode'], 'xattrs': xattrs})
             if not (is_header or is_config or SECURITY.search(virtual)):
                 continue
@@ -335,6 +335,8 @@ def collect(image: Image, name: str, label: str, mode: str, tools: Tools,
         receipt = m['collector_execution']['rpm']
         if tools.config['tools'].get('rpm') is False:
             receipt.update(status='NOT_EXECUTED', reason_code='DISABLED', reason='rpm explicitly disabled')
+        elif inventory.get('reason_code'):
+            receipt.update(reason_code=inventory['reason_code'], tool=inventory['tool'])
         elif status == 'NOT_EXECUTED':
             if image.format == 'rpm-collection':
                 if inventory['archive_count']:

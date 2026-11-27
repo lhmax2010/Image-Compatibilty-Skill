@@ -93,7 +93,10 @@ def get_group():
 
 def digest(path):
     with path.open('rb') as handle:
-        return hashlib.file_digest(handle, 'sha256').hexdigest()
+        digest = hashlib.sha256()
+        for block in iter(lambda: handle.read(1024 * 1024), b''):
+            digest.update(block)
+        return digest.hexdigest()
 
 
 def file_id(path):

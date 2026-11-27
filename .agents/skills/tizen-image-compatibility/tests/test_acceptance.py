@@ -101,18 +101,20 @@ class AcceptanceTests(Environment):
         reverse=compare_elf(b,a)
         self.assertFalse(any(f['status']=='INCOMPATIBLE' for f in reverse))
 
-    def test_two_root_consumers_keep_distinct_transitive_evidence(self):
+    def test_two_root_consumers_share_one_transitive_finding(self):
         a=inventory(self.blank(),[installed('app-a',['/bin/a']),installed('app-b',['/bin/b']),installed('middle',['/lib/m.so'])]);b=copy.deepcopy(a)
         a['elf_objects']=[obj(p,type='EXEC',needed=['m.so']) for p in ('/bin/a','/bin/b')]
         b['elf_objects']=[obj('/lib/m.so',type='DYN',needed=['missing.so'])]
         b['loader_environment']=dict(model='glibc',environment_complete=True,cache_complete=True,default_dirs=['/lib'],symbol_scope='startup',namespace='base')
         fs=finalize(dependency_checks(b,'baseline consumers on candidate',a['elf_objects']),self.config)
         broken=[f for f in fs if f['component']=='/lib/m.so' and f['status']=='INCOMPATIBLE']
-        self.assertEqual({f['root_consumer'] for f in broken},{'/bin/a','/bin/b'})
-        self.assertEqual(len({f['id'] for f in broken}),2)
+        row, = broken
+        self.assertEqual(row['roots'], {'count':2, 'examples':['/bin/a','/bin/b']})
         result=build_results(a,b,fs,[],[],self.config)
         for p in result['package_results']:
-            if p['name'].startswith('app-'):self.assertEqual(p['linking']['status'],'INCOMPATIBLE')
+            if p['name'].startswith('app-'):
+                self.assertEqual(p['linking']['status'],'INCOMPATIBLE')
+                self.assertIn(row['id'], p['linking']['finding_ids'])
         edges=result['package_inventory']['provider_consumers']
         provider=package_id(b['packages'][2])
         self.assertEqual({e['consumer_package'] for e in edges if e['provider_package']==provider}, {package_id(p) for p in a['packages'][:2]})

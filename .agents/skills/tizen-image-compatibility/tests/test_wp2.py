@@ -324,7 +324,7 @@ class Boundaries(unittest.TestCase):
         right=[obj | {'exports':[obj['exports'][0] | {'size':8}]} for obj in left]
         right[0]=right[0] | {'imports':[{'name':'__asan_init'}]}
         self.assertEqual(comparison_profile(left,right)['comparison_validity'],'COMPARABLE')
-        rows=compare_elf({'elf_objects':left},{'elf_objects':right},repository=True)
+        rows=compare_elf({'elf_objects':left},{'elf_objects':right})
         sizes={f['component']:f['reason_code'] for f in rows if f['interface']=='table:size'}
         self.assertEqual(sizes.pop('/obj0'),'INSTRUMENTATION_MISMATCH')
         self.assertEqual(list(sizes.values()),['DATA_SIZE_INCREASED']*5)

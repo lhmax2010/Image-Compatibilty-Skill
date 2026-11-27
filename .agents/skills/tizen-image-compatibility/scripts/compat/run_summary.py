@@ -45,7 +45,8 @@ def make_summary(a, b, result, config, objective=None, reused=False):
                 continue
             errors.append({'side': side, 'collector': name, 'status': receipt['status'],
                            'reason': str(receipt.get('reason') or receipt.get('reason_code') or '')[:300],
-                           'error_count': len(receipt.get('errors', []))})
+                           'error_count': len(receipt.get('errors', [])),
+                           **{key: receipt[key] for key in ('reason_code', 'tool') if key in receipt}})
     completion = 'COMPLETE'
     if objective == 'EXPORT_SYMBOLS':
         if a['image'].get('fallback_reason') or b['image'].get('fallback_reason'):
@@ -108,17 +109,22 @@ def make_summary(a, b, result, config, objective=None, reused=False):
             'execution_status':execution, 'compatibility_status':result['status'], 'coverage_status':coverage,
             'ci_gate_status':result['quality_gate']['status'], 'source_evidence': 'MANIFEST_REUSE' if reused else 'COLLECTED',
             'statistics':stats, 'finding_counts':result['summary']['by_status'], 'errors':errors,
+            'linking_summary':result.get('linking_summary', {}),
             'high_risk_findings':[{key: str(f[key])[:240] for key in ('id','dimension','component','interface','status','severity')}
                                   for f in high], 'report_paths':paths,
             'next_step': ('Review symbol or Finding evidence for the requested objective.' if completion == 'COMPLETE' else
                           'Review the recorded collection gaps, then repeat with complete inputs and tools.')}
-    if repo:
-        summary.update(comparison_validity=repo['comparison_validity'],confounders=repo['confounders'])
+    summary.update({key: result[key] for key in ('comparison_validity', 'confounders', 'build_profile')
+                    if key in result})
     return summary
 
 
 def blocked_summary(objective, phase, reason):
+    message = str(reason)
+    error = {'reason': message[:600]}
+    if message.startswith('TOOL_TIMEOUT: '):
+        error.update(reason_code='TOOL_TIMEOUT', tool=message.partition(': ')[2])
     return {'schema':SCHEMA, 'scope':None, 'requested_objective':objective, 'objective_completion':'BLOCKED',
             'execution_status':phase, 'compatibility_status':'UNKNOWN', 'coverage_status':'NOT_EXECUTED',
-            'statistics':{}, 'high_risk_findings':[], 'errors':[{'reason':str(reason)[:600]}], 'report_paths':{},
+            'statistics':{}, 'high_risk_findings':[], 'errors':[error], 'report_paths':{},
             'next_step':'Resolve the reported blocker and use a new output directory.'}

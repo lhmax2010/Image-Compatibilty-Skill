@@ -10,7 +10,10 @@ analysis:
   ignore_timestamps: true
   normalize_build_paths: true
   workers: 4
-  timeout_seconds: 60
+  timeout_seconds: 60 # Short collector operations.
+  extract_timeout_seconds: 3600 # SquashFS, rpm2cpio and EROFS extraction.
+  rpmdb_timeout_seconds: 900 # Installed RPM database queries on the scratch copy.
+  abi_timeout_seconds: 1800 # abidiff per ELF pair.
   max_text_bytes: 4194304
   max_readelf_bytes: 536870912 # Combined capture cap per readelf invocation.
   max_extract_bytes: 107374182400
@@ -23,11 +26,12 @@ rpm_payload:
   max_elf_bytes: 268435456
   max_files: 100000
   max_packages: 100000
-  timeout_seconds: 300
+  timeout_seconds: 3600 # Legacy payload ceiling. A smaller override may further limit extraction.
+  max_metadata_bytes: 134217728 # Per RPM query, combined stdout and stderr. Maximum 1 GiB.
 preparation:
   platform_partition: pltf_t.img
   xz_memory_mib: 256
-  adapter_timeout_seconds: 1800
+  adapter_timeout_seconds: 1800 # VDFS adapter. EROFS uses analysis.extract_timeout_seconds.
   vdfs_adapter: {} # Optional trusted host adapter. See references/image_preparation.md.
   erofs_adapter: {} # Optional trusted vendor extractor.
   erofs_scratch_mib: 1024 # Private tmpfs cap for standard fsck.erofs.

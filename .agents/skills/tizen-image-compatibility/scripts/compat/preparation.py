@@ -162,8 +162,13 @@ def _extract_adapter(source, work, tools, record, kind='vdfs', erofs_info=None):
     input_sha = hash_file(source)
     values = {'{input}': str(source), '{output}': str(archive), '{receipt}': str(receipt_file)}
     result = tools.run([str(executable), *(values.get(arg, arg) for arg in command[1:])],
-                       cwd=work, timeout=tools.config['preparation']['adapter_timeout_seconds'], max_capture_bytes=1024**2)
+                       cwd=work, timeout=(tools.config['analysis']['extract_timeout_seconds'] if kind == 'erofs'
+                                          else tools.config['preparation']['adapter_timeout_seconds']),
+                       max_capture_bytes=1024**2)
     record['extractor'].update(exit_code=result['returncode'], evidence=[result['stdout_evidence'], result['stderr_evidence']])
+    if result.get('reason_code') == 'TOOL_TIMEOUT' and kind == 'erofs':
+        record['extractor'].update(reason_code='TOOL_TIMEOUT', tool=result['tool'])
+        raise PreparationError('TOOL_TIMEOUT', result['tool'])
     if (result['returncode'] != 0 or result.get('error') or archive.is_symlink() or not archive.is_file()
             or archive.stat().st_size > tools.config['analysis']['max_extract_bytes'] or hash_file(source) != input_sha):
         raise PreparationError(name+'_EXTRACTION_FAILED', 'Extractor failed, mutated the input copy, or returned an invalid TAR')

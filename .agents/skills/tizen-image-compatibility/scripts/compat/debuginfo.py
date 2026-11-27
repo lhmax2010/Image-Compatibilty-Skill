@@ -66,7 +66,7 @@ def advanced_abi(a, b, roots, tools):
         reason = ('Candidate ELF unavailable' if other is None else 'abidiff unavailable' if not binary else
                   'Usable embedded DWARF or matching Build-ID debuginfo unavailable' if not all(sources) else '')
         status = 'UNKNOWN'; ev = []; output = reason; code = None
-        fingerprint = None
+        fingerprint = result = None
         if not reason:
             inputs = []; flags = []
             for n, (current, image, source) in enumerate(zip((obj, other), roots, sources), 1):
@@ -86,7 +86,8 @@ def advanced_abi(a, b, roots, tools):
                     shutil.copyfile(source['path'], target)
                 flags += ['--debug-info-dir' + str(n), str(debugdir)]
             if not reason:
-                result = tools.run([binary, '--no-default-suppression', '--fail-no-debug-info', *flags, *inputs])
+                result = tools.run([binary, '--no-default-suppression', '--fail-no-debug-info', *flags, *inputs],
+                                   timeout=tools.config['analysis']['abi_timeout_seconds'])
                 code = result['returncode']; output = tools.normalize(result['stdout'])
                 ev = [result['stdout_evidence'], result['stderr_evidence']]
                 status = 'UNKNOWN' if code < 0 or code & 3 or result['stdout_truncated'] else 'INCOMPATIBLE' if code & 8 else 'UNKNOWN' if code & 4 else 'COMPATIBLE' if code == 0 else 'UNKNOWN'
@@ -100,6 +101,9 @@ def advanced_abi(a, b, roots, tools):
                        {'debug': new_source, 'returncode': code, 'report': output},
                        status, 'HIGH' if status == 'INCOMPATIBLE' else 'INFO', DWARF_METHOD, ev,
                        impact='Coverage concerns externally reachable DWARF types, not every language/runtime behavior. Exit bit 4 alone is a difference, not a confirmed break.')
+        if result and result.get('reason_code') == 'TOOL_TIMEOUT':
+            item.update(reason_code=result['reason_code'], tool=result['tool'])
+            item['id'] = 'TC-' + digest(canonical({k: v for k, v in item.items() if k != 'id'}).encode())[:16]
         if fingerprint:
             # Raw, content-addressed files may contain staging paths. Keep their
             # original references and derive identity from the complete normalized diagnostics.

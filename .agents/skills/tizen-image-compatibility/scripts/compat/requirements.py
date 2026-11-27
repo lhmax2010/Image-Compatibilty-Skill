@@ -11,7 +11,8 @@ from .repository_pairing import abi_key
 EXAMPLE_LIMIT = 1000
 DEPTH_LIMIT = 32
 CSV_COLUMNS = ('id','scope','consumer','package_id','package_nevra','kind','soname','version','symbol',
-               'status','severity','reason_code','baseline','candidate','evidence','potential_impact')
+               'status','severity','reason_code','baseline','candidate','evidence','potential_impact',
+               'suppressed_by','suppressed_dependents')
 REASONS = {'DT_NEEDED':'NEEDED_SONAME_UNAVAILABLE', 'VERSION_NODE':'VERSION_NODE_UNAVAILABLE',
            'VERSIONED_IMPORT':'VERSIONED_SYMBOL_UNAVAILABLE', 'UNVERSIONED_IMPORT':'UNVERSIONED_SYMBOL_NOT_IN_CLOSURE'}
 
@@ -125,9 +126,29 @@ def classify(requirement, before, after, candidate_complete):
     return 'INCOMPATIBLE','HIGH',REASONS[kind]
 
 
+def aggregate_consumer(rows):
+    """Keep the diagnostic rows and attach each suppressed row to its finding."""
+    reason = 'ALSO_UNSATISFIED_IN_BASELINE'
+    missing = {row['soname']: row for row in rows if row['kind'] == 'DT_NEEDED'
+               and row['reason_code'] in (reason, 'NEEDED_SONAME_UNAVAILABLE')}
+    baseline = dict(missing)
+    for row in rows:
+        if row['reason_code'] == reason:
+            baseline.setdefault(row['soname'], row)
+    for row in rows:
+        anchor = missing.get(row['soname']) if row['kind'] in ('VERSION_NODE', 'VERSIONED_IMPORT') else None
+        if anchor is None and row['reason_code'] == reason:
+            anchor = baseline[row['soname']]
+        row['suppressed_by'] = ''
+        if anchor is not None and anchor is not row:
+            row['suppressed_by'] = anchor['id']
+            anchor['suppressed_dependents'] = anchor.get('suppressed_dependents', 0) + 1
+
+
 def check_available_set(dictionaries, owners, components, complete, output=None):
     left, right = (Providers(objects.values()) for objects in dictionaries)
     examples, by_reason, by_kind = [], Counter(), defaultdict(Counter)
+    emitted_by_reason = Counter()
     limitation = ('AVAILABLE_SET checks only objects present in the repository payloads. '
                   'Installed sets, loader scope and runtime resolution remain unverified.')
 
@@ -141,6 +162,7 @@ def check_available_set(dictionaries, owners, components, complete, output=None)
                       and obj.get('export_inventory_complete') is True and isinstance(obj.get('imports'),list)
                       and all(abi) and not duplicate_dynsym_names(obj))
             requirements = obligations(obj) if usable else [('CONSUMER_INVENTORY',None,None,None,False)]
+            details = []
             for req in requirements:
                 kind, soname, version, symbol, _ = req
                 if usable:
@@ -164,8 +186,14 @@ def check_available_set(dictionaries, owners, components, complete, output=None)
                 item.update(scope='AVAILABLE_SET', consumer=path, package_id=package_id, package_nevra=nevra,
                             kind=kind, **identity)
                 by_reason[code] += 1
-                if by_reason[code] <= EXAMPLE_LIMIT:
-                    examples.append(item)
+                details.append(item)
+            aggregate_consumer(details)
+            for item in details:
+                if not item['suppressed_by']:
+                    code = item['reason_code']
+                    emitted_by_reason[code] += 1
+                    if emitted_by_reason[code] <= EXAMPLE_LIMIT:
+                        examples.append(item)
                 yield item
 
     if output is None:
@@ -176,6 +204,7 @@ def check_available_set(dictionaries, owners, components, complete, output=None)
     summary = {'scope':'AVAILABLE_SET','by_kind':{kind:{k:counts[k] for k in ('satisfied','failed','unknown')}
                                                   for kind,counts in sorted(by_kind.items())},
                'by_reason':dict(sorted(by_reason.items())), 'finding_count':sum(by_reason.values()),
+               'emitted_count':sum(emitted_by_reason.values()),
                'stored_examples':len(examples), 'example_limit_per_reason':EXAMPLE_LIMIT,
                'limitations':limitation}
     return summary, examples
